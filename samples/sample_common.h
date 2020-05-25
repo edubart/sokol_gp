@@ -26,11 +26,11 @@ int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
         fprintf(stderr, "Failed to create NGCTX context: %s\n", ngctx_get_error(&ngctx));
         return 1;
     }
-    ngctx_set_swap_interval(&ngctx, 0);
+    ngctx_set_swap_interval(&ngctx, 1);
 
     // create nanogp context
     ngp_context ngp = {0};
-    if(!ngp_create(&ngp)) {
+    if(!ngp_create(&ngp, &(ngp_desc){0})) {
         fprintf(stderr, "Failed to create NGP context: %s\n", ngp_get_error(&ngp));
         return 1;
     }
