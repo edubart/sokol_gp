@@ -31,7 +31,6 @@ SOFTWARE.
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include "sokol_gfx.h"
 
@@ -83,9 +82,9 @@ typedef struct ngp_color {
 
 typedef struct ngp_draw_args {
     sg_pipeline pip;
-    int vertex_index;
-    int uniform_index;
-    int num_vertices;
+    uint vertex_index;
+    uint uniform_index;
+    uint num_vertices;
 } ngp_draw_args;
 
 typedef union ngp_command_args {
@@ -123,14 +122,15 @@ typedef struct ngp_context {
     sg_buffer vbuf;
     sg_bindings bind;
     sg_pipeline fill_triangles_pip;
+    sg_pipeline points_pip;
 
     // command queue
-    int cur_vertex;
-    int cur_uniform;
-    int cur_command;
-    int num_vertices;
-    int num_uniforms;
-    int num_commands;
+    uint cur_vertex;
+    uint cur_uniform;
+    uint cur_command;
+    uint num_vertices;
+    uint num_uniforms;
+    uint num_commands;
     ngp_vertex* vertices;
     ngp_uniform* uniforms;
     ngp_command* commands;
@@ -144,10 +144,9 @@ typedef struct ngp_context {
     ngp_mat3 mvp;
     int width;
     int height;
-    bool matrix_dirty;
 
     // matrix stack
-    int cur_transform;
+    uint cur_transform;
     ngp_mat3 transform_stack[_NGP_MAX_STACK_DEPTH];
 } ngp_context;
 
@@ -215,12 +214,30 @@ static inline ngp_mat3 ngp_mat3_mul(const ngp_mat3* a, const ngp_mat3* b) {
     return p;
 }
 
-static inline ngp_mat3 ngp_mat3_proj2d(int width, int height) {
+static inline ngp_mat3 ngp_proj2d(int width, int height) {
+    // matrix to convert screen coordinate system
+    // to the usual the coordinate system used on the backends
     return (ngp_mat3){
         2.0f/width,           0.0f, -1.0f,
               0.0f,   -2.0f/height,  1.0f,
               0.0f,           0.0f,  1.0f
     };
+}
+
+static inline ngp_mat3 _ngp_mul_proj2d_transform(ngp_mat3* proj, ngp_mat3* transform) {
+    // this actually multiply matrix proj2d by transform matrix in an optimized way
+    // the effect is the same as "return ngp_mat3_mul(proj, transform);"
+    float x = proj->v[0][0], y = proj->v[1][1];
+    float a = transform->v[2][0], b = transform->v[2][1], c = transform->v[2][2];
+    return (ngp_mat3) {
+        x*transform->v[0][0]-a, x*transform->v[0][1]-b, x*transform->v[0][2]-c,
+        y*transform->v[1][0]+a, y*transform->v[1][1]+b, y*transform->v[1][2]+c,
+        a, b, c
+    };
+};
+
+static inline bool ngp_color_eq(ngp_color a, ngp_color b) {
+    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 
 #ifdef __cplusplus
@@ -258,6 +275,13 @@ static inline ngp_mat3 ngp_mat3_proj2d(int width, int height) {
 #ifndef NGP_UNREACHABLE
 #define NGP_UNREACHABLE NGP_ASSERT(false)
 #endif
+#ifdef __GNUC__
+#define NGP_LIKELY(x) __builtin_expect(x, 1)
+#define NGP_UNLIKELY(x) __builtin_expect(x, 0)
+#else
+#define NGP_LIKELY(x) (x)
+#define NGP_UNLIKELY(x) (x)
+#endif
 
 #define _NGP_INIT_COOKIE 0xCAFED00D
 #define _NGP_DEFAULT_MAX_VERTICES 65536
@@ -272,37 +296,40 @@ static void _ngp_set_error(ngp_context* ngp, ngp_error error_code, const char *e
 }
 
 static void _ngp_setup_pipelines(ngp_context* ngp) {
-    // create a pipeline
-    ngp->fill_triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = sg_make_shader(&(sg_shader_desc){
-            .vs.source =
-                "#version 330\n"
-                "layout(location=0) in vec2 position;\n"
-                "void main() {\n"
-                "  gl_Position.xy = position;\n"
-                "}\n",
-            .fs.source =
-                "#version 330\n"
-                "out vec4 frag_color;\n"
-                "uniform vec4 color;\n"
-                "void main() {\n"
-                "  frag_color = color;\n"
-                "}\n",
-            .fs.uniform_blocks[0] = {
-                .uniforms[0] = {.name="color", .type=SG_UNIFORMTYPE_FLOAT4},
-                .size = 4*sizeof(float),
-            },
-            .attrs = {
-                [0] = {.name="position", .sem_name="POSITION"},
-            },
-        }),
-        .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
-        .layout.attrs = {
-            [0] = {
-                .offset=0,
-                .format=SG_VERTEXFORMAT_FLOAT2
-            },
+    // create shaders
+    sg_shader solid_shader = sg_make_shader(&(sg_shader_desc){
+        .vs.source =
+            "#version 330\n"
+            "layout(location=0) in vec2 position;\n"
+            "void main() {\n"
+            "  gl_Position.xy = position;\n"
+            "}\n",
+        .fs.source =
+            "#version 330\n"
+            "out vec4 frag_color;\n"
+            "uniform vec4 color;\n"
+            "void main() {\n"
+            "  frag_color = color;\n"
+            "}\n",
+        .fs.uniform_blocks[0] = {
+            .uniforms[0] = {.name="color", .type=SG_UNIFORMTYPE_FLOAT4},
+            .size = 4*sizeof(float),
         },
+        .attrs = {
+            [0] = {.name="position", .sem_name="POSITION"},
+        },
+    });
+
+    // create pipelines
+    ngp->fill_triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = solid_shader,
+        .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+        .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
+    });
+    ngp->points_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = solid_shader,
+        .primitive_type = SG_PRIMITIVETYPE_POINTS,
+        .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
 }
 
@@ -346,7 +373,7 @@ bool ngp_create(ngp_context* ngp, ngp_desc* desc) {
         .stencil = {.action = SG_ACTION_DONTCARE },
         .depth = {.action = SG_ACTION_DONTCARE }
     };
-    for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+    for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp->pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_DONTCARE,
         };
@@ -362,8 +389,10 @@ void ngp_destroy(ngp_context* ngp) {
     NGP_FREE(ngp->vertices);
     NGP_FREE(ngp->uniforms);
     NGP_FREE(ngp->commands);
+    // no need to manually free sokol resources
+    // they are automatically freed on shutdown
     sg_shutdown();
-    memset(ngp, 0, sizeof(ngp_context));
+    *ngp = (ngp_context){0};
 }
 
 bool ngp_is_valid(ngp_context* ngp) {
@@ -388,12 +417,11 @@ void ngp_begin(ngp_context* ngp, int width, int height) {
     ngp->color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
     ngp->viewport = (ngp_irect){0, 0, width, height};
     ngp->scissor = (ngp_irect){0, 0, -1, -1};
-    ngp->proj = ngp_mat3_proj2d(width, height);
+    ngp->proj = ngp_proj2d(width, height);
     ngp->transform = ngp_mat3_identity();
-    ngp->mvp = ngp_mat3_mul(&ngp->proj, &ngp->transform);
+    ngp->mvp = ngp->proj;
     ngp->width = width;
     ngp->height = height;
-    ngp->matrix_dirty = false;
 }
 
 static void _ngp_rewind(ngp_context* ngp) {
@@ -411,7 +439,7 @@ static void _ngp_flush_commands(ngp_context* ngp) {
     uint32_t cur_pip_id = SG_INVALID_ID;
     int cur_uniform_index = -1;
     sg_update_buffer(ngp->vbuf, ngp->vertices, ngp->cur_vertex * sizeof(ngp_vertex));
-    for(int i = 0; i < ngp->cur_command; ++i) {
+    for(uint i = 0; i < ngp->cur_command; ++i) {
         ngp_command* cmd = &ngp->commands[i];
         switch(cmd->cmd) {
             case NGP_COMMAND_VIEWPORT: {
@@ -462,7 +490,7 @@ void ngp_end(ngp_context* ngp) {
 
 void ngp_set_clear_color(ngp_context* ngp, float r, float g, float b, float a) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+    for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp->pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_CLEAR,
             .val = {r,g,b,a}
@@ -472,7 +500,7 @@ void ngp_set_clear_color(ngp_context* ngp, float r, float g, float b, float a) {
 
 void ngp_reset_clear_color(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+    for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp->pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_DONTCARE,
         };
@@ -481,7 +509,7 @@ void ngp_reset_clear_color(ngp_context* ngp) {
 
 void ngp_push_transform(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    if(ngp->cur_transform >= _NGP_MAX_STACK_DEPTH) {
+    if(NGP_UNLIKELY(ngp->cur_transform >= _NGP_MAX_STACK_DEPTH)) {
         _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
         return;
     }
@@ -490,35 +518,35 @@ void ngp_push_transform(ngp_context* ngp) {
 
 void ngp_pop_transform(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    if(ngp->cur_transform <= 0) {
+    if(NGP_UNLIKELY(ngp->cur_transform <= 0)) {
         _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
         return;
     }
     ngp->transform = ngp->transform_stack[--ngp->cur_transform];
-    ngp->matrix_dirty = true;
+    ngp->mvp = _ngp_mul_proj2d_transform(&ngp->proj, &ngp->transform);
 }
 
 void ngp_translate(ngp_context* ngp, float x, float y) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp_mat3 matrix = {
-       1.0f, 0.0f,    x,
-       0.0f, 1.0f,    y,
-       0.0f, 0.0f, 1.0f,
-    };
-    ngp->transform = ngp_mat3_mul(&ngp->transform, &matrix);
-    ngp->matrix_dirty = true;
+    ngp->transform.v[0][2] += x*ngp->transform.v[0][0] + y*ngp->transform.v[0][1];
+    ngp->transform.v[1][2] += x*ngp->transform.v[1][0] + y*ngp->transform.v[1][1];
+    ngp->transform.v[2][2] += x*ngp->transform.v[2][0] + y*ngp->transform.v[2][1];
+    ngp->mvp = _ngp_mul_proj2d_transform(&ngp->proj, &ngp->transform);
 }
 
 void ngp_rotate(ngp_context* ngp, float theta) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     float sint = sinf(theta), cost = cosf(theta);
-    ngp_mat3 matrix = {
-       sint,  cost, 0.0f,
-       cost, -sint, 0.0f,
-       0.0f,  0.0f, 1.0f,
+    // multiply by rotation matrix:
+    // sint,  cost, 0.0f,
+    // cost, -sint, 0.0f,
+    // 0.0f,  0.0f, 1.0f,
+    ngp->transform = (ngp_mat3){
+       sint*ngp->transform.v[0][0]+cost*ngp->transform.v[0][1], cost*ngp->transform.v[0][0]-sint*ngp->transform.v[0][1], ngp->transform.v[0][2],
+       sint*ngp->transform.v[1][0]+cost*ngp->transform.v[1][1], cost*ngp->transform.v[1][0]-sint*ngp->transform.v[1][1], ngp->transform.v[1][2],
+       sint*ngp->transform.v[2][0]+cost*ngp->transform.v[2][1], cost*ngp->transform.v[2][0]-sint*ngp->transform.v[2][1], ngp->transform.v[2][2],
     };
-    ngp->transform = ngp_mat3_mul(&ngp->transform, &matrix);
-    ngp->matrix_dirty = true;
+    ngp->mvp = _ngp_mul_proj2d_transform(&ngp->proj, &ngp->transform);
 }
 
 void ngp_rotate_at(ngp_context* ngp, float theta, float x, float y) {
@@ -530,13 +558,13 @@ void ngp_rotate_at(ngp_context* ngp, float theta, float x, float y) {
 
 void ngp_scale(ngp_context* ngp, float sx, float sy) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp_mat3 matrix = {
-        sx,  0.0f, 0.0f,
-       0.0f,   sy, 0.0f,
-       0.0f, 0.0f, 1.0f,
-    };
-    ngp->transform = ngp_mat3_mul(&ngp->transform, &matrix);
-    ngp->matrix_dirty = true;
+    // multiply by scale matrix:
+    //   sx, 0.0f, 0.0f,
+    // 0.0f,   sy, 0.0f,
+    // 0.0f, 0.0f, 1.0f,
+    ngp->transform.v[0][0] *= sx;
+    ngp->transform.v[1][1] *= sy;
+    ngp->mvp = _ngp_mul_proj2d_transform(&ngp->proj, &ngp->transform);
 }
 
 void ngp_scale_at(ngp_context* ngp, float sx, float sy, float x, float y) {
@@ -549,7 +577,7 @@ void ngp_scale_at(ngp_context* ngp, float sx, float sy, float x, float y) {
 void ngp_reset_transform(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     ngp->transform = ngp_mat3_identity();
-    ngp->matrix_dirty = true;
+    ngp->mvp = _ngp_mul_proj2d_transform(&ngp->proj, &ngp->transform);
 }
 
 void ngp_set_color(ngp_context* ngp, float r, float g, float b, float a) {
@@ -562,8 +590,8 @@ void ngp_reset_color(ngp_context* ngp) {
     ngp->color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
-static ngp_vertex* _ngp_next_vertices(ngp_context* ngp, int count) {
-    if(ngp->cur_vertex + count <= ngp->num_vertices) {
+static ngp_vertex* _ngp_next_vertices(ngp_context* ngp, uint count) {
+    if(NGP_LIKELY(ngp->cur_vertex + count <= ngp->num_vertices)) {
         ngp_vertex *vertices = &ngp->vertices[ngp->cur_vertex];
         ngp->cur_vertex += count;
         return vertices;
@@ -573,7 +601,7 @@ static ngp_vertex* _ngp_next_vertices(ngp_context* ngp, int count) {
     }
 }
 static ngp_uniform* _ngp_prev_uniform(ngp_context* ngp) {
-    if(ngp->cur_uniform > 0) {
+    if(NGP_LIKELY(ngp->cur_uniform > 0)) {
         return &ngp->uniforms[ngp->cur_uniform-1];
     } else {
         return NULL;
@@ -581,7 +609,7 @@ static ngp_uniform* _ngp_prev_uniform(ngp_context* ngp) {
 }
 
 static ngp_uniform* _ngp_next_uniform(ngp_context* ngp) {
-    if(ngp->cur_uniform < ngp->num_uniforms) {
+    if(NGP_LIKELY(ngp->cur_uniform < ngp->num_uniforms)) {
         return &ngp->uniforms[ngp->cur_uniform++];
     } else {
         _ngp_set_error(ngp, NGP_ERROR_UNIFORMS_FULL, "NGP uniform buffer is full");
@@ -590,7 +618,7 @@ static ngp_uniform* _ngp_next_uniform(ngp_context* ngp) {
 }
 
 static ngp_command* _ngp_prev_command(ngp_context* ngp) {
-    if(ngp->cur_command > 0) {
+    if(NGP_LIKELY(ngp->cur_command > 0)) {
         return &ngp->commands[ngp->cur_command-1];
     } else {
         return NULL;
@@ -598,7 +626,7 @@ static ngp_command* _ngp_prev_command(ngp_context* ngp) {
 }
 
 static ngp_command* _ngp_next_command(ngp_context* ngp) {
-    if(ngp->cur_command < ngp->num_commands) {
+    if(NGP_LIKELY(ngp->cur_command < ngp->num_commands)) {
         return &ngp->commands[ngp->cur_command++];
     } else {
         _ngp_set_error(ngp, NGP_ERROR_COMMANDS_FULL, "NGP command buffer is full");
@@ -611,18 +639,25 @@ void ngp_viewport(ngp_context* ngp, int x, int y, int w, int h) {
 
     // skip in case of the same viewport
     if(ngp->viewport.x == x && ngp->viewport.y == y &&
-       ngp->viewport.w == ngp->viewport.w && ngp->viewport.h == h)
+       ngp->viewport.w == w && ngp->viewport.h == h)
         return;
 
     ngp_command* cmd = _ngp_next_command(ngp);
-    if(!cmd) return;
+    if(NGP_UNLIKELY(!cmd)) return;
     *cmd = (ngp_command) {
         .cmd = NGP_COMMAND_VIEWPORT,
         .args.viewport = {x, y, w, h},
     };
+
+    // adjust current scissor relative offset
+    if(!(ngp->scissor.w == -1 && ngp->scissor.h == -1 && ngp->scissor.x == 0 && ngp->scissor.y == 0)) {
+        ngp->scissor.x += x - ngp->viewport.x;
+        ngp->scissor.y += y - ngp->viewport.y;
+    }
+
     ngp->viewport = (ngp_irect){x, y, w, h};
-    ngp->proj = ngp_mat3_proj2d(w, h);
-    ngp->matrix_dirty = true;
+    ngp->proj = ngp_proj2d(w, h);
+    ngp->mvp = _ngp_mul_proj2d_transform(&ngp->proj, &ngp->transform);
 }
 
 void ngp_reset_viewport(ngp_context* ngp) {
@@ -635,11 +670,11 @@ void ngp_scissor(ngp_context* ngp, int x, int y, int w, int h) {
 
     // skip in case of the same scissor
     if(ngp->scissor.x == x && ngp->scissor.y == y &&
-       ngp->scissor.w == ngp->scissor.w && ngp->scissor.h == h)
+       ngp->scissor.w == w && ngp->scissor.h == h)
         return;
 
     ngp_command* cmd = _ngp_next_command(ngp);
-    if(!cmd) return;
+    if(NGP_UNLIKELY(!cmd)) return;
 
     // coordinate scissor in viewport subspace
     ngp_irect viewport_scissor = {ngp->viewport.x + x, ngp->viewport.y + y, w, h};
@@ -668,19 +703,49 @@ void ngp_reset_state(ngp_context* ngp) {
     ngp_reset_color(ngp);
 }
 
-static void _ngp_update_mvp(ngp_context* ngp) {
-    if(!ngp->matrix_dirty)
-        return;
-    ngp->mvp = ngp_mat3_mul(&ngp->proj, &ngp->transform);
-    ngp->matrix_dirty = false;
+static void _ngp_queue_draw(ngp_context* ngp, sg_pipeline pip, uint vertex_index, uint num_vertices) {
+    // setup uniform, try to reuse previous uniform when possible
+    ngp_uniform *prev_uniform = _ngp_prev_uniform(ngp);
+    bool reuse_uniform = prev_uniform && ngp_color_eq(prev_uniform->color, ngp->color);
+    if(!reuse_uniform) {
+        // append new uniform
+        ngp_uniform *uniform = _ngp_next_uniform(ngp);
+        if(NGP_UNLIKELY(!uniform)) return;
+        uniform->color = ngp->color;
+    }
+    uint uniform_index = ngp->cur_uniform - 1;
+
+    ngp_command* prev_cmd = _ngp_prev_command(ngp);
+    bool merge_cmd = prev_cmd &&
+                     prev_cmd->cmd == NGP_COMMAND_DRAW &&
+                     prev_cmd->args.draw.pip.id == pip.id &&
+                     prev_cmd->args.draw.uniform_index == uniform_index;
+    if(merge_cmd) {
+        // merge command for batched rendering
+        prev_cmd->args.draw.num_vertices += num_vertices;
+    } else {
+        // append new draw command
+        ngp_command* cmd = _ngp_next_command(ngp);
+        if(NGP_UNLIKELY(!cmd)) return;
+        cmd->cmd = NGP_COMMAND_DRAW,
+        cmd->args.draw = (ngp_draw_args){
+            .pip = pip,
+            .vertex_index = vertex_index,
+            .uniform_index = uniform_index,
+            .num_vertices = num_vertices,
+        };
+    }
 }
 
 void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
 
-    //TODO: skip in case outside of viewport/scissor boundings?
+    // setup vertices
+    uint vertex_index = ngp->cur_vertex;
+    ngp_vertex* vertices = _ngp_next_vertices(ngp, 6);
+    if(NGP_UNLIKELY(!vertices)) return;
 
-    // compute vertexes
+    // compute vertices
     float r = x + w, b = y + h;
     ngp_vec2 tl = (ngp_vec2){x, y};
     ngp_vec2 br = (ngp_vec2){r, b};
@@ -688,17 +753,12 @@ void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h) {
     ngp_vec2 bl = (ngp_vec2){x, b};
 
     // apply transform
-    _ngp_update_mvp(ngp);
     tl = ngp_mat3_vec2_mul(&ngp->mvp, tl);
     br = ngp_mat3_vec2_mul(&ngp->mvp, br);
     tr = ngp_mat3_vec2_mul(&ngp->mvp, tr);
     bl = ngp_mat3_vec2_mul(&ngp->mvp, bl);
 
-    // setup vertex
-    int vertex_index = ngp->cur_vertex;
-    ngp_vertex* vertices = _ngp_next_vertices(ngp, 6);
-    if(!vertices) return;
-
+    // to make a quad we need 2 triangles
     vertices[0] = bl;
     vertices[1] = br;
     vertices[2] = tr;
@@ -706,40 +766,25 @@ void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h) {
     vertices[4] = tr;
     vertices[5] = tl;
 
-    // setup uniform, try to reuse previous uniform when possible
-    ngp_uniform *prev_uniform = _ngp_prev_uniform(ngp);
-    bool reuse_uniform = prev_uniform &&
-                         memcmp(&prev_uniform->color, &ngp->color, sizeof(ngp_color)) == 0;
-    if(!reuse_uniform) {
-        // append new uniform
-        ngp_uniform *uniform = _ngp_next_uniform(ngp);
-        if(!uniform) return;
-        uniform->color = ngp->color;
-    }
-    int uniform_index = ngp->cur_uniform - 1;
+    _ngp_queue_draw(ngp, ngp->fill_triangles_pip, vertex_index, 6);
+}
 
-    ngp_command* prev_cmd = _ngp_prev_command(ngp);
-    bool merge_cmd = prev_cmd &&
-                     prev_cmd->cmd == NGP_COMMAND_DRAW &&
-                     prev_cmd->args.draw.pip.id == ngp->fill_triangles_pip.id &&
-                     prev_cmd->args.draw.uniform_index == uniform_index;
-    if(merge_cmd) {
-        // merge command for batched rendering
-        prev_cmd->args.draw.num_vertices += 6;
-    } else {
-        // append new draw command
-        ngp_command* cmd = _ngp_next_command(ngp);
-        if(!cmd) return;
-        *cmd = (ngp_command) {
-            .cmd = NGP_COMMAND_DRAW,
-            .args.draw = {
-                .pip = ngp->fill_triangles_pip,
-                .vertex_index = vertex_index,
-                .uniform_index = uniform_index,
-                .num_vertices = 6,
-            },
-        };
-    }
+void ngp_points(ngp_context* ngp, ngp_vec2* points, uint num_points) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+
+    uint vertex_index = ngp->cur_vertex;
+    ngp_vertex* vertices = _ngp_next_vertices(ngp, num_points);
+    if(!vertices) return;
+
+    // apply transform
+    for(uint i=0;i<num_points;++i)
+        vertices[i] = ngp_mat3_vec2_mul(&ngp->mvp, points[i]);
+
+    _ngp_queue_draw(ngp, ngp->points_pip, vertex_index, num_points);
+}
+
+void ngp_point(ngp_context* ngp, float x, float y) {
+    ngp_points(ngp, &(ngp_vec2){x, y}, 1);
 }
 
 #endif // NANOGP_IMPL
