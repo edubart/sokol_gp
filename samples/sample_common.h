@@ -17,7 +17,7 @@ int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
     // create window
     SDL_Window *window = SDL_CreateWindow("GP Clear",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        640, 480,
+        512, 512,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if(!window) {
         fprintf(stderr, "Failed to create SDL window: %s\n", SDL_GetError());
@@ -38,7 +38,6 @@ int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
         fprintf(stderr, "Failed to create NGP context: %s\n", ngp_get_error(&ngp));
         return 1;
     }
-    ngp_set_clear_color(&ngp, (ngp_color){0.0f, 0.0f, 1.0f, 1.0f});
 
     // run loop
     while(!SDL_QuitRequested()) {

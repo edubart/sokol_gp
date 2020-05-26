@@ -56,12 +56,16 @@ typedef enum ngp_error {
 typedef enum ngp_command_type {
     NGP_COMMAND_DRAW,
     NGP_COMMAND_VIEWPORT,
-    NGP_COMMAND_SCISSOR_RECT
+    NGP_COMMAND_SCISSOR
 } ngp_command_type;
 
 typedef struct ngp_rect {
     float x, y, w, h;
 } ngp_rect;
+
+typedef struct ngp_irect {
+    int x, y, w, h;
+} ngp_irect;
 
 typedef struct ngp_vec2 {
     float x, y;
@@ -77,16 +81,6 @@ typedef struct ngp_color {
     float r, g, b, a;
 } ngp_color;
 
-typedef struct ngp_state {
-    ngp_color color;
-    ngp_mat3 proj;
-    ngp_mat3 transform;
-    ngp_mat3 mvp;
-    int width;
-    int height;
-    bool matrix_dirty;
-} ngp_state;
-
 typedef struct ngp_draw_args {
     sg_pipeline pip;
     int vertex_index;
@@ -94,18 +88,10 @@ typedef struct ngp_draw_args {
     int num_vertices;
 } ngp_draw_args;
 
-typedef struct {
-    int x, y, w, h;
-} ngp_viewport_args;
-
-typedef struct {
-    int x, y, w, h;
-} ngp_scissor_rect_args;
-
 typedef union ngp_command_args {
     ngp_draw_args draw;
-    ngp_viewport_args viewport;
-    ngp_scissor_rect_args scissor_rect;
+    ngp_irect viewport;
+    ngp_irect scissor;
 } ngp_command_args;
 
 typedef struct ngp_command {
@@ -127,10 +113,16 @@ typedef struct ngp_desc {
 
 typedef struct ngp_context {
     uint32_t init_cookie;
+    const char *last_error;
+    ngp_error last_error_code;
+
+    // default render pass
     sg_pass_action pass_action;
 
-    // fixed pipelines
-    sg_pipeline filled_triangles_pip;
+    // resources
+    sg_buffer vbuf;
+    sg_bindings bind;
+    sg_pipeline fill_triangles_pip;
 
     // command queue
     int cur_vertex;
@@ -143,35 +135,36 @@ typedef struct ngp_context {
     ngp_uniform* uniforms;
     ngp_command* commands;
 
-    // resources
-    sg_buffer vbuf;
-    sg_bindings bind;
-
-    // last error
-    const char *last_error;
-    ngp_error last_error_code;
-
     // state tracking
-    ngp_state state;
+    ngp_color color;
+    ngp_irect viewport;
+    ngp_irect scissor;
+    ngp_mat3 proj;
+    ngp_mat3 transform;
+    ngp_mat3 mvp;
+    int width;
+    int height;
+    bool matrix_dirty;
 
     // matrix stack
     int cur_transform;
     ngp_mat3 transform_stack[_NGP_MAX_STACK_DEPTH];
 } ngp_context;
 
+// setup functions
 NGP_API bool ngp_create(ngp_context* ngp, ngp_desc* desc);
 NGP_API void ngp_destroy(ngp_context* ngp);
 NGP_API bool ngp_is_valid(ngp_context* ngp);
 NGP_API ngp_error ngp_get_error_code(ngp_context* ngp);
 NGP_API const char* ngp_get_error(ngp_context* ngp);
-NGP_API void ngp_reset_state(ngp_context* ngp);
+
+// rendering functions
 NGP_API void ngp_begin(ngp_context* ngp, int width, int height);
 NGP_API void ngp_end(ngp_context* ngp);
-NGP_API void ngp_set_clear_color(ngp_context* ngp, ngp_color color);
-NGP_API void ngp_unset_clear_color(ngp_context* ngp);
-NGP_API void ngp_set_color(ngp_context* ngp, ngp_color color);
-NGP_API void ngp_filled_rect(ngp_context* ngp, ngp_rect rect);
+NGP_API void ngp_set_clear_color(ngp_context* ngp, float r, float g, float b, float a);
+NGP_API void ngp_reset_clear_color(ngp_context* ngp);
 
+// state transform functions
 NGP_API void ngp_push_transform(ngp_context* ngp);
 NGP_API void ngp_pop_transform(ngp_context* ngp);
 NGP_API void ngp_translate(ngp_context* ngp, float x, float y);
@@ -179,6 +172,19 @@ NGP_API void ngp_rotate(ngp_context* ngp, float theta);
 NGP_API void ngp_rotate_at(ngp_context* ngp, float theta, float x, float y);
 NGP_API void ngp_scale(ngp_context* ngp, float sx, float sy);
 NGP_API void ngp_scale_at(ngp_context* ngp, float sx, float sy, float x, float y);
+NGP_API void ngp_reset_transform(ngp_context* ngp);
+
+// state changing functions
+NGP_API void ngp_set_color(ngp_context* ngp, float r, float g, float b, float a);
+NGP_API void ngp_reset_color(ngp_context* ngp);
+NGP_API void ngp_viewport(ngp_context* ngp, int x, int y, int w, int h);
+NGP_API void ngp_reset_viewport(ngp_context* ngp);
+NGP_API void ngp_scissor(ngp_context* ngp, int x, int y, int w, int h);
+NGP_API void ngp_reset_scissor(ngp_context* ngp);
+NGP_API void ngp_reset_state(ngp_context* ngp);
+
+// drawing functions
+NGP_API void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h);
 
 static inline ngp_mat3 ngp_mat3_identity() {
     return (ngp_mat3){
@@ -267,7 +273,7 @@ static void _ngp_set_error(ngp_context* ngp, ngp_error error_code, const char *e
 
 static void _ngp_setup_pipelines(ngp_context* ngp) {
     // create a pipeline
-    ngp->filled_triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
+    ngp->fill_triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = sg_make_shader(&(sg_shader_desc){
             .vs.source =
                 "#version 330\n"
@@ -374,36 +380,28 @@ const char* ngp_get_error(ngp_context* ngp) {
     return ngp->last_error;
 }
 
-static void _ngp_update_mvp(ngp_context* ngp) {
-    if(!ngp->state.matrix_dirty)
-        return;
-    ngp->state.mvp = ngp_mat3_mul(&ngp->state.proj, &ngp->state.transform);
-    ngp->state.matrix_dirty = false;
-}
-
-void ngp_reset_state(ngp_context* ngp) {
-    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp->state.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
-    ngp->state.transform = ngp_mat3_identity();
-    ngp->state.proj = ngp_mat3_proj2d(ngp->state.width, ngp->state.height);
-    ngp->state.matrix_dirty = true;
-    _ngp_update_mvp(ngp);
-}
-
 void ngp_begin(ngp_context* ngp, int width, int height) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     sg_begin_default_pass(&ngp->pass_action, width, height);
-    ngp->state.width = width;
-    ngp->state.height = height;
-    ngp_reset_state(ngp);
+
+    // default state
+    ngp->color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
+    ngp->viewport = (ngp_irect){0, 0, width, height};
+    ngp->scissor = (ngp_irect){0, 0, -1, -1};
+    ngp->proj = ngp_mat3_proj2d(width, height);
+    ngp->transform = ngp_mat3_identity();
+    ngp->mvp = ngp_mat3_mul(&ngp->proj, &ngp->transform);
+    ngp->width = width;
+    ngp->height = height;
+    ngp->matrix_dirty = false;
 }
 
 static void _ngp_rewind(ngp_context* ngp) {
-    ngp->cur_command = 0;
-    ngp->cur_uniform = 0;
-    ngp->cur_vertex = 0;
-    ngp->last_error_code = NGP_NO_ERROR;
     ngp->last_error = "";
+    ngp->last_error_code = NGP_NO_ERROR;
+    ngp->cur_vertex = 0;
+    ngp->cur_uniform = 0;
+    ngp->cur_command = 0;
 }
 
 static void _ngp_flush_commands(ngp_context* ngp) {
@@ -417,9 +415,13 @@ static void _ngp_flush_commands(ngp_context* ngp) {
         ngp_command* cmd = &ngp->commands[i];
         switch(cmd->cmd) {
             case NGP_COMMAND_VIEWPORT: {
+                ngp_irect* args = &cmd->args.viewport;
+                sg_apply_viewport(args->x, args->y, args->w, args->h, true);
                 break;
             }
-            case NGP_COMMAND_SCISSOR_RECT: {
+            case NGP_COMMAND_SCISSOR: {
+                ngp_irect* args = &cmd->args.scissor;
+                sg_apply_scissor_rect(args->x, args->y, args->w, args->h, true);
                 break;
             }
             case NGP_COMMAND_DRAW: {
@@ -458,17 +460,17 @@ void ngp_end(ngp_context* ngp) {
     sg_commit();
 }
 
-void ngp_set_clear_color(ngp_context* ngp, ngp_color color) {
+void ngp_set_clear_color(ngp_context* ngp, float r, float g, float b, float a) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp->pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_CLEAR,
-            .val = { color.r, color.g, color.b, color.a}
+            .val = {r,g,b,a}
         };
     }
 }
 
-void ngp_unset_clear_color(ngp_context* ngp) {
+void ngp_reset_clear_color(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp->pass_action.colors[i] = (sg_color_attachment_action) {
@@ -477,9 +479,87 @@ void ngp_unset_clear_color(ngp_context* ngp) {
     }
 }
 
-void ngp_set_color(ngp_context* ngp, ngp_color color) {
+void ngp_push_transform(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp->state.color = color;
+    if(ngp->cur_transform >= _NGP_MAX_STACK_DEPTH) {
+        _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
+        return;
+    }
+    ngp->transform_stack[ngp->cur_transform++] = ngp->transform;
+}
+
+void ngp_pop_transform(ngp_context* ngp) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    if(ngp->cur_transform <= 0) {
+        _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
+        return;
+    }
+    ngp->transform = ngp->transform_stack[--ngp->cur_transform];
+    ngp->matrix_dirty = true;
+}
+
+void ngp_translate(ngp_context* ngp, float x, float y) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_mat3 matrix = {
+       1.0f, 0.0f,    x,
+       0.0f, 1.0f,    y,
+       0.0f, 0.0f, 1.0f,
+    };
+    ngp->transform = ngp_mat3_mul(&ngp->transform, &matrix);
+    ngp->matrix_dirty = true;
+}
+
+void ngp_rotate(ngp_context* ngp, float theta) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    float sint = sinf(theta), cost = cosf(theta);
+    ngp_mat3 matrix = {
+       sint,  cost, 0.0f,
+       cost, -sint, 0.0f,
+       0.0f,  0.0f, 1.0f,
+    };
+    ngp->transform = ngp_mat3_mul(&ngp->transform, &matrix);
+    ngp->matrix_dirty = true;
+}
+
+void ngp_rotate_at(ngp_context* ngp, float theta, float x, float y) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_translate(ngp, x, y);
+    ngp_rotate(ngp, theta);
+    ngp_translate(ngp, -x, -y);
+}
+
+void ngp_scale(ngp_context* ngp, float sx, float sy) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_mat3 matrix = {
+        sx,  0.0f, 0.0f,
+       0.0f,   sy, 0.0f,
+       0.0f, 0.0f, 1.0f,
+    };
+    ngp->transform = ngp_mat3_mul(&ngp->transform, &matrix);
+    ngp->matrix_dirty = true;
+}
+
+void ngp_scale_at(ngp_context* ngp, float sx, float sy, float x, float y) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_translate(ngp, x, y);
+    ngp_scale(ngp, sx, sy);
+    ngp_translate(ngp, -x, -y);
+}
+
+void ngp_reset_transform(ngp_context* ngp) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp->transform = ngp_mat3_identity();
+    ngp->matrix_dirty = true;
+}
+
+void ngp_set_color(ngp_context* ngp, float r, float g, float b, float a) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp->color = (ngp_color){r,g,b,a};
+}
+
+void ngp_reset_color(ngp_context* ngp) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp->color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
 static ngp_vertex* _ngp_next_vertices(ngp_context* ngp, int count) {
@@ -526,86 +606,93 @@ static ngp_command* _ngp_next_command(ngp_context* ngp) {
     }
 }
 
-void ngp_push_transform(ngp_context* ngp) {
+void ngp_viewport(ngp_context* ngp, int x, int y, int w, int h) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    if(ngp->cur_transform >= _NGP_MAX_STACK_DEPTH) {
-        _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
+
+    // skip in case of the same viewport
+    if(ngp->viewport.x == x && ngp->viewport.y == y &&
+       ngp->viewport.w == ngp->viewport.w && ngp->viewport.h == h)
         return;
-    }
-    ngp->transform_stack[ngp->cur_transform++] = ngp->state.transform;
+
+    ngp_command* cmd = _ngp_next_command(ngp);
+    if(!cmd) return;
+    *cmd = (ngp_command) {
+        .cmd = NGP_COMMAND_VIEWPORT,
+        .args.viewport = {x, y, w, h},
+    };
+    ngp->viewport = (ngp_irect){x, y, w, h};
+    ngp->proj = ngp_mat3_proj2d(w, h);
+    ngp->matrix_dirty = true;
 }
 
-void ngp_pop_transform(ngp_context* ngp) {
+void ngp_reset_viewport(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    if(ngp->cur_transform <= 0) {
-        _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
+    ngp_viewport(ngp, 0, 0, ngp->width, ngp->height);
+}
+
+void ngp_scissor(ngp_context* ngp, int x, int y, int w, int h) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+
+    // skip in case of the same scissor
+    if(ngp->scissor.x == x && ngp->scissor.y == y &&
+       ngp->scissor.w == ngp->scissor.w && ngp->scissor.h == h)
         return;
-    }
-    ngp->state.transform = ngp->transform_stack[--ngp->cur_transform];
-    ngp->state.matrix_dirty = true;
-}
 
-void ngp_translate(ngp_context* ngp, float x, float y) {
-    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp_mat3 matrix = {
-       1.0f, 0.0f,    x,
-       0.0f, 1.0f,    y,
-       0.0f, 0.0f, 1.0f,
+    ngp_command* cmd = _ngp_next_command(ngp);
+    if(!cmd) return;
+
+    // coordinate scissor in viewport subspace
+    ngp_irect viewport_scissor = {ngp->viewport.x + x, ngp->viewport.y + y, w, h};
+
+    // reset scissor
+    if(w == -1 && h == -1 && x == 0 && y == 0)
+        viewport_scissor = (ngp_irect){0, 0, ngp->width, ngp->height};
+
+    *cmd = (ngp_command) {
+        .cmd = NGP_COMMAND_SCISSOR,
+        .args.scissor = viewport_scissor,
     };
-    ngp->state.transform = ngp_mat3_mul(&ngp->state.transform, &matrix);
-    ngp->state.matrix_dirty = true;
+    ngp->scissor = (ngp_irect){x, y, w, h};
 }
 
-void ngp_rotate(ngp_context* ngp, float theta) {
+void ngp_reset_scissor(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    float sint = sinf(theta), cost = cosf(theta);
-    ngp_mat3 matrix = {
-       sint,  cost, 0.0f,
-       cost, -sint, 0.0f,
-       0.0f,  0.0f, 1.0f,
-    };
-    ngp->state.transform = ngp_mat3_mul(&ngp->state.transform, &matrix);
-    ngp->state.matrix_dirty = true;
+    ngp_scissor(ngp, 0, 0, -1, -1);
 }
 
-void ngp_rotate_at(ngp_context* ngp, float theta, float x, float y) {
-    ngp_translate(ngp, x, y);
-    ngp_rotate(ngp, theta);
-    ngp_translate(ngp, -x, -y);
-}
-
-void ngp_scale(ngp_context* ngp, float sx, float sy) {
+void ngp_reset_state(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp_mat3 matrix = {
-        sx,  0.0f, 0.0f,
-       0.0f,   sy, 0.0f,
-       0.0f, 0.0f, 1.0f,
-    };
-    ngp->state.transform = ngp_mat3_mul(&ngp->state.transform, &matrix);
-    ngp->state.matrix_dirty = true;
+    ngp_reset_viewport(ngp);
+    ngp_reset_scissor(ngp);
+    ngp_reset_transform(ngp);
+    ngp_reset_color(ngp);
 }
 
-void ngp_scale_at(ngp_context* ngp, float sx, float sy, float x, float y) {
-    ngp_translate(ngp, x, y);
-    ngp_scale(ngp, sx, sy);
-    ngp_translate(ngp, -x, -y);
+static void _ngp_update_mvp(ngp_context* ngp) {
+    if(!ngp->matrix_dirty)
+        return;
+    ngp->mvp = ngp_mat3_mul(&ngp->proj, &ngp->transform);
+    ngp->matrix_dirty = false;
 }
 
-void ngp_filled_rect(ngp_context* ngp, ngp_rect rect) {
+void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+
+    //TODO: skip in case outside of viewport/scissor boundings?
 
     // compute vertexes
-    ngp_vec2 tl = (ngp_vec2){rect.x, rect.y};
-    ngp_vec2 br = (ngp_vec2){rect.x + rect.w, rect.y + rect.h};
-    ngp_vec2 tr = (ngp_vec2){br.x, tl.y};
-    ngp_vec2 bl = (ngp_vec2){tl.x, br.y};
+    float r = x + w, b = y + h;
+    ngp_vec2 tl = (ngp_vec2){x, y};
+    ngp_vec2 br = (ngp_vec2){r, b};
+    ngp_vec2 tr = (ngp_vec2){r, y};
+    ngp_vec2 bl = (ngp_vec2){x, b};
 
     // apply transform
     _ngp_update_mvp(ngp);
-    tl = ngp_mat3_vec2_mul(&ngp->state.mvp, tl);
-    br = ngp_mat3_vec2_mul(&ngp->state.mvp, br);
-    tr = ngp_mat3_vec2_mul(&ngp->state.mvp, tr);
-    bl = ngp_mat3_vec2_mul(&ngp->state.mvp, bl);
+    tl = ngp_mat3_vec2_mul(&ngp->mvp, tl);
+    br = ngp_mat3_vec2_mul(&ngp->mvp, br);
+    tr = ngp_mat3_vec2_mul(&ngp->mvp, tr);
+    bl = ngp_mat3_vec2_mul(&ngp->mvp, bl);
 
     // setup vertex
     int vertex_index = ngp->cur_vertex;
@@ -622,19 +709,19 @@ void ngp_filled_rect(ngp_context* ngp, ngp_rect rect) {
     // setup uniform, try to reuse previous uniform when possible
     ngp_uniform *prev_uniform = _ngp_prev_uniform(ngp);
     bool reuse_uniform = prev_uniform &&
-                         memcmp(&prev_uniform->color, &ngp->state.color, sizeof(ngp_color)) == 0;
+                         memcmp(&prev_uniform->color, &ngp->color, sizeof(ngp_color)) == 0;
     if(!reuse_uniform) {
         // append new uniform
         ngp_uniform *uniform = _ngp_next_uniform(ngp);
         if(!uniform) return;
-        uniform->color = ngp->state.color;
+        uniform->color = ngp->color;
     }
     int uniform_index = ngp->cur_uniform - 1;
 
     ngp_command* prev_cmd = _ngp_prev_command(ngp);
     bool merge_cmd = prev_cmd &&
                      prev_cmd->cmd == NGP_COMMAND_DRAW &&
-                     prev_cmd->args.draw.pip.id == ngp->filled_triangles_pip.id &&
+                     prev_cmd->args.draw.pip.id == ngp->fill_triangles_pip.id &&
                      prev_cmd->args.draw.uniform_index == uniform_index;
     if(merge_cmd) {
         // merge command for batched rendering
@@ -646,7 +733,7 @@ void ngp_filled_rect(ngp_context* ngp, ngp_rect rect) {
         *cmd = (ngp_command) {
             .cmd = NGP_COMMAND_DRAW,
             .args.draw = {
-                .pip = ngp->filled_triangles_pip,
+                .pip = ngp->fill_triangles_pip,
                 .vertex_index = vertex_index,
                 .uniform_index = uniform_index,
                 .num_vertices = 6,
