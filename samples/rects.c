@@ -37,11 +37,15 @@ void draw_rects(ngp_context* ngp) {
 void draw_points(ngp_context* ngp) {
     ngp_set_color(ngp, 1.0f, 1.0f, 1.0f, 1.0f);
     int width = ngp->viewport.w, height = ngp->viewport.h;
-    for(int y=64;y<height-64;y+=8) {
-        for(int x=64;x<width-64;x+=8) {
-            ngp_draw_point(ngp, x, y);
+    static ngp_vec2 points[4096];
+    uint count = 0;
+    for(int y=64;y<height-64 && count < 4096;y+=8) {
+        for(int x=64;x<width-64 && count < 4096;x+=8) {
+            points[count] = (ngp_vec2){x,y};
+            count++;
         }
     }
+    ngp_draw_points(ngp, points, count);
 }
 
 void draw_lines(ngp_context* ngp) {
@@ -56,6 +60,19 @@ void draw_lines(ngp_context* ngp) {
     }
 }
 
+void draw_triangles(ngp_context* ngp) {
+    int width = ngp->viewport.w, height = ngp->viewport.h;
+    float time = frame / 60.0f;
+    float hw = width * 0.5f;
+    float hh = height * 0.5f;
+    float w = height*0.3f;
+    float ax = hw - w, ay = hh + w;
+    float bx = hw,     by = hh - w;
+    float cx = hw + w, cy = hh + w;
+    ngp_set_color(ngp, 1.0f, 0.0f, 1.0f, 1.0f);
+    ngp_draw_triangle(ngp, ax, ay, bx, by, cx, cy);
+}
+
 void render(ng_context* ngctx, ngp_context* ngp) {
     int width, height;
     ngctx_get_drawable_size(ngctx, &width, &height);
@@ -68,13 +85,20 @@ void render(ng_context* ngctx, ngp_context* ngp) {
     ngp_viewport(ngp, 0, 0, hw, hh);
     ngp_set_color(ngp, 0.1f, 0.1f, 0.1f, 1.0f);
     ngp_draw_rect(ngp, 0, 0, hw, hh);
+    ngp_push_transform(ngp);
+    ngp_translate(ngp, 0.0f, -hh / 4.0f);
     draw_rects(ngp);
+    ngp_pop_transform(ngp);
+    ngp_push_transform(ngp);
+    ngp_translate(ngp, 0.0f, hh / 4.0f);
+    ngp_scissor(ngp, 0, 0, hw, 3.0f*hh / 4.0f);
+    draw_rects(ngp);
+    ngp_reset_scissor(ngp);
+    ngp_pop_transform(ngp);
 
     // top right
     ngp_viewport(ngp, hw, 0, hw, hh);
-    ngp_scissor(ngp, 0, 0, hw, hh / 2);
-    draw_rects(ngp);
-    ngp_reset_scissor(ngp);
+    draw_triangles(ngp);
 
     // bottom left
     ngp_viewport(ngp, 0, hh, hw, hh);

@@ -71,9 +71,12 @@ typedef struct ngp_vec2 {
 } ngp_vec2;
 
 typedef struct ngp_line {
-    ngp_vec2 a;
-    ngp_vec2 b;
+    ngp_vec2 a, b;
 } ngp_line;
+
+typedef struct ngp_triangle {
+    ngp_vec2 a, b, c;
+} ngp_triangle;
 
 typedef ngp_vec2 ngp_vertex;
 
@@ -189,11 +192,14 @@ NGP_API void ngp_reset_scissor(ngp_context* ngp);
 NGP_API void ngp_reset_state(ngp_context* ngp);
 
 // drawing functions
-NGP_API void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h);
-NGP_API void ngp_draw_points(ngp_context* ngp, const ngp_vec2* points, uint num_points);
+NGP_API void ngp_draw_points(ngp_context* ngp, const ngp_vec2* points, uint count);
 NGP_API void ngp_draw_point(ngp_context* ngp, float x, float y);
-NGP_API void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint num_lines);
+NGP_API void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint count);
 NGP_API void ngp_draw_line(ngp_context* ngp, float ax, float ay, float bx, float by);
+NGP_API void ngp_draw_triangles(ngp_context* ngp, const ngp_triangle* triangles, uint count);
+NGP_API void ngp_draw_triangle(ngp_context* ngp, float ax, float ay, float bx, float by, float cx, float cy);
+NGP_API void ngp_draw_rects(ngp_context* ngp, const ngp_rect* rects, uint count);
+NGP_API void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h);
 
 static inline ngp_mat3 ngp_mat3_identity() {
     return (ngp_mat3){
@@ -752,9 +758,57 @@ static void _ngp_queue_draw(ngp_context* ngp, sg_pipeline pip, uint vertex_index
     }
 }
 
-static void _ngp_transform_vertices(ngp_context* ngp, ngp_vec2* dest, const ngp_vec2 *src, uint num_vertices) {
-    for(uint i=0;i<num_vertices;++i)
+static void _ngp_transform_vertices(ngp_context* ngp, ngp_vec2* dest, const ngp_vec2 *src, uint count) {
+    for(uint i=0;i<count;++i)
         dest[i] = ngp_mat3_vec2_mul(&ngp->mvp, src[i]);
+}
+
+void ngp_draw_triangles(ngp_context* ngp, const ngp_triangle* triangles, uint count) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+
+    uint vertex_index = ngp->cur_vertex;
+    uint num_vertices = count * 3;
+    ngp_vertex* vertices = _ngp_next_vertices(ngp, num_vertices);
+    if(NGP_UNLIKELY(!vertices)) return;
+
+    _ngp_transform_vertices(ngp, vertices, (const ngp_vec2*)triangles, num_vertices);
+    _ngp_queue_draw(ngp, ngp->triangles_pip, vertex_index, num_vertices);
+}
+
+void ngp_draw_triangle(ngp_context* ngp, float ax, float ay, float bx, float by, float cx, float cy) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_draw_triangles(ngp, &(ngp_triangle){{ax,ay},{bx, by},{cx, cy}}, 1);
+}
+
+void ngp_draw_rects(ngp_context* ngp, const ngp_rect* rects, uint count) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+
+    // setup vertices
+    uint num_vertices = count * 6;
+    uint vertex_index = ngp->cur_vertex;
+    ngp_vertex* vertices = _ngp_next_vertices(ngp, num_vertices);
+    if(NGP_UNLIKELY(!vertices)) return;
+
+    // compute vertices
+    for(uint i=0;i<count;++i) {
+        const ngp_rect* rect = &rects[i];
+        float l = rect->x, t = rect->y;
+        float r = rect->x + rect->w, b = rect->y + rect->h;
+        ngp_vec2 quad[4] = {
+            {l, b}, // bottom left
+            {r, b}, // bottom right
+            {r, t}, // top right
+            {l, t}, // top left
+        };
+        _ngp_transform_vertices(ngp, quad, quad, 4);
+
+        // make a quad composed of 2 triangles
+        ngp_vertex* v = &vertices[count*6];
+        v[0] = quad[0]; v[1] = quad[1]; v[2] = quad[2];
+        v[3] = quad[0]; v[4] = quad[2]; v[5] = quad[3];
+    }
+
+    _ngp_queue_draw(ngp, ngp->triangles_pip, vertex_index, num_vertices);
 }
 
 void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h) {
@@ -783,15 +837,15 @@ void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h) {
     _ngp_queue_draw(ngp, ngp->triangles_pip, vertex_index, 6);
 }
 
-void ngp_draw_points(ngp_context* ngp, const ngp_vec2* points, uint num_points) {
+void ngp_draw_points(ngp_context* ngp, const ngp_vec2* points, uint count) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
 
     uint vertex_index = ngp->cur_vertex;
-    ngp_vertex* vertices = _ngp_next_vertices(ngp, num_points);
+    ngp_vertex* vertices = _ngp_next_vertices(ngp, count);
     if(NGP_UNLIKELY(!vertices)) return;
 
-    _ngp_transform_vertices(ngp, vertices, points, num_points);
-    _ngp_queue_draw(ngp, ngp->points_pip, vertex_index, num_points);
+    _ngp_transform_vertices(ngp, vertices, points, count);
+    _ngp_queue_draw(ngp, ngp->points_pip, vertex_index, count);
 }
 
 void ngp_draw_point(ngp_context* ngp, float x, float y) {
@@ -799,11 +853,11 @@ void ngp_draw_point(ngp_context* ngp, float x, float y) {
     ngp_draw_points(ngp, &(ngp_vec2){x, y}, 1);
 }
 
-void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint num_lines) {
+void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint count) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
 
     uint vertex_index = ngp->cur_vertex;
-    uint num_vertices = num_lines * 2;
+    uint num_vertices = count * 2;
     ngp_vertex* vertices = _ngp_next_vertices(ngp, num_vertices);
     if(NGP_UNLIKELY(!vertices)) return;
 
@@ -813,7 +867,7 @@ void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint num_lines) {
 
 void ngp_draw_line(ngp_context* ngp, float ax, float ay, float bx, float by) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp_draw_lines(ngp, &(ngp_line){.a={ax,ay}, .b={bx, by}}, 1);
+    ngp_draw_lines(ngp, &(ngp_line){{ax,ay},{bx, by}}, 1);
 }
 
 #endif // NANOGP_IMPL
