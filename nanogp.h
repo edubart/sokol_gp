@@ -132,6 +132,8 @@ typedef struct ngp_context {
     sg_pipeline triangles_pip;
     sg_pipeline points_pip;
     sg_pipeline lines_pip;
+    sg_pipeline triangle_strip_pip;
+    sg_pipeline line_strip_pip;
 
     // command queue
     uint cur_vertex;
@@ -200,19 +202,15 @@ NGP_API void ngp_draw_triangles(ngp_context* ngp, const ngp_triangle* triangles,
 NGP_API void ngp_draw_triangle(ngp_context* ngp, float ax, float ay, float bx, float by, float cx, float cy);
 NGP_API void ngp_draw_rects(ngp_context* ngp, const ngp_rect* rects, uint count);
 NGP_API void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h);
+NGP_API void ngp_draw_line_strip(ngp_context* ngp, const ngp_vec2* points, uint count);
+NGP_API void ngp_draw_triangle_strip(ngp_context* ngp, const ngp_vec2* points, uint count);
 
+// utilities
 static inline ngp_mat3 ngp_mat3_identity() {
     return (ngp_mat3){
         1.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 0.0f,
         0.0f, 0.0f, 1.0f,
-    };
-}
-
-static inline ngp_vec2 ngp_mat3_vec2_mul(const ngp_mat3* m, ngp_vec2 v) {
-    return (ngp_vec2){
-        .x = m->v[0][0]*v.x + m->v[0][1]*v.y + m->v[0][2],
-        .y = m->v[1][0]*v.x + m->v[1][1]*v.y + m->v[1][2]
     };
 }
 
@@ -229,28 +227,6 @@ static inline ngp_mat3 ngp_mat3_mul(const ngp_mat3* a, const ngp_mat3* b) {
     p.v[2][2] = a->v[2][0]*b->v[0][2] + a->v[2][1]*b->v[1][2] + a->v[2][2]*b->v[2][2];
     return p;
 }
-
-static inline ngp_mat3 ngp_proj2d(int width, int height) {
-    // matrix to convert screen coordinate system
-    // to the usual the coordinate system used on the backends
-    return (ngp_mat3){
-        2.0f/width,           0.0f, -1.0f,
-              0.0f,   -2.0f/height,  1.0f,
-              0.0f,           0.0f,  1.0f
-    };
-}
-
-static inline ngp_mat3 _ngp_mul_proj2d_transform(ngp_mat3* proj, ngp_mat3* transform) {
-    // this actually multiply matrix proj2d by transform matrix in an optimized way
-    // the effect is the same as "return ngp_mat3_mul(proj, transform);"
-    float x = proj->v[0][0], y = proj->v[1][1];
-    float a = transform->v[2][0], b = transform->v[2][1], c = transform->v[2][2];
-    return (ngp_mat3) {
-        x*transform->v[0][0]-a, x*transform->v[0][1]-b, x*transform->v[0][2]-c,
-        y*transform->v[1][0]+a, y*transform->v[1][1]+b, y*transform->v[1][2]+c,
-        a, b, c
-    };
-};
 
 static inline bool ngp_color_eq(ngp_color a, ngp_color b) {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
@@ -352,6 +328,16 @@ static void _ngp_setup_pipelines(ngp_context* ngp) {
         .primitive_type = SG_PRIMITIVETYPE_LINES,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
+    ngp->triangle_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = solid_shader,
+        .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+        .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
+    });
+    ngp->line_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = solid_shader,
+        .primitive_type = SG_PRIMITIVETYPE_LINE_STRIP,
+        .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
+    });
 }
 
 bool ngp_create(ngp_context* ngp, const ngp_desc* desc) {
@@ -430,6 +416,16 @@ const char* ngp_get_error(ngp_context* ngp) {
     return ngp->last_error;
 }
 
+static inline ngp_mat3 _ngp_proj2d(int width, int height) {
+    // matrix to convert screen coordinate system
+    // to the usual the coordinate system used on the backends
+    return (ngp_mat3){
+        2.0f/width,           0.0f, -1.0f,
+              0.0f,   -2.0f/height,  1.0f,
+              0.0f,           0.0f,  1.0f
+    };
+}
+
 void ngp_begin(ngp_context* ngp, int width, int height) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     sg_begin_default_pass(&ngp->pass_action, width, height);
@@ -438,7 +434,7 @@ void ngp_begin(ngp_context* ngp, int width, int height) {
     ngp->color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
     ngp->viewport = (ngp_irect){0, 0, width, height};
     ngp->scissor = (ngp_irect){0, 0, -1, -1};
-    ngp->proj = ngp_proj2d(width, height);
+    ngp->proj = _ngp_proj2d(width, height);
     ngp->transform = ngp_mat3_identity();
     ngp->mvp = ngp->proj;
     ngp->width = width;
@@ -527,6 +523,18 @@ void ngp_reset_clear_color(ngp_context* ngp) {
         };
     }
 }
+
+static inline ngp_mat3 _ngp_mul_proj2d_transform(ngp_mat3* proj, ngp_mat3* transform) {
+    // this actually multiply matrix proj2d by transform matrix in an optimized way
+    // the effect is the same as "return ngp_mat3_mul(proj, transform);"
+    float x = proj->v[0][0], y = proj->v[1][1];
+    float a = transform->v[2][0], b = transform->v[2][1], c = transform->v[2][2];
+    return (ngp_mat3) {
+        x*transform->v[0][0]-a, x*transform->v[0][1]-b, x*transform->v[0][2]-c,
+        y*transform->v[1][0]+a, y*transform->v[1][1]+b, y*transform->v[1][2]+c,
+        a, b, c
+    };
+};
 
 void ngp_push_transform(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
@@ -677,7 +685,7 @@ void ngp_viewport(ngp_context* ngp, int x, int y, int w, int h) {
     }
 
     ngp->viewport = (ngp_irect){x, y, w, h};
-    ngp->proj = ngp_proj2d(w, h);
+    ngp->proj = _ngp_proj2d(w, h);
     ngp->mvp = _ngp_mul_proj2d_transform(&ngp->proj, &ngp->transform);
 }
 
@@ -758,21 +766,30 @@ static void _ngp_queue_draw(ngp_context* ngp, sg_pipeline pip, uint vertex_index
     }
 }
 
+static inline ngp_vec2 ngp_mat3_vec2_mul(const ngp_mat3* m, ngp_vec2 v) {
+    return (ngp_vec2){
+        .x = m->v[0][0]*v.x + m->v[0][1]*v.y + m->v[0][2],
+        .y = m->v[1][0]*v.x + m->v[1][1]*v.y + m->v[1][2]
+    };
+}
+
 static void _ngp_transform_vertices(ngp_context* ngp, ngp_vec2* dest, const ngp_vec2 *src, uint count) {
     for(uint i=0;i<count;++i)
         dest[i] = ngp_mat3_vec2_mul(&ngp->mvp, src[i]);
 }
 
-void ngp_draw_triangles(ngp_context* ngp, const ngp_triangle* triangles, uint count) {
-    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-
+static void _ngp_draw_pip(ngp_context* ngp, sg_pipeline pip, const ngp_vec2* vertices, uint count) {
     uint vertex_index = ngp->cur_vertex;
-    uint num_vertices = count * 3;
-    ngp_vertex* vertices = _ngp_next_vertices(ngp, num_vertices);
+    ngp_vertex* transformed_vertices = _ngp_next_vertices(ngp, count);
     if(NGP_UNLIKELY(!vertices)) return;
 
-    _ngp_transform_vertices(ngp, vertices, (const ngp_vec2*)triangles, num_vertices);
-    _ngp_queue_draw(ngp, ngp->triangles_pip, vertex_index, num_vertices);
+    _ngp_transform_vertices(ngp, transformed_vertices, vertices, count);
+    _ngp_queue_draw(ngp, pip, vertex_index, count);
+}
+
+void ngp_draw_triangles(ngp_context* ngp, const ngp_triangle* triangles, uint count) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    _ngp_draw_pip(ngp, ngp->triangles_pip, (const ngp_vec2*)triangles, count*3);
 }
 
 void ngp_draw_triangle(ngp_context* ngp, float ax, float ay, float bx, float by, float cx, float cy) {
@@ -839,13 +856,7 @@ void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h) {
 
 void ngp_draw_points(ngp_context* ngp, const ngp_vec2* points, uint count) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-
-    uint vertex_index = ngp->cur_vertex;
-    ngp_vertex* vertices = _ngp_next_vertices(ngp, count);
-    if(NGP_UNLIKELY(!vertices)) return;
-
-    _ngp_transform_vertices(ngp, vertices, points, count);
-    _ngp_queue_draw(ngp, ngp->points_pip, vertex_index, count);
+    _ngp_draw_pip(ngp, ngp->points_pip, points, count);
 }
 
 void ngp_draw_point(ngp_context* ngp, float x, float y) {
@@ -855,19 +866,22 @@ void ngp_draw_point(ngp_context* ngp, float x, float y) {
 
 void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint count) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-
-    uint vertex_index = ngp->cur_vertex;
-    uint num_vertices = count * 2;
-    ngp_vertex* vertices = _ngp_next_vertices(ngp, num_vertices);
-    if(NGP_UNLIKELY(!vertices)) return;
-
-    _ngp_transform_vertices(ngp, vertices, (const ngp_vec2*)lines, num_vertices);
-    _ngp_queue_draw(ngp, ngp->lines_pip, vertex_index, num_vertices);
+    _ngp_draw_pip(ngp, ngp->lines_pip, (const ngp_vec2*)lines, count*2);
 }
 
 void ngp_draw_line(ngp_context* ngp, float ax, float ay, float bx, float by) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     ngp_draw_lines(ngp, &(ngp_line){{ax,ay},{bx, by}}, 1);
+}
+
+void ngp_draw_line_strip(ngp_context* ngp, const ngp_vec2* points, uint count) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    _ngp_draw_pip(ngp, ngp->line_strip_pip, points, count);
+}
+
+void ngp_draw_triangle_strip(ngp_context* ngp, const ngp_vec2* points, uint count) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    _ngp_draw_pip(ngp, ngp->triangle_strip_pip, points, count);
 }
 
 #endif // NANOGP_IMPL
