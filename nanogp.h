@@ -70,6 +70,11 @@ typedef struct ngp_vec2 {
     float x, y;
 } ngp_vec2;
 
+typedef struct ngp_line {
+    ngp_vec2 a;
+    ngp_vec2 b;
+} ngp_line;
+
 typedef ngp_vec2 ngp_vertex;
 
 typedef struct ngp_mat3 {
@@ -121,8 +126,9 @@ typedef struct ngp_context {
     // resources
     sg_buffer vbuf;
     sg_bindings bind;
-    sg_pipeline fill_triangles_pip;
+    sg_pipeline triangles_pip;
     sg_pipeline points_pip;
+    sg_pipeline lines_pip;
 
     // command queue
     uint cur_vertex;
@@ -151,7 +157,7 @@ typedef struct ngp_context {
 } ngp_context;
 
 // setup functions
-NGP_API bool ngp_create(ngp_context* ngp, ngp_desc* desc);
+NGP_API bool ngp_create(ngp_context* ngp, const ngp_desc* desc);
 NGP_API void ngp_destroy(ngp_context* ngp);
 NGP_API bool ngp_is_valid(ngp_context* ngp);
 NGP_API ngp_error ngp_get_error_code(ngp_context* ngp);
@@ -183,7 +189,11 @@ NGP_API void ngp_reset_scissor(ngp_context* ngp);
 NGP_API void ngp_reset_state(ngp_context* ngp);
 
 // drawing functions
-NGP_API void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h);
+NGP_API void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h);
+NGP_API void ngp_draw_points(ngp_context* ngp, const ngp_vec2* points, uint num_points);
+NGP_API void ngp_draw_point(ngp_context* ngp, float x, float y);
+NGP_API void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint num_lines);
+NGP_API void ngp_draw_line(ngp_context* ngp, float ax, float ay, float bx, float by);
 
 static inline ngp_mat3 ngp_mat3_identity() {
     return (ngp_mat3){
@@ -321,7 +331,7 @@ static void _ngp_setup_pipelines(ngp_context* ngp) {
     });
 
     // create pipelines
-    ngp->fill_triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
+    ngp->triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
@@ -331,9 +341,14 @@ static void _ngp_setup_pipelines(ngp_context* ngp) {
         .primitive_type = SG_PRIMITIVETYPE_POINTS,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
+    ngp->lines_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = solid_shader,
+        .primitive_type = SG_PRIMITIVETYPE_LINES,
+        .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
+    });
 }
 
-bool ngp_create(ngp_context* ngp, ngp_desc* desc) {
+bool ngp_create(ngp_context* ngp, const ngp_desc* desc) {
     NGP_ASSERT(ngp->init_cookie == 0);
 
     // setup sokol
@@ -737,7 +752,12 @@ static void _ngp_queue_draw(ngp_context* ngp, sg_pipeline pip, uint vertex_index
     }
 }
 
-void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h) {
+static void _ngp_transform_vertices(ngp_context* ngp, ngp_vec2* dest, const ngp_vec2 *src, uint num_vertices) {
+    for(uint i=0;i<num_vertices;++i)
+        dest[i] = ngp_mat3_vec2_mul(&ngp->mvp, src[i]);
+}
+
+void ngp_draw_rect(ngp_context* ngp, float x, float y, float w, float h) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
 
     // setup vertices
@@ -747,44 +767,53 @@ void ngp_fill_rect(ngp_context* ngp, float x, float y, float w, float h) {
 
     // compute vertices
     float r = x + w, b = y + h;
-    ngp_vec2 tl = (ngp_vec2){x, y};
-    ngp_vec2 br = (ngp_vec2){r, b};
-    ngp_vec2 tr = (ngp_vec2){r, y};
-    ngp_vec2 bl = (ngp_vec2){x, b};
+    ngp_vec2 quad[4] = {
+        {x, b}, // bottom left
+        {r, b}, // bottom right
+        {r, y}, // top right
+        {x, y}, // top left
+    };
 
-    // apply transform
-    tl = ngp_mat3_vec2_mul(&ngp->mvp, tl);
-    br = ngp_mat3_vec2_mul(&ngp->mvp, br);
-    tr = ngp_mat3_vec2_mul(&ngp->mvp, tr);
-    bl = ngp_mat3_vec2_mul(&ngp->mvp, bl);
+    _ngp_transform_vertices(ngp, quad, quad, 4);
 
-    // to make a quad we need 2 triangles
-    vertices[0] = bl;
-    vertices[1] = br;
-    vertices[2] = tr;
-    vertices[3] = bl;
-    vertices[4] = tr;
-    vertices[5] = tl;
+    // make a quad composed of 2 triangles
+    vertices[0] = quad[0]; vertices[1] = quad[1]; vertices[2] = quad[2];
+    vertices[3] = quad[0]; vertices[4] = quad[2]; vertices[5] = quad[3];
 
-    _ngp_queue_draw(ngp, ngp->fill_triangles_pip, vertex_index, 6);
+    _ngp_queue_draw(ngp, ngp->triangles_pip, vertex_index, 6);
 }
 
-void ngp_points(ngp_context* ngp, ngp_vec2* points, uint num_points) {
+void ngp_draw_points(ngp_context* ngp, const ngp_vec2* points, uint num_points) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
 
     uint vertex_index = ngp->cur_vertex;
     ngp_vertex* vertices = _ngp_next_vertices(ngp, num_points);
-    if(!vertices) return;
+    if(NGP_UNLIKELY(!vertices)) return;
 
-    // apply transform
-    for(uint i=0;i<num_points;++i)
-        vertices[i] = ngp_mat3_vec2_mul(&ngp->mvp, points[i]);
-
+    _ngp_transform_vertices(ngp, vertices, points, num_points);
     _ngp_queue_draw(ngp, ngp->points_pip, vertex_index, num_points);
 }
 
-void ngp_point(ngp_context* ngp, float x, float y) {
-    ngp_points(ngp, &(ngp_vec2){x, y}, 1);
+void ngp_draw_point(ngp_context* ngp, float x, float y) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_draw_points(ngp, &(ngp_vec2){x, y}, 1);
+}
+
+void ngp_draw_lines(ngp_context* ngp, const ngp_line* lines, uint num_lines) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+
+    uint vertex_index = ngp->cur_vertex;
+    uint num_vertices = num_lines * 2;
+    ngp_vertex* vertices = _ngp_next_vertices(ngp, num_vertices);
+    if(NGP_UNLIKELY(!vertices)) return;
+
+    _ngp_transform_vertices(ngp, vertices, (const ngp_vec2*)lines, num_vertices);
+    _ngp_queue_draw(ngp, ngp->lines_pip, vertex_index, num_vertices);
+}
+
+void ngp_draw_line(ngp_context* ngp, float ax, float ay, float bx, float by) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_draw_lines(ngp, &(ngp_line){.a={ax,ay}, .b={bx, by}}, 1);
 }
 
 #endif // NANOGP_IMPL

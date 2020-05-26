@@ -14,7 +14,7 @@ void draw_rects(ngp_context* ngp) {
     ngp_translate(ngp, width*0.25f - hsize, height*0.5f - hsize);
     ngp_translate(ngp, 0.0f, 2*size*t - size);
     ngp_set_color(ngp, t, 0.3f, 1.0f-t, 1.0f);
-    ngp_fill_rect(ngp, 0, 0, size, size);
+    ngp_draw_rect(ngp, 0, 0, size, size);
     ngp_pop_transform(ngp);
 
     // middle
@@ -22,7 +22,7 @@ void draw_rects(ngp_context* ngp) {
     ngp_translate(ngp, width*0.5f - hsize, height*0.5f - hsize);
     ngp_rotate_at(ngp, time, hsize, hsize);
     ngp_set_color(ngp, t, 1.0f - t, 0.3f, 1.0f);
-    ngp_fill_rect(ngp, 0, 0, size, size);
+    ngp_draw_rect(ngp, 0, 0, size, size);
     ngp_pop_transform(ngp);
 
     // right
@@ -30,18 +30,29 @@ void draw_rects(ngp_context* ngp) {
     ngp_translate(ngp, width*0.75f - hsize, height*0.5f - hsize);
     ngp_scale_at(ngp, t + 0.25f, t + 0.5f, hsize, hsize);
     ngp_set_color(ngp, 0.3f, t, 1.0f - t, 1.0f);
-    ngp_fill_rect(ngp, 0, 0, size, size);
+    ngp_draw_rect(ngp, 0, 0, size, size);
     ngp_pop_transform(ngp);
 }
 
 void draw_points(ngp_context* ngp) {
-    float time = frame / 60.0f;
     ngp_set_color(ngp, 1.0f, 1.0f, 1.0f, 1.0f);
     int width = ngp->viewport.w, height = ngp->viewport.h;
     for(int y=64;y<height-64;y+=8) {
         for(int x=64;x<width-64;x+=8) {
-            ngp_point(ngp, x, y);
+            ngp_draw_point(ngp, x, y);
         }
+    }
+}
+
+void draw_lines(ngp_context* ngp) {
+    ngp_set_color(ngp, 1.0f, 1.0f, 1.0f, 1.0f);
+    ngp_vec2 c = {ngp->viewport.w / 2, ngp->viewport.h / 2};
+    ngp_vec2 a = c;
+    for(float theta = 0.0f; theta <= M_PI*8.0f; theta+=M_PI/10.0f) {
+        float r = 10.0f*theta;
+        ngp_vec2 b = {c.x + r*cosf(theta), c.y + r*sinf(theta)};
+        ngp_draw_line(ngp, a.x, a.y, b.x, b.y);
+        a = b;
     }
 }
 
@@ -56,7 +67,7 @@ void render(ng_context* ngctx, ngp_context* ngp) {
     // top left
     ngp_viewport(ngp, 0, 0, hw, hh);
     ngp_set_color(ngp, 0.1f, 0.1f, 0.1f, 1.0f);
-    ngp_fill_rect(ngp, 0, 0, hw, hh);
+    ngp_draw_rect(ngp, 0, 0, hw, hh);
     draw_rects(ngp);
 
     // top right
@@ -72,8 +83,8 @@ void render(ng_context* ngctx, ngp_context* ngp) {
     // bottom right
     ngp_viewport(ngp, hw, hh, hw, hh);
     ngp_set_color(ngp, 0.1f, 0.1f, 0.1f, 1.0f);
-    ngp_fill_rect(ngp, 0, 0, hw, hh);
-    draw_points(ngp);
+    ngp_draw_rect(ngp, 0, 0, hw, hh);
+    draw_lines(ngp);
 
     ngp_end(ngp);
     ngctx_swap(ngctx);
