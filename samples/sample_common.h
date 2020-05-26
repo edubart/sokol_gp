@@ -8,9 +8,13 @@
 #include <math.h>
 
 int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
-    // create window
-    ngctx_prepare_attributes();
+    // initialize SDL
     SDL_Init(SDL_INIT_VIDEO);
+
+    // setup context attributes before window and context creation
+    ngctx_prepare_attributes(&(ng_context_desc){.sample_count = 4});
+
+    // create window
     SDL_Window *window = SDL_CreateWindow("GP Clear",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         640, 480,
@@ -28,7 +32,7 @@ int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
     }
     ngctx_set_swap_interval(&ngctx, 1);
 
-    // create nanogp context
+    // create NanoGP context
     ngp_context ngp = {0};
     if(!ngp_create(&ngp, &(ngp_desc){0})) {
         fprintf(stderr, "Failed to create NGP context: %s\n", ngp_get_error(&ngp));

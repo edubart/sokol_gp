@@ -40,6 +40,11 @@ SOFTWARE.
 
 #include <SDL2/SDL.h>
 
+typedef struct ng_context_desc {
+    int sample_count;
+    int depth_size;
+} ng_context_desc;
+
 typedef struct ng_context {
     uint32_t init_cookie;
     SDL_Window* window;
@@ -60,10 +65,14 @@ const char* ngctx_get_error(ng_context* ctx);
 
 #ifdef NANOGCTX_IMPL
 
-void ngctx_prepare_attributes() {
+void ngctx_prepare_attributes(ng_context_desc* desc) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, desc->depth_size);
+    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, desc->sample_count > 0 ? 1 : 0);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, desc->sample_count);
 }
 
 bool ngctx_create(ng_context* ctx, SDL_Window* window) {

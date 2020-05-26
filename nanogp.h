@@ -32,6 +32,7 @@ SOFTWARE.
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "sokol_gfx.h"
 
 #ifndef NGP_API
@@ -48,6 +49,8 @@ typedef enum ngp_error {
     NGP_ERROR_VERTICES_FULL,
     NGP_ERROR_UNIFORMS_FULL,
     NGP_ERROR_COMMANDS_FULL,
+    NGP_ERROR_TRANSFORM_STACK_OVERFLOW,
+    NGP_ERROR_TRANSFORM_STACK_UNDERFLOW,
 } ngp_error;
 
 typedef enum ngp_command_type {
@@ -77,7 +80,7 @@ typedef struct ngp_color {
 typedef struct ngp_state {
     ngp_color color;
     ngp_mat3 proj;
-    ngp_mat3 modelview;
+    ngp_mat3 transform;
     ngp_mat3 mvp;
     int width;
     int height;
@@ -117,27 +120,43 @@ typedef struct ngp_uniform {
 typedef struct ngp_desc {
     int max_vertices;
     int max_commands;
+    int sample_count;
 } ngp_desc;
+
+#define _NGP_MAX_STACK_DEPTH 64
 
 typedef struct ngp_context {
     uint32_t init_cookie;
     sg_pass_action pass_action;
-    const char *last_error;
-    ngp_error last_error_code;
-    ngp_state state;
-    sg_pipeline filled_rect_pip;
+
+    // fixed pipelines
+    sg_pipeline filled_triangles_pip;
+
+    // command queue
     int cur_vertex;
     int cur_uniform;
     int cur_command;
     int num_vertices;
     int num_uniforms;
     int num_commands;
-    sg_shader shd;
-    sg_buffer vbuf;
-    sg_bindings bind;
     ngp_vertex* vertices;
     ngp_uniform* uniforms;
     ngp_command* commands;
+
+    // resources
+    sg_buffer vbuf;
+    sg_bindings bind;
+
+    // last error
+    const char *last_error;
+    ngp_error last_error_code;
+
+    // state tracking
+    ngp_state state;
+
+    // matrix stack
+    int cur_transform;
+    ngp_mat3 transform_stack[_NGP_MAX_STACK_DEPTH];
 } ngp_context;
 
 NGP_API bool ngp_create(ngp_context* ngp, ngp_desc* desc);
@@ -152,6 +171,14 @@ NGP_API void ngp_set_clear_color(ngp_context* ngp, ngp_color color);
 NGP_API void ngp_unset_clear_color(ngp_context* ngp);
 NGP_API void ngp_set_color(ngp_context* ngp, ngp_color color);
 NGP_API void ngp_filled_rect(ngp_context* ngp, ngp_rect rect);
+
+NGP_API void ngp_push_transform(ngp_context* ngp);
+NGP_API void ngp_pop_transform(ngp_context* ngp);
+NGP_API void ngp_translate(ngp_context* ngp, float x, float y);
+NGP_API void ngp_rotate(ngp_context* ngp, float theta);
+NGP_API void ngp_rotate_at(ngp_context* ngp, float theta, float x, float y);
+NGP_API void ngp_scale(ngp_context* ngp, float sx, float sy);
+NGP_API void ngp_scale_at(ngp_context* ngp, float sx, float sy, float x, float y);
 
 static inline ngp_mat3 ngp_mat3_identity() {
     return (ngp_mat3){
@@ -240,7 +267,7 @@ static void _ngp_set_error(ngp_context* ngp, ngp_error error_code, const char *e
 
 static void _ngp_setup_pipelines(ngp_context* ngp) {
     // create a pipeline
-    ngp->filled_rect_pip = sg_make_pipeline(&(sg_pipeline_desc){
+    ngp->filled_triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = sg_make_shader(&(sg_shader_desc){
             .vs.source =
                 "#version 330\n"
@@ -263,6 +290,7 @@ static void _ngp_setup_pipelines(ngp_context* ngp) {
                 [0] = {.name="position", .sem_name="POSITION"},
             },
         }),
+        .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .layout.attrs = {
             [0] = {
                 .offset=0,
@@ -277,7 +305,8 @@ bool ngp_create(ngp_context* ngp, ngp_desc* desc) {
 
     // setup sokol
     sg_setup(&(sg_desc){
-        .context.depth_format = SG_PIXELFORMAT_NONE // depth buffer is not needed
+        .context.depth_format = SG_PIXELFORMAT_NONE, // depth buffer is not needed
+        .context.sample_count = desc->sample_count,
     });
     if(!sg_isvalid()) {
         _ngp_set_error(ngp, NGP_ERROR_SOKOL_INVALID, "sokol_gfx initialization failed");
@@ -308,13 +337,14 @@ bool ngp_create(ngp_context* ngp, ngp_desc* desc) {
 
     // disable default render clear color
     ngp->pass_action = (sg_pass_action){
-        .colors[0] = { .action = SG_ACTION_DONTCARE },
-        .colors[1] = { .action = SG_ACTION_DONTCARE },
-        .colors[2] = { .action = SG_ACTION_DONTCARE },
-        .colors[3] = { .action = SG_ACTION_DONTCARE },
         .stencil = {.action = SG_ACTION_DONTCARE },
         .depth = {.action = SG_ACTION_DONTCARE }
     };
+    for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+        ngp->pass_action.colors[i] = (sg_color_attachment_action) {
+            .action = SG_ACTION_DONTCARE,
+        };
+    }
 
     _ngp_setup_pipelines(ngp);
     return true;
@@ -347,14 +377,14 @@ const char* ngp_get_error(ngp_context* ngp) {
 static void _ngp_update_mvp(ngp_context* ngp) {
     if(!ngp->state.matrix_dirty)
         return;
-    ngp->state.mvp = ngp_mat3_mul(&ngp->state.proj, &ngp->state.modelview);
+    ngp->state.mvp = ngp_mat3_mul(&ngp->state.proj, &ngp->state.transform);
     ngp->state.matrix_dirty = false;
 }
 
 void ngp_reset_state(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
     ngp->state.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
-    ngp->state.modelview = ngp_mat3_identity();
+    ngp->state.transform = ngp_mat3_identity();
     ngp->state.proj = ngp_mat3_proj2d(ngp->state.width, ngp->state.height);
     ngp->state.matrix_dirty = true;
     _ngp_update_mvp(ngp);
@@ -430,17 +460,21 @@ void ngp_end(ngp_context* ngp) {
 
 void ngp_set_clear_color(ngp_context* ngp, ngp_color color) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp->pass_action.colors[0] = (sg_color_attachment_action) {
-        .action = SG_ACTION_CLEAR,
-        .val = { color.r, color.g, color.b, color.a}
-    };
+    for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+        ngp->pass_action.colors[i] = (sg_color_attachment_action) {
+            .action = SG_ACTION_CLEAR,
+            .val = { color.r, color.g, color.b, color.a}
+        };
+    }
 }
 
 void ngp_unset_clear_color(ngp_context* ngp) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp->pass_action.colors[0] = (sg_color_attachment_action) {
-        .action = SG_ACTION_DONTCARE,
-    };
+    for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+        ngp->pass_action.colors[i] = (sg_color_attachment_action) {
+            .action = SG_ACTION_DONTCARE,
+        };
+    }
 }
 
 void ngp_set_color(ngp_context* ngp, ngp_color color) {
@@ -492,26 +526,86 @@ static ngp_command* _ngp_next_command(ngp_context* ngp) {
     }
 }
 
+void ngp_push_transform(ngp_context* ngp) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    if(ngp->cur_transform >= _NGP_MAX_STACK_DEPTH) {
+        _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
+        return;
+    }
+    ngp->transform_stack[ngp->cur_transform++] = ngp->state.transform;
+}
+
+void ngp_pop_transform(ngp_context* ngp) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    if(ngp->cur_transform <= 0) {
+        _ngp_set_error(ngp, NGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
+        return;
+    }
+    ngp->state.transform = ngp->transform_stack[--ngp->cur_transform];
+    ngp->state.matrix_dirty = true;
+}
+
 void ngp_translate(ngp_context* ngp, float x, float y) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
-    ngp_mat3 translate = {
+    ngp_mat3 matrix = {
        1.0f, 0.0f,    x,
        0.0f, 1.0f,    y,
        0.0f, 0.0f, 1.0f,
     };
-    ngp->state.modelview = ngp_mat3_mul(&ngp->state.modelview, &translate);
+    ngp->state.transform = ngp_mat3_mul(&ngp->state.transform, &matrix);
     ngp->state.matrix_dirty = true;
+}
+
+void ngp_rotate(ngp_context* ngp, float theta) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    float sint = sinf(theta), cost = cosf(theta);
+    ngp_mat3 matrix = {
+       sint,  cost, 0.0f,
+       cost, -sint, 0.0f,
+       0.0f,  0.0f, 1.0f,
+    };
+    ngp->state.transform = ngp_mat3_mul(&ngp->state.transform, &matrix);
+    ngp->state.matrix_dirty = true;
+}
+
+void ngp_rotate_at(ngp_context* ngp, float theta, float x, float y) {
+    ngp_translate(ngp, x, y);
+    ngp_rotate(ngp, theta);
+    ngp_translate(ngp, -x, -y);
+}
+
+void ngp_scale(ngp_context* ngp, float sx, float sy) {
+    NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
+    ngp_mat3 matrix = {
+        sx,  0.0f, 0.0f,
+       0.0f,   sy, 0.0f,
+       0.0f, 0.0f, 1.0f,
+    };
+    ngp->state.transform = ngp_mat3_mul(&ngp->state.transform, &matrix);
+    ngp->state.matrix_dirty = true;
+}
+
+void ngp_scale_at(ngp_context* ngp, float sx, float sy, float x, float y) {
+    ngp_translate(ngp, x, y);
+    ngp_scale(ngp, sx, sy);
+    ngp_translate(ngp, -x, -y);
 }
 
 void ngp_filled_rect(ngp_context* ngp, ngp_rect rect) {
     NGP_ASSERT(ngp->init_cookie == _NGP_INIT_COOKIE);
 
-    // compute rect vertexes
-    _ngp_update_mvp(ngp);
-    ngp_vec2 tl = ngp_mat3_vec2_mul(&ngp->state.mvp, (ngp_vec2){rect.x, rect.y});
-    ngp_vec2 br = ngp_mat3_vec2_mul(&ngp->state.mvp, (ngp_vec2){rect.x + rect.w, rect.y + rect.h});
+    // compute vertexes
+    ngp_vec2 tl = (ngp_vec2){rect.x, rect.y};
+    ngp_vec2 br = (ngp_vec2){rect.x + rect.w, rect.y + rect.h};
     ngp_vec2 tr = (ngp_vec2){br.x, tl.y};
     ngp_vec2 bl = (ngp_vec2){tl.x, br.y};
+
+    // apply transform
+    _ngp_update_mvp(ngp);
+    tl = ngp_mat3_vec2_mul(&ngp->state.mvp, tl);
+    br = ngp_mat3_vec2_mul(&ngp->state.mvp, br);
+    tr = ngp_mat3_vec2_mul(&ngp->state.mvp, tr);
+    bl = ngp_mat3_vec2_mul(&ngp->state.mvp, bl);
 
     // setup vertex
     int vertex_index = ngp->cur_vertex;
@@ -540,7 +634,7 @@ void ngp_filled_rect(ngp_context* ngp, ngp_rect rect) {
     ngp_command* prev_cmd = _ngp_prev_command(ngp);
     bool merge_cmd = prev_cmd &&
                      prev_cmd->cmd == NGP_COMMAND_DRAW &&
-                     prev_cmd->args.draw.pip.id == ngp->filled_rect_pip.id &&
+                     prev_cmd->args.draw.pip.id == ngp->filled_triangles_pip.id &&
                      prev_cmd->args.draw.uniform_index == uniform_index;
     if(merge_cmd) {
         // merge command for batched rendering
@@ -552,7 +646,7 @@ void ngp_filled_rect(ngp_context* ngp, ngp_rect rect) {
         *cmd = (ngp_command) {
             .cmd = NGP_COMMAND_DRAW,
             .args.draw = {
-                .pip = ngp->filled_rect_pip,
+                .pip = ngp->filled_triangles_pip,
                 .vertex_index = vertex_index,
                 .uniform_index = uniform_index,
                 .num_vertices = 6,
