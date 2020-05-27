@@ -3,3 +3,5 @@
 *.exe
 *.dll
 *.o
+*.log
+*.dxvk-cache

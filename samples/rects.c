@@ -1,3 +1,6 @@
+#define NANOGP_GLCORE33_BACKEND
+//#define NANOGP_D3D11_BACKEND
+
 #include "sample_common.h"
 
 int frame = 0;
@@ -90,7 +93,7 @@ void draw_triangles() {
     ngp_pop_transform();
 }
 
-void render(ngctx_context* ngctx) {
+void render(ngctx_context ngctx) {
     ngctx_isize size = ngctx_get_drawable_size(ngctx);
     ngp_set_clear_color(0.05f, 0.05f, 0.05f, 1.0f);
     ngp_begin(size.w, size.h);
