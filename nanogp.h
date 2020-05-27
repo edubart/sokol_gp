@@ -25,8 +25,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef NANOGP_H
-#define NANOGP_H
+#ifndef NANOGP_INCLUDED
+#define NANOGP_INCLUDED
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -34,8 +34,8 @@ SOFTWARE.
 #include <math.h>
 #include "sokol_gfx.h"
 
-#ifndef NGP_API
-#define NGP_API extern
+#ifndef NANOGP_API
+#define NANOGP_API extern
 #endif
 
 #ifdef __cplusplus
@@ -109,101 +109,114 @@ typedef struct ngp_state {
 } ngp_state;
 
 // setup functions
-NGP_API bool ngp_setup(const ngp_desc* desc);
-NGP_API void ngp_shutdown();
-NGP_API bool ngp_is_valid();
-NGP_API ngp_error ngp_get_error_code();
-NGP_API const char* ngp_get_error();
+NANOGP_API bool ngp_setup(const ngp_desc* desc);
+NANOGP_API void ngp_shutdown();
+NANOGP_API bool ngp_is_valid();
+NANOGP_API ngp_error ngp_get_error_code();
+NANOGP_API const char* ngp_get_error();
 
 // rendering functions
-NGP_API void ngp_begin(int width, int height);
-NGP_API void ngp_end();
-NGP_API void ngp_set_clear_color(float r, float g, float b, float a);
-NGP_API void ngp_reset_clear_color();
+NANOGP_API void ngp_begin(int width, int height);
+NANOGP_API void ngp_end();
+NANOGP_API void ngp_set_clear_color(float r, float g, float b, float a);
+NANOGP_API void ngp_reset_clear_color();
 
 // state transform functions
-NGP_API void ngp_push_transform();
-NGP_API void ngp_pop_transform();
-NGP_API void ngp_translate(float x, float y);
-NGP_API void ngp_rotate(float theta);
-NGP_API void ngp_rotate_at(float theta, float x, float y);
-NGP_API void ngp_scale(float sx, float sy);
-NGP_API void ngp_scale_at(float sx, float sy, float x, float y);
-NGP_API void ngp_reset_transform();
+NANOGP_API void ngp_push_transform();
+NANOGP_API void ngp_pop_transform();
+NANOGP_API void ngp_translate(float x, float y);
+NANOGP_API void ngp_rotate(float theta);
+NANOGP_API void ngp_rotate_at(float theta, float x, float y);
+NANOGP_API void ngp_scale(float sx, float sy);
+NANOGP_API void ngp_scale_at(float sx, float sy, float x, float y);
+NANOGP_API void ngp_reset_transform();
 
 // state changing functions
-NGP_API void ngp_set_color(float r, float g, float b, float a);
-NGP_API void ngp_reset_color();
-NGP_API void ngp_viewport(int x, int y, int w, int h);
-NGP_API void ngp_reset_viewport();
-NGP_API void ngp_scissor(int x, int y, int w, int h);
-NGP_API void ngp_reset_scissor();
-NGP_API void ngp_reset_state();
+NANOGP_API void ngp_set_color(float r, float g, float b, float a);
+NANOGP_API void ngp_reset_color();
+NANOGP_API void ngp_viewport(int x, int y, int w, int h);
+NANOGP_API void ngp_reset_viewport();
+NANOGP_API void ngp_scissor(int x, int y, int w, int h);
+NANOGP_API void ngp_reset_scissor();
+NANOGP_API void ngp_reset_state();
 
 // drawing functions
-NGP_API void ngp_draw_points(const ngp_vec2* points, uint count);
-NGP_API void ngp_draw_point(float x, float y);
-NGP_API void ngp_draw_lines(const ngp_line* lines, uint count);
-NGP_API void ngp_draw_line(float ax, float ay, float bx, float by);
-NGP_API void ngp_draw_triangles(const ngp_triangle* triangles, uint count);
-NGP_API void ngp_draw_triangle(float ax, float ay, float bx, float by, float cx, float cy);
-NGP_API void ngp_draw_rects(const ngp_rect* rects, uint count);
-NGP_API void ngp_draw_rect(float x, float y, float w, float h);
-NGP_API void ngp_draw_line_strip(const ngp_vec2* points, uint count);
-NGP_API void ngp_draw_triangle_strip(const ngp_vec2* points, uint count);
+NANOGP_API void ngp_draw_points(const ngp_vec2* points, uint count);
+NANOGP_API void ngp_draw_point(float x, float y);
+NANOGP_API void ngp_draw_lines(const ngp_line* lines, uint count);
+NANOGP_API void ngp_draw_line(float ax, float ay, float bx, float by);
+NANOGP_API void ngp_draw_triangles(const ngp_triangle* triangles, uint count);
+NANOGP_API void ngp_draw_triangle(float ax, float ay, float bx, float by, float cx, float cy);
+NANOGP_API void ngp_draw_rects(const ngp_rect* rects, uint count);
+NANOGP_API void ngp_draw_rect(float x, float y, float w, float h);
+NANOGP_API void ngp_draw_line_strip(const ngp_vec2* points, uint count);
+NANOGP_API void ngp_draw_triangle_strip(const ngp_vec2* points, uint count);
 
 // querying functions
-NGP_API ngp_state* ngp_query_state();
-NGP_API ngp_desc ngp_query_desc();
+NANOGP_API ngp_state* ngp_query_state();
+NANOGP_API ngp_desc ngp_query_desc();
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-#endif // NANOGP_H
+#endif // NANOGP_INCLUDED
 
 #ifdef NANOGP_IMPL
+#ifndef NANOGP_IMPL_INCLUDED
+#define NANOGP_IMPL_INCLUDED
 
-#ifndef NGP_ASSERT
+#ifndef NANOGP_ASSERT
 #include <assert.h>
-#define NGP_ASSERT(c) assert(c)
+#define NANOGP_ASSERT(c) assert(c)
 #endif
-#ifndef NGP_MALLOC
+#ifndef NANOGP_MALLOC
 #include <stdlib.h>
-#define NGP_MALLOC(s) malloc(s)
-#define NGP_FREE(p) free(p)
+#define NANOGP_MALLOC(s) malloc(s)
+#define NANOGP_FREE(p) free(p)
 #endif
 #ifndef NDEBUG
-#define NGP_DEBUG
+#define NANOGP_DEBUG
 #endif
-#ifndef NGP_LOG
-#ifdef NGP_DEBUG
+#ifndef NANOGP_LOG
+#ifdef NANOGP_DEBUG
 #include <stdio.h>
-#define NGP_LOG(s) { NGP_ASSERT(s); puts(s); }
+#define NANOGP_LOG(s) { NANOGP_ASSERT(s); puts(s); }
 #else
-#define NGP_LOG(s)
+#define NANOGP_LOG(s)
 #endif
 #endif
-#ifndef NGP_UNREACHABLE
-#define NGP_UNREACHABLE NGP_ASSERT(false)
+#ifndef NANOGP_UNREACHABLE
+#define NANOGP_UNREACHABLE NANOGP_ASSERT(false)
 #endif
 #ifdef __GNUC__
-#define NGP_LIKELY(x) __builtin_expect(x, 1)
-#define NGP_UNLIKELY(x) __builtin_expect(x, 0)
+#define NANOGP_LIKELY(x) __builtin_expect(x, 1)
+#define NANOGP_UNLIKELY(x) __builtin_expect(x, 0)
 #else
-#define NGP_LIKELY(x) (x)
-#define NGP_UNLIKELY(x) (x)
+#define NANOGP_LIKELY(x) (x)
+#define NANOGP_UNLIKELY(x) (x)
 #endif
-#define NGP_DEF(val, def) (((val) == 0) ? (def) : (val))
-
-#define _NGP_INIT_COOKIE 0xCAFED00D
-#define _NGP_DEFAULT_MAX_VERTICES 65536
-#define _NGP_DEFAULT_MAX_COMMANDS 16384
-#define _NGP_MAX_STACK_DEPTH 64
+#define NANOGP_DEF(val, def) (((val) == 0) ? (def) : (val))
 
 #define SOKOL_IMPL
+
+#ifdef NANOGP_GLCORE33_BACKEND
 #define SOKOL_GLCORE33
+#endif
+#ifdef NANOGP_WGPU_BACKEND
+#define SOKOL_WGPU
+#endif
+#ifdef NANOGP_DUMMY_BACKEND
+#define SOKOL_DUMMY_BACKEND
+#endif
 #include "sokol_gfx.h"
+
+enum {
+    _NGP_INIT_COOKIE = 0xCAFED00D,
+    _NGP_DEFAULT_MAX_VERTICES = 65536,
+    _NGP_DEFAULT_MAX_COMMANDS = 16384,
+    _NGP_MAX_STACK_DEPTH = 64,
+};
 
 typedef struct ngp_draw_args {
     sg_pipeline pip;
@@ -275,7 +288,7 @@ static const ngp_mat3 _ngp_mat3_identity = {
 static void _ngp_set_error(ngp_error error_code, const char *error) {
     ngp.last_error_code = error_code;
     ngp.last_error = error;
-    NGP_LOG(error);
+    NANOGP_LOG(error);
 }
 
 static void _ngp_setup_pipelines() {
@@ -332,7 +345,7 @@ static void _ngp_setup_pipelines() {
 }
 
 bool ngp_setup(const ngp_desc* desc) {
-    NGP_ASSERT(ngp.init_cookie == 0);
+    NANOGP_ASSERT(ngp.init_cookie == 0);
 
     // setup sokol
     sg_setup(&(sg_desc){
@@ -350,17 +363,17 @@ bool ngp_setup(const ngp_desc* desc) {
 
     // set desc default values
     ngp.desc = *desc;
-    ngp.desc.max_vertices = NGP_DEF(desc->max_vertices, _NGP_DEFAULT_MAX_VERTICES);
-    ngp.desc.max_commands = NGP_DEF(desc->max_commands, _NGP_DEFAULT_MAX_COMMANDS);
+    ngp.desc.max_vertices = NANOGP_DEF(desc->max_vertices, _NGP_DEFAULT_MAX_VERTICES);
+    ngp.desc.max_commands = NANOGP_DEF(desc->max_commands, _NGP_DEFAULT_MAX_COMMANDS);
 
     // allocate buffers
     ngp.num_vertices = ngp.desc.max_vertices;
     ngp.num_commands = ngp.desc.max_commands;
     ngp.num_uniforms = ngp.desc.max_commands;
-    ngp.vertices = (ngp_vertex*) NGP_MALLOC(ngp.num_vertices * sizeof(ngp_vertex));
-    ngp.uniforms = (ngp_uniform*) NGP_MALLOC(ngp.num_uniforms * sizeof(ngp_uniform));
-    ngp.commands = (ngp_command*) NGP_MALLOC(ngp.num_commands * sizeof(ngp_command));
-    NGP_ASSERT(ngp.commands && ngp.uniforms && ngp.uniforms);
+    ngp.vertices = (ngp_vertex*) NANOGP_MALLOC(ngp.num_vertices * sizeof(ngp_vertex));
+    ngp.uniforms = (ngp_uniform*) NANOGP_MALLOC(ngp.num_uniforms * sizeof(ngp_uniform));
+    ngp.commands = (ngp_command*) NANOGP_MALLOC(ngp.num_commands * sizeof(ngp_command));
+    NANOGP_ASSERT(ngp.commands && ngp.uniforms && ngp.uniforms);
 
     // create vertex buffer
     ngp.vbuf = sg_make_buffer(&(sg_buffer_desc){
@@ -391,10 +404,10 @@ bool ngp_setup(const ngp_desc* desc) {
 
 void ngp_shutdown() {
     if(ngp.init_cookie == 0) return; // not initialized
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    NGP_FREE(ngp.vertices);
-    NGP_FREE(ngp.uniforms);
-    NGP_FREE(ngp.commands);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_FREE(ngp.vertices);
+    NANOGP_FREE(ngp.uniforms);
+    NANOGP_FREE(ngp.commands);
     // no need to manually free sokol resources
     // they are automatically freed on shutdown
     sg_shutdown();
@@ -406,12 +419,12 @@ bool ngp_is_valid() {
 }
 
 ngp_error ngp_get_error_code() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     return ngp.last_error_code;
 }
 
 const char* ngp_get_error() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     return ngp.last_error;
 }
 
@@ -426,7 +439,7 @@ static inline ngp_mat3 _ngp_proj2d(int width, int height) {
 }
 
 void ngp_begin(int width, int height) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     sg_begin_default_pass(&ngp.pass_action, width, height);
 
     // default state
@@ -488,7 +501,7 @@ static void _ngp_flush_commands() {
                 break;
             }
             default: {
-                NGP_UNREACHABLE;
+                NANOGP_UNREACHABLE;
                 break;
             }
         }
@@ -497,14 +510,14 @@ static void _ngp_flush_commands() {
 }
 
 void ngp_end() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_flush_commands(ngp);
     sg_end_pass();
     sg_commit();
 }
 
 void ngp_set_clear_color(float r, float g, float b, float a) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp.pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_CLEAR,
@@ -514,7 +527,7 @@ void ngp_set_clear_color(float r, float g, float b, float a) {
 }
 
 void ngp_reset_clear_color() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp.pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_DONTCARE,
@@ -549,8 +562,8 @@ static inline ngp_mat3 _ngp_mul_proj2d_transform(ngp_mat3* proj, ngp_mat3* trans
 };
 
 void ngp_push_transform() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    if(NGP_UNLIKELY(ngp.cur_transform >= _NGP_MAX_STACK_DEPTH)) {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    if(NANOGP_UNLIKELY(ngp.cur_transform >= _NGP_MAX_STACK_DEPTH)) {
         _ngp_set_error(NGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
         return;
     }
@@ -558,8 +571,8 @@ void ngp_push_transform() {
 }
 
 void ngp_pop_transform() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    if(NGP_UNLIKELY(ngp.cur_transform <= 0)) {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    if(NANOGP_UNLIKELY(ngp.cur_transform <= 0)) {
         _ngp_set_error(NGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
         return;
     }
@@ -568,7 +581,7 @@ void ngp_pop_transform() {
 }
 
 void ngp_translate(float x, float y) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     // multiply by translate matrix:
     // 1.0f, 0.0f,    x,
     // 0.0f, 1.0f,    y,
@@ -580,7 +593,7 @@ void ngp_translate(float x, float y) {
 }
 
 void ngp_rotate(float theta) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     float sint = sinf(theta), cost = cosf(theta);
     // multiply by rotation matrix:
     // sint,  cost, 0.0f,
@@ -595,14 +608,14 @@ void ngp_rotate(float theta) {
 }
 
 void ngp_rotate_at(float theta, float x, float y) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_translate(x, y);
     ngp_rotate(theta);
     ngp_translate(-x, -y);
 }
 
 void ngp_scale(float sx, float sy) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     // multiply by scale matrix:
     //   sx, 0.0f, 0.0f,
     // 0.0f,   sy, 0.0f,
@@ -613,30 +626,30 @@ void ngp_scale(float sx, float sy) {
 }
 
 void ngp_scale_at(float sx, float sy, float x, float y) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_translate(x, y);
     ngp_scale(sx, sy);
     ngp_translate(-x, -y);
 }
 
 void ngp_reset_transform() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp.state.transform = _ngp_mat3_identity;
     ngp.state.mvp = _ngp_mul_proj2d_transform(&ngp.state.proj, &ngp.state.transform);
 }
 
 void ngp_set_color(float r, float g, float b, float a) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp.state.color = (ngp_color){r,g,b,a};
 }
 
 void ngp_reset_color() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp.state.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
 static ngp_vertex* _ngp_next_vertices(uint count) {
-    if(NGP_LIKELY(ngp.cur_vertex + count <= ngp.num_vertices)) {
+    if(NANOGP_LIKELY(ngp.cur_vertex + count <= ngp.num_vertices)) {
         ngp_vertex *vertices = &ngp.vertices[ngp.cur_vertex];
         ngp.cur_vertex += count;
         return vertices;
@@ -646,7 +659,7 @@ static ngp_vertex* _ngp_next_vertices(uint count) {
     }
 }
 static ngp_uniform* _ngp_prev_uniform() {
-    if(NGP_LIKELY(ngp.cur_uniform > 0)) {
+    if(NANOGP_LIKELY(ngp.cur_uniform > 0)) {
         return &ngp.uniforms[ngp.cur_uniform-1];
     } else {
         return NULL;
@@ -654,7 +667,7 @@ static ngp_uniform* _ngp_prev_uniform() {
 }
 
 static ngp_uniform* _ngp_next_uniform() {
-    if(NGP_LIKELY(ngp.cur_uniform < ngp.num_uniforms)) {
+    if(NANOGP_LIKELY(ngp.cur_uniform < ngp.num_uniforms)) {
         return &ngp.uniforms[ngp.cur_uniform++];
     } else {
         _ngp_set_error(NGP_ERROR_UNIFORMS_FULL, "NGP uniform buffer is full");
@@ -663,7 +676,7 @@ static ngp_uniform* _ngp_next_uniform() {
 }
 
 static ngp_command* _ngp_prev_command() {
-    if(NGP_LIKELY(ngp.cur_command > 0)) {
+    if(NANOGP_LIKELY(ngp.cur_command > 0)) {
         return &ngp.commands[ngp.cur_command-1];
     } else {
         return NULL;
@@ -671,7 +684,7 @@ static ngp_command* _ngp_prev_command() {
 }
 
 static ngp_command* _ngp_next_command() {
-    if(NGP_LIKELY(ngp.cur_command < ngp.num_commands)) {
+    if(NANOGP_LIKELY(ngp.cur_command < ngp.num_commands)) {
         return &ngp.commands[ngp.cur_command++];
     } else {
         _ngp_set_error(NGP_ERROR_COMMANDS_FULL, "NGP command buffer is full");
@@ -680,7 +693,7 @@ static ngp_command* _ngp_next_command() {
 }
 
 void ngp_viewport(int x, int y, int w, int h) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
 
     // skip in case of the same viewport
     if(ngp.state.viewport.x == x && ngp.state.viewport.y == y &&
@@ -688,7 +701,7 @@ void ngp_viewport(int x, int y, int w, int h) {
         return;
 
     ngp_command* cmd = _ngp_next_command(ngp);
-    if(NGP_UNLIKELY(!cmd)) return;
+    if(NANOGP_UNLIKELY(!cmd)) return;
     *cmd = (ngp_command) {
         .cmd = NGP_COMMAND_VIEWPORT,
         .args.viewport = {x, y, w, h},
@@ -706,12 +719,12 @@ void ngp_viewport(int x, int y, int w, int h) {
 }
 
 void ngp_reset_viewport() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_viewport(0, 0, ngp.state.frame_size.w, ngp.state.frame_size.h);
 }
 
 void ngp_scissor(int x, int y, int w, int h) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
 
     // skip in case of the same scissor
     if(ngp.state.scissor.x == x && ngp.state.scissor.y == y &&
@@ -719,7 +732,7 @@ void ngp_scissor(int x, int y, int w, int h) {
         return;
 
     ngp_command* cmd = _ngp_next_command(ngp);
-    if(NGP_UNLIKELY(!cmd)) return;
+    if(NANOGP_UNLIKELY(!cmd)) return;
 
     // coordinate scissor in viewport subspace
     ngp_irect viewport_scissor = {ngp.state.viewport.x + x, ngp.state.viewport.y + y, w, h};
@@ -736,12 +749,12 @@ void ngp_scissor(int x, int y, int w, int h) {
 }
 
 void ngp_reset_scissor() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_scissor(0, 0, -1, -1);
 }
 
 void ngp_reset_state() {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_reset_viewport(ngp);
     ngp_reset_scissor(ngp);
     ngp_reset_transform(ngp);
@@ -759,7 +772,7 @@ static void _ngp_queue_draw(sg_pipeline pip, uint vertex_index, uint num_vertice
     if(!reuse_uniform) {
         // append new uniform
         ngp_uniform *uniform = _ngp_next_uniform(ngp);
-        if(NGP_UNLIKELY(!uniform)) return;
+        if(NANOGP_UNLIKELY(!uniform)) return;
         uniform->color = ngp.state.color;
     }
     uint uniform_index = ngp.cur_uniform - 1;
@@ -775,7 +788,7 @@ static void _ngp_queue_draw(sg_pipeline pip, uint vertex_index, uint num_vertice
     } else {
         // append new draw command
         ngp_command* cmd = _ngp_next_command(ngp);
-        if(NGP_UNLIKELY(!cmd)) return;
+        if(NANOGP_UNLIKELY(!cmd)) return;
         cmd->cmd = NGP_COMMAND_DRAW,
         cmd->args.draw = (ngp_draw_args){
             .pip = pip,
@@ -801,30 +814,30 @@ static void _ngp_transform_vertices(ngp_vec2* dest, const ngp_vec2 *src, uint co
 static void _ngp_draw_pip(sg_pipeline pip, const ngp_vec2* vertices, uint count) {
     uint vertex_index = ngp.cur_vertex;
     ngp_vertex* transformed_vertices = _ngp_next_vertices(count);
-    if(NGP_UNLIKELY(!vertices)) return;
+    if(NANOGP_UNLIKELY(!vertices)) return;
 
     _ngp_transform_vertices(transformed_vertices, vertices, count);
     _ngp_queue_draw(pip, vertex_index, count);
 }
 
 void ngp_draw_triangles(const ngp_triangle* triangles, uint count) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.triangles_pip, (const ngp_vec2*)triangles, count*3);
 }
 
 void ngp_draw_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_draw_triangles(&(ngp_triangle){{ax,ay},{bx, by},{cx, cy}}, 1);
 }
 
 void ngp_draw_rects(const ngp_rect* rects, uint count) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
 
     // setup vertices
     uint num_vertices = count * 6;
     uint vertex_index = ngp.cur_vertex;
     ngp_vertex* vertices = _ngp_next_vertices(num_vertices);
-    if(NGP_UNLIKELY(!vertices)) return;
+    if(NANOGP_UNLIKELY(!vertices)) return;
 
     // compute vertices
     for(uint i=0;i<count;++i) {
@@ -849,12 +862,12 @@ void ngp_draw_rects(const ngp_rect* rects, uint count) {
 }
 
 void ngp_draw_rect(float x, float y, float w, float h) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
 
     // setup vertices
     uint vertex_index = ngp.cur_vertex;
     ngp_vertex* vertices = _ngp_next_vertices(6);
-    if(NGP_UNLIKELY(!vertices)) return;
+    if(NANOGP_UNLIKELY(!vertices)) return;
 
     // compute vertices
     float r = x + w, b = y + h;
@@ -875,32 +888,32 @@ void ngp_draw_rect(float x, float y, float w, float h) {
 }
 
 void ngp_draw_points(const ngp_vec2* points, uint count) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.points_pip, points, count);
 }
 
 void ngp_draw_point(float x, float y) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_draw_points(&(ngp_vec2){x, y}, 1);
 }
 
 void ngp_draw_lines(const ngp_line* lines, uint count) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.lines_pip, (const ngp_vec2*)lines, count*2);
 }
 
 void ngp_draw_line(float ax, float ay, float bx, float by) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp_draw_lines(&(ngp_line){{ax,ay},{bx, by}}, 1);
 }
 
 void ngp_draw_line_strip(const ngp_vec2* points, uint count) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.line_strip_pip, points, count);
 }
 
 void ngp_draw_triangle_strip(const ngp_vec2* points, uint count) {
-    NGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.triangle_strip_pip, points, count);
 }
 
@@ -912,4 +925,5 @@ ngp_state* ngp_query_state() {
     return &ngp.state;
 }
 
+#endif // NANOGP_IMPL_INCLUDED
 #endif // NANOGP_IMPL

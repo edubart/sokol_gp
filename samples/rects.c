@@ -90,8 +90,8 @@ void draw_triangles() {
     ngp_pop_transform();
 }
 
-void render(ng_context* ngctx) {
-    ng_isize size = ngctx_get_drawable_size(ngctx);
+void render(ngctx_context* ngctx) {
+    ngctx_isize size = ngctx_get_drawable_size(ngctx);
     ngp_set_clear_color(0.05f, 0.05f, 0.05f, 1.0f);
     ngp_begin(size.w, size.h);
     int hw = size.w / 2;

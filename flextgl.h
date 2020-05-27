@@ -1947,6 +1947,9 @@ int flextInit(void);
 #endif /* _gl_h_ */
 
 #ifdef FLEXTGL_IMPL
+#ifndef FLEXTGL_IMPL_INCLUDED
+#define FLEXTGL_IMPL_INCLUDED
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -2465,4 +2468,5 @@ static GLPROC get_proc(const char *proc)
 }
 #endif
 
+#endif /* FLEXTGL_IMPL_INCLUDED */
 #endif /* FLEXTGL_IMPL */

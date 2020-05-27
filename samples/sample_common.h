@@ -1,18 +1,25 @@
 #define FLEXTGL_IMPL
 #include "flextgl.h"
+#define NANOGCTX_GLCORE33_BACKEND
+//#define NANOGCTX_WGPU_BACKEND
+#define NANOGCTX_DUMMY_BACKEND
 #define NANOGCTX_IMPL
 #include "nanogctx.h"
 #define NANOGP_IMPL
+#define NANOGP_GLCORE33_BACKEND
+//#define NANOGP_WGPU_BACKEND
+//#define NANOGP_DUMMY_BACKEND
 #include "nanogp.h"
 #include <SDL2/SDL.h>
 #include <math.h>
 
-int sample_app(void (*draw)(ng_context* ngctx)) {
+int sample_app(void (*draw)(ngctx_context* ngctx)) {
     // initialize SDL
     SDL_Init(SDL_INIT_VIDEO);
 
     // setup context attributes before window and context creation
-    ngctx_prepare_attributes(&(ng_context_desc){.sample_count = 0});
+    ngctx_backend backend = NGCTX_BACKEND_GLCORE33;
+    ngctx_prepare_attributes(&(ngctx_desc){.sample_count = 0}, backend);
 
     // create window
     SDL_Window *window = SDL_CreateWindow("GP Clear",
@@ -25,8 +32,8 @@ int sample_app(void (*draw)(ng_context* ngctx)) {
     }
 
     // create graphics context
-    ng_context ngctx = {0};
-    if(!ngctx_create(&ngctx, window)) {
+    ngctx_context ngctx = {0};
+    if(!ngctx_create(&ngctx, window, backend)) {
         fprintf(stderr, "Failed to create NGCTX context: %s\n", ngctx_get_error(&ngctx));
         return 1;
     }
