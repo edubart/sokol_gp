@@ -141,16 +141,16 @@ NANOGP_API void ngp_reset_scissor();
 NANOGP_API void ngp_reset_state();
 
 // drawing functions
-NANOGP_API void ngp_draw_points(const ngp_vec2* points, uint count);
+NANOGP_API void ngp_draw_points(const ngp_vec2* points, unsigned int count);
 NANOGP_API void ngp_draw_point(float x, float y);
-NANOGP_API void ngp_draw_lines(const ngp_line* lines, uint count);
+NANOGP_API void ngp_draw_lines(const ngp_line* lines, unsigned int count);
 NANOGP_API void ngp_draw_line(float ax, float ay, float bx, float by);
-NANOGP_API void ngp_draw_triangles(const ngp_triangle* triangles, uint count);
+NANOGP_API void ngp_draw_triangles(const ngp_triangle* triangles, unsigned int count);
 NANOGP_API void ngp_draw_triangle(float ax, float ay, float bx, float by, float cx, float cy);
-NANOGP_API void ngp_draw_rects(const ngp_rect* rects, uint count);
+NANOGP_API void ngp_draw_rects(const ngp_rect* rects, unsigned int count);
 NANOGP_API void ngp_draw_rect(float x, float y, float w, float h);
-NANOGP_API void ngp_draw_line_strip(const ngp_vec2* points, uint count);
-NANOGP_API void ngp_draw_triangle_strip(const ngp_vec2* points, uint count);
+NANOGP_API void ngp_draw_line_strip(const ngp_vec2* points, unsigned int count);
+NANOGP_API void ngp_draw_triangle_strip(const ngp_vec2* points, unsigned int count);
 
 // querying functions
 NANOGP_API ngp_state* ngp_query_state();
@@ -203,8 +203,8 @@ NANOGP_API ngp_desc ngp_query_desc();
 #ifdef NANOGP_GLCORE33_BACKEND
 #define SOKOL_GLCORE33
 #endif
-#ifdef NANOGP_WGPU_BACKEND
-#define SOKOL_WGPU
+#ifdef NANOGP_D3D11_BACKEND
+#define SOKOL_D3D11
 #endif
 #ifdef NANOGP_DUMMY_BACKEND
 #define SOKOL_DUMMY_BACKEND
@@ -220,9 +220,9 @@ enum {
 
 typedef struct ngp_draw_args {
     sg_pipeline pip;
-    uint vertex_index;
-    uint uniform_index;
-    uint num_vertices;
+    unsigned int vertex_index;
+    unsigned int uniform_index;
+    unsigned int num_vertices;
 } ngp_draw_args;
 
 typedef union ngp_command_args {
@@ -259,12 +259,12 @@ typedef struct ngp_context {
     sg_pipeline line_strip_pip;
 
     // command queue
-    uint cur_vertex;
-    uint cur_uniform;
-    uint cur_command;
-    uint num_vertices;
-    uint num_uniforms;
-    uint num_commands;
+    unsigned int cur_vertex;
+    unsigned int cur_uniform;
+    unsigned int cur_command;
+    unsigned int num_vertices;
+    unsigned int num_uniforms;
+    unsigned int num_commands;
     ngp_vertex* vertices;
     ngp_uniform* uniforms;
     ngp_command* commands;
@@ -273,7 +273,7 @@ typedef struct ngp_context {
     ngp_state state;
 
     // matrix stack
-    uint cur_transform;
+    unsigned int cur_transform;
     ngp_mat3 transform_stack[_NGP_MAX_STACK_DEPTH];
 } ngp_context;
 
@@ -392,7 +392,7 @@ bool ngp_setup(const ngp_desc* desc) {
         .stencil = {.action = SG_ACTION_DONTCARE },
         .depth = {.action = SG_ACTION_DONTCARE }
     };
-    for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+    for(unsigned int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp.pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_DONTCARE,
         };
@@ -467,7 +467,7 @@ static void _ngp_flush_commands() {
     uint32_t cur_pip_id = SG_INVALID_ID;
     int cur_uniform_index = -1;
     sg_update_buffer(ngp.vbuf, ngp.vertices, ngp.cur_vertex * sizeof(ngp_vertex));
-    for(uint i = 0; i < ngp.cur_command; ++i) {
+    for(unsigned int i = 0; i < ngp.cur_command; ++i) {
         ngp_command* cmd = &ngp.commands[i];
         switch(cmd->cmd) {
             case NGP_COMMAND_VIEWPORT: {
@@ -518,7 +518,7 @@ void ngp_end() {
 
 void ngp_set_clear_color(float r, float g, float b, float a) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+    for(unsigned int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp.pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_CLEAR,
             .val = {r,g,b,a}
@@ -528,7 +528,7 @@ void ngp_set_clear_color(float r, float g, float b, float a) {
 
 void ngp_reset_clear_color() {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    for(uint i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+    for(unsigned int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
         ngp.pass_action.colors[i] = (sg_color_attachment_action) {
             .action = SG_ACTION_DONTCARE,
         };
@@ -648,7 +648,7 @@ void ngp_reset_color() {
     ngp.state.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
-static ngp_vertex* _ngp_next_vertices(uint count) {
+static ngp_vertex* _ngp_next_vertices(unsigned int count) {
     if(NANOGP_LIKELY(ngp.cur_vertex + count <= ngp.num_vertices)) {
         ngp_vertex *vertices = &ngp.vertices[ngp.cur_vertex];
         ngp.cur_vertex += count;
@@ -765,7 +765,7 @@ static inline bool ngp_color_eq(ngp_color a, ngp_color b) {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 
-static void _ngp_queue_draw(sg_pipeline pip, uint vertex_index, uint num_vertices) {
+static void _ngp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned int num_vertices) {
     // setup uniform, try to reuse previous uniform when possible
     ngp_uniform *prev_uniform = _ngp_prev_uniform(ngp);
     bool reuse_uniform = prev_uniform && ngp_color_eq(prev_uniform->color, ngp.state.color);
@@ -775,7 +775,7 @@ static void _ngp_queue_draw(sg_pipeline pip, uint vertex_index, uint num_vertice
         if(NANOGP_UNLIKELY(!uniform)) return;
         uniform->color = ngp.state.color;
     }
-    uint uniform_index = ngp.cur_uniform - 1;
+    unsigned int uniform_index = ngp.cur_uniform - 1;
 
     ngp_command* prev_cmd = _ngp_prev_command(ngp);
     bool merge_cmd = prev_cmd &&
@@ -806,13 +806,13 @@ static inline ngp_vec2 ngp_mat3_vec2_mul(const ngp_mat3* m, ngp_vec2 v) {
     };
 }
 
-static void _ngp_transform_vertices(ngp_vec2* dest, const ngp_vec2 *src, uint count) {
-    for(uint i=0;i<count;++i)
+static void _ngp_transform_vertices(ngp_vec2* dest, const ngp_vec2 *src, unsigned int count) {
+    for(unsigned int i=0;i<count;++i)
         dest[i] = ngp_mat3_vec2_mul(&ngp.state.mvp, src[i]);
 }
 
-static void _ngp_draw_pip(sg_pipeline pip, const ngp_vec2* vertices, uint count) {
-    uint vertex_index = ngp.cur_vertex;
+static void _ngp_draw_pip(sg_pipeline pip, const ngp_vec2* vertices, unsigned int count) {
+    unsigned int vertex_index = ngp.cur_vertex;
     ngp_vertex* transformed_vertices = _ngp_next_vertices(count);
     if(NANOGP_UNLIKELY(!vertices)) return;
 
@@ -820,7 +820,7 @@ static void _ngp_draw_pip(sg_pipeline pip, const ngp_vec2* vertices, uint count)
     _ngp_queue_draw(pip, vertex_index, count);
 }
 
-void ngp_draw_triangles(const ngp_triangle* triangles, uint count) {
+void ngp_draw_triangles(const ngp_triangle* triangles, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.triangles_pip, (const ngp_vec2*)triangles, count*3);
 }
@@ -830,17 +830,17 @@ void ngp_draw_triangle(float ax, float ay, float bx, float by, float cx, float c
     ngp_draw_triangles(&(ngp_triangle){{ax,ay},{bx, by},{cx, cy}}, 1);
 }
 
-void ngp_draw_rects(const ngp_rect* rects, uint count) {
+void ngp_draw_rects(const ngp_rect* rects, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
 
     // setup vertices
-    uint num_vertices = count * 6;
-    uint vertex_index = ngp.cur_vertex;
+    unsigned int num_vertices = count * 6;
+    unsigned int vertex_index = ngp.cur_vertex;
     ngp_vertex* vertices = _ngp_next_vertices(num_vertices);
     if(NANOGP_UNLIKELY(!vertices)) return;
 
     // compute vertices
-    for(uint i=0;i<count;++i) {
+    for(unsigned int i=0;i<count;++i) {
         const ngp_rect* rect = &rects[i];
         float l = rect->x, t = rect->y;
         float r = rect->x + rect->w, b = rect->y + rect->h;
@@ -865,7 +865,7 @@ void ngp_draw_rect(float x, float y, float w, float h) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
 
     // setup vertices
-    uint vertex_index = ngp.cur_vertex;
+    unsigned int vertex_index = ngp.cur_vertex;
     ngp_vertex* vertices = _ngp_next_vertices(6);
     if(NANOGP_UNLIKELY(!vertices)) return;
 
@@ -887,7 +887,7 @@ void ngp_draw_rect(float x, float y, float w, float h) {
     _ngp_queue_draw(ngp.triangles_pip, vertex_index, 6);
 }
 
-void ngp_draw_points(const ngp_vec2* points, uint count) {
+void ngp_draw_points(const ngp_vec2* points, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.points_pip, points, count);
 }
@@ -897,7 +897,7 @@ void ngp_draw_point(float x, float y) {
     ngp_draw_points(&(ngp_vec2){x, y}, 1);
 }
 
-void ngp_draw_lines(const ngp_line* lines, uint count) {
+void ngp_draw_lines(const ngp_line* lines, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.lines_pip, (const ngp_vec2*)lines, count*2);
 }
@@ -907,12 +907,12 @@ void ngp_draw_line(float ax, float ay, float bx, float by) {
     ngp_draw_lines(&(ngp_line){{ax,ay},{bx, by}}, 1);
 }
 
-void ngp_draw_line_strip(const ngp_vec2* points, uint count) {
+void ngp_draw_line_strip(const ngp_vec2* points, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.line_strip_pip, points, count);
 }
 
-void ngp_draw_triangle_strip(const ngp_vec2* points, uint count) {
+void ngp_draw_triangle_strip(const ngp_vec2* points, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.triangle_strip_pip, points, count);
 }

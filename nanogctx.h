@@ -43,7 +43,7 @@ extern "C" {
 typedef enum ngctx_backend {
     NGCTX_BACKEND_DUMMY = 0,
     NGCTX_BACKEND_GLCORE33,
-    NGCTX_BACKEND_WGPU
+    NGCTX_BACKEND_D3D11
 } ngctx_backend;
 
 typedef struct ngctx_isize {
@@ -84,23 +84,23 @@ NANOGCTX_API const char* ngctx_gl_get_error(ngctx_gl_context* ngctx);
 NANOGCTX_API ngctx_error ngctx_gl_get_error_code(ngctx_gl_context* ngctx);
 #endif // NANOGCTX_GLCORE33_BACKEND
 
-#ifdef NANOGCTX_WGPU_BACKEND
-typedef struct ngctx_wgpu_context {
+#ifdef NANOGCTX_D3D11_BACKEND
+typedef struct ngctx_d3d11_context {
     uint32_t init_cookie;
     SDL_Window* window;
-} ngctx_wgpu_context;
+} ngctx_d3d11_context;
 
-NANOGCTX_API void ngctx_wgpu_prepare_attributes(ngctx_desc* desc);
-NANOGCTX_API bool ngctx_wgpu_create(ngctx_wgpu_context* ngctx, SDL_Window* window);
-NANOGCTX_API void ngctx_wgpu_destroy(ngctx_wgpu_context* ngctx);
-NANOGCTX_API bool ngctx_wgpu_activate(ngctx_wgpu_context* ngctx);
-NANOGCTX_API bool ngctx_wgpu_is_valid(ngctx_wgpu_context* ngctx);
-NANOGCTX_API ngctx_isize ngctx_wgpu_get_drawable_size(ngctx_wgpu_context* ngctx);
-NANOGCTX_API bool ngctx_wgpu_set_swap_interval(ngctx_wgpu_context* ngctx, int interval);
-NANOGCTX_API void ngctx_wgpu_swap(ngctx_wgpu_context* ngctx);
-NANOGCTX_API const char* ngctx_wgpu_get_error(ngctx_wgpu_context* ngctx);
-NANOGCTX_API ngctx_error ngctx_wgpu_get_error_code(ngctx_wgpu_context* ngctx);
-#endif // NANOGCTX_WGPU_BACKEND
+NANOGCTX_API void ngctx_d3d11_prepare_attributes(ngctx_desc* desc);
+NANOGCTX_API bool ngctx_d3d11_create(ngctx_d3d11_context* ngctx, SDL_Window* window);
+NANOGCTX_API void ngctx_d3d11_destroy(ngctx_d3d11_context* ngctx);
+NANOGCTX_API bool ngctx_d3d11_activate(ngctx_d3d11_context* ngctx);
+NANOGCTX_API bool ngctx_d3d11_is_valid(ngctx_d3d11_context* ngctx);
+NANOGCTX_API ngctx_isize ngctx_d3d11_get_drawable_size(ngctx_d3d11_context* ngctx);
+NANOGCTX_API bool ngctx_d3d11_set_swap_interval(ngctx_d3d11_context* ngctx, int interval);
+NANOGCTX_API void ngctx_d3d11_swap(ngctx_d3d11_context* ngctx);
+NANOGCTX_API const char* ngctx_d3d11_get_error(ngctx_d3d11_context* ngctx);
+NANOGCTX_API ngctx_error ngctx_d3d11_get_error_code(ngctx_d3d11_context* ngctx);
+#endif // NANOGCTX_D3D11_BACKEND
 
 #ifdef NANOGCTX_DUMMY_BACKEND
 typedef struct ngctx_dummy_context {
@@ -125,8 +125,8 @@ typedef struct ngctx_context {
         #ifdef NANOGCTX_GLCORE33_BACKEND
         ngctx_gl_context gl;
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        ngctx_wgpu_context wgpu;
+        #ifdef NANOGCTX_D3D11_BACKEND
+        ngctx_d3d11_context d3d11;
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         ngctx_dummy_context dummy;
@@ -150,7 +150,7 @@ NANOGCTX_API const char* ngctx_get_error(ngctx_context* ngctx);
 // NANOGCTX_GLES3
 // NANOGCTX_D3D11
 // NANOGCTX_METAL
-// NANOGCTX_WGPU
+// NANOGCTX_D3D11
 
 #ifdef __cplusplus
 } // extern "C"
@@ -279,58 +279,59 @@ ngctx_error ngctx_gl_get_error_code(ngctx_gl_context* ngctx) {
 
 #endif // NANOGCTX_GLCORE33_BACKEND
 
-#ifdef NANOGCTX_WGPU_BACKEND
+#ifdef NANOGCTX_D3D11_BACKEND
 
-void ngctx_wgpu_prepare_attributes(ngctx_desc* desc) {
+void ngctx_d3d11_prepare_attributes(ngctx_desc* desc) {
 }
 
-bool ngctx_wgpu_create(ngctx_wgpu_context* ngctx, SDL_Window* window) {
+bool ngctx_d3d11_create(ngctx_d3d11_context* ngctx, SDL_Window* window) {
     NANOGP_ASSERT(ngctx->init_cookie == 0);
     NANOGP_ASSERT(window);
-    ngctx->window = window;
-    return true;
+    //ngctx->init_cookie = _NGCTX_INIT_COOKIE;
+    //ngctx->window = window;
+    return false;
 }
 
-void ngctx_wgpu_destroy(ngctx_wgpu_context* ngctx) {
+void ngctx_d3d11_destroy(ngctx_d3d11_context* ngctx) {
     if(ngctx->init_cookie == 0) return; // not initialized
-    *ngctx = (ngctx_wgpu_context){0};
+    *ngctx = (ngctx_d3d11_context){0};
 }
 
-bool ngctx_wgpu_activate(ngctx_wgpu_context* ngctx) {
+bool ngctx_d3d11_activate(ngctx_d3d11_context* ngctx) {
     return true;
 }
 
-bool ngctx_wgpu_is_valid(ngctx_wgpu_context* ngctx) {
+bool ngctx_d3d11_is_valid(ngctx_d3d11_context* ngctx) {
     return ngctx->init_cookie == _NGCTX_INIT_COOKIE;
 }
 
-ngctx_isize ngctx_wgpu_get_drawable_size(ngctx_wgpu_context* ngctx) {
+ngctx_isize ngctx_d3d11_get_drawable_size(ngctx_d3d11_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
     ngctx_isize size;
     SDL_GetWindowSize(ngctx->window, &size.w, &size.h);
     return size;
 }
 
-bool ngctx_wgpu_set_swap_interval(ngctx_wgpu_context* ngctx, int interval) {
+bool ngctx_d3d11_set_swap_interval(ngctx_d3d11_context* ngctx, int interval) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
     return true;
 }
 
-void ngctx_wgpu_swap(ngctx_wgpu_context* ngctx) {
+void ngctx_d3d11_swap(ngctx_d3d11_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
 }
 
-const char* ngctx_wgpu_get_error(ngctx_wgpu_context* ngctx) {
+const char* ngctx_d3d11_get_error(ngctx_d3d11_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
     return "";
 }
 
-ngctx_error ngctx_wgpu_get_error_code(ngctx_wgpu_context* ngctx) {
+ngctx_error ngctx_d3d11_get_error_code(ngctx_d3d11_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
     return NGCTX_NO_ERROR;
 }
 
-#endif // NANOGCTX_WGPU_BACKEND
+#endif // NANOGCTX_D3D11_BACKEND
 
 #ifdef NANOGCTX_DUMMY_BACKEND
 
@@ -392,9 +393,9 @@ void ngctx_prepare_attributes(ngctx_desc* desc, ngctx_backend backend) {
         case NGCTX_BACKEND_GLCORE33:
             ngctx_gl_prepare_attributes(desc); return;
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            ngctx_wgpu_prepare_attributes(desc); return;
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            ngctx_d3d11_prepare_attributes(desc); return;
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -412,9 +413,9 @@ bool ngctx_create(ngctx_context* ngctx, SDL_Window* window, ngctx_backend backen
         case NGCTX_BACKEND_GLCORE33:
             ok = ngctx_gl_create(&ngctx->gl, window); break;
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            ok = ngctx_wgpu_create(&ngctx->wgpu, window); break;
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            ok = ngctx_d3d11_create(&ngctx->d3d11, window); break;
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -431,9 +432,9 @@ void ngctx_destroy(ngctx_context* ngctx) {
         case NGCTX_BACKEND_GLCORE33:
             ngctx_gl_destroy(&ngctx->gl); break;
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            ngctx_wgpu_destroy(&ngctx->wgpu); break;
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            ngctx_d3d11_destroy(&ngctx->d3d11); break;
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -450,9 +451,9 @@ bool ngctx_activate(ngctx_context* ngctx) {
         case NGCTX_BACKEND_GLCORE33:
             return ngctx_gl_activate(&ngctx->gl);
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            return ngctx_wgpu_activate(&ngctx->wgpu);
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            return ngctx_d3d11_activate(&ngctx->d3d11);
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -469,9 +470,9 @@ bool ngctx_is_valid(ngctx_context* ngctx) {
         case NGCTX_BACKEND_GLCORE33:
             return ngctx_gl_is_valid(&ngctx->gl);
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            return ngctx_wgpu_is_valid(&ngctx->wgpu);
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            return ngctx_d3d11_is_valid(&ngctx->d3d11);
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -488,9 +489,9 @@ ngctx_isize ngctx_get_drawable_size(ngctx_context* ngctx) {
         case NGCTX_BACKEND_GLCORE33:
             return ngctx_gl_get_drawable_size(&ngctx->gl);
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            return ngctx_wgpu_get_drawable_size(&ngctx->wgpu);
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            return ngctx_d3d11_get_drawable_size(&ngctx->d3d11);
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -507,9 +508,9 @@ bool ngctx_set_swap_interval(ngctx_context* ngctx, int interval) {
         case NGCTX_BACKEND_GLCORE33:
             return ngctx_gl_set_swap_interval(&ngctx->gl, interval);
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            return ngctx_wgpu_set_swap_interval(&ngctx->wgpu, interval);
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            return ngctx_d3d11_set_swap_interval(&ngctx->d3d11, interval);
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -526,9 +527,9 @@ void ngctx_swap(ngctx_context* ngctx) {
         case NGCTX_BACKEND_GLCORE33:
             ngctx_gl_swap(&ngctx->gl); return;
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            ngctx_wgpu_swap(&ngctx->wgpu); return;
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            ngctx_d3d11_swap(&ngctx->d3d11); return;
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -545,9 +546,9 @@ const char* ngctx_get_error(ngctx_context* ngctx) {
         case NGCTX_BACKEND_GLCORE33:
             return ngctx_gl_get_error(&ngctx->gl);
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            return ngctx_wgpu_get_error(&ngctx->wgpu);
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            return ngctx_d3d11_get_error(&ngctx->d3d11);
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
@@ -564,9 +565,9 @@ ngctx_error ngctx_get_error_code(ngctx_context* ngctx) {
         case NGCTX_BACKEND_GLCORE33:
             return ngctx_gl_get_error_code(&ngctx->gl);
         #endif
-        #ifdef NANOGCTX_WGPU_BACKEND
-        case NGCTX_BACKEND_WGPU:
-            return ngctx_wgpu_get_error_code(&ngctx->wgpu);
+        #ifdef NANOGCTX_D3D11_BACKEND
+        case NGCTX_BACKEND_D3D11:
+            return ngctx_d3d11_get_error_code(&ngctx->d3d11);
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:

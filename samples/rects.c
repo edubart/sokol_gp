@@ -41,7 +41,7 @@ void draw_points() {
     ngp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
     ngp_irect viewport = ngp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
-    uint count = 0;
+    unsigned int count = 0;
     for(int y=64;y<height-64 && count < 4096;y+=8) {
         for(int x=64;x<width-64 && count < 4096;x+=8) {
             points_buffer[count++] = (ngp_vec2){x,y};
@@ -52,7 +52,7 @@ void draw_points() {
 
 void draw_lines() {
     ngp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
-    uint count = 0;
+    unsigned int count = 0;
     ngp_irect viewport = ngp_query_state()->viewport;
     ngp_vec2 c = {viewport.w / 2, viewport.h / 2};
     points_buffer[count++] = c;
@@ -132,6 +132,6 @@ void render(ngctx_context* ngctx) {
     frame++;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     return sample_app(render);
 }

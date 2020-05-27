@@ -1,13 +1,13 @@
 #define FLEXTGL_IMPL
 #include "flextgl.h"
 #define NANOGCTX_GLCORE33_BACKEND
-//#define NANOGCTX_WGPU_BACKEND
+//#define NANOGCTX_D3D11_BACKEND
 #define NANOGCTX_DUMMY_BACKEND
 #define NANOGCTX_IMPL
 #include "nanogctx.h"
 #define NANOGP_IMPL
 #define NANOGP_GLCORE33_BACKEND
-//#define NANOGP_WGPU_BACKEND
+//#define NANOGP_D3D11_BACKEND
 //#define NANOGP_DUMMY_BACKEND
 #include "nanogp.h"
 #include <SDL2/SDL.h>
@@ -22,7 +22,7 @@ int sample_app(void (*draw)(ngctx_context* ngctx)) {
     ngctx_prepare_attributes(&(ngctx_desc){.sample_count = 0}, backend);
 
     // create window
-    SDL_Window *window = SDL_CreateWindow("GP Clear",
+    SDL_Window *window = SDL_CreateWindow("NGP Sample",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         512, 512,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);

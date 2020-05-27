@@ -1,2 +1,5 @@
 /scratch
 *.TODO
+*.exe
+*.dll
+*.o
