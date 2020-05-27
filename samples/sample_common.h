@@ -25,7 +25,7 @@ int sample_app(void (*draw)(ngctx_context ngctx)) {
 #ifdef NANOGP_D3D11_BACKEND
         .backend = NGCTX_BACKEND_D3D11,
 #endif
-        .sample_count = 4
+        .sample_count = 0
     };
     ngctx_prepare_attributes(&ctx_desc);
 

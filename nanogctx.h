@@ -390,7 +390,7 @@ bool _ngctx_d3d11_create_device(ngctx_d3d11_context* ngctx, HWND hwnd) {
         .SwapEffect = DXGI_SWAP_EFFECT_DISCARD,
         .BufferCount = 1,
         .SampleDesc = {
-            .Count = ngctx->desc.sample_count,
+            .Count = ngctx->desc.sample_count > 0 ? ngctx->desc.sample_count : 1,
             .Quality = ngctx->desc.sample_count > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0
         },
         .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT
