@@ -52,11 +52,15 @@ typedef struct ng_context {
     const char* last_error;
 } ng_context;
 
+typedef struct ng_isize {
+    int w, h;
+} ng_isize;
+
 void ngctx_prepare_attributes();
 bool ngctx_create(ng_context* ctx, SDL_Window* window);
 void ngctx_destroy(ng_context* ctx);
 bool ngctx_is_valid(ng_context* ctx);
-void ngctx_get_drawable_size(ng_context* ctx, int* width, int* height);
+ng_isize ngctx_get_drawable_size(ng_context* ctx);
 bool ngctx_set_swap_interval(ng_context* ctx, int interval);
 void ngctx_swap(ng_context* ctx);
 const char* ngctx_get_error(ng_context* ctx);
@@ -110,9 +114,11 @@ bool ngctx_is_valid(ng_context* ctx) {
     return ctx->init_cookie == _NANOGCTX_INIT_COOKIE;
 }
 
-void ngctx_get_drawable_size(ng_context* ctx, int* width, int* height) {
+ng_isize ngctx_get_drawable_size(ng_context* ctx) {
+    ng_isize size;
     NGP_ASSERT(ctx->init_cookie == _NANOGCTX_INIT_COOKIE);
-    SDL_GL_GetDrawableSize(ctx->window, width, height);
+    SDL_GL_GetDrawableSize(ctx->window, &size.w, &size.h);
+    return size;
 }
 
 bool ngctx_set_swap_interval(ng_context* ctx, int interval) {

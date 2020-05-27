@@ -7,7 +7,7 @@
 #include <SDL2/SDL.h>
 #include <math.h>
 
-int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
+int sample_app(void (*draw)(ng_context* ngctx)) {
     // initialize SDL
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -30,12 +30,11 @@ int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
         fprintf(stderr, "Failed to create NGCTX context: %s\n", ngctx_get_error(&ngctx));
         return 1;
     }
-    ngctx_set_swap_interval(&ngctx, 0);
+    ngctx_set_swap_interval(&ngctx, 1);
 
     // create NanoGP context
-    ngp_context ngp = {0};
-    if(!ngp_create(&ngp, &(ngp_desc){0})) {
-        fprintf(stderr, "Failed to create NGP context: %s\n", ngp_get_error(&ngp));
+    if(!ngp_setup(&(ngp_desc){0})) {
+        fprintf(stderr, "Failed to create NGP context: %s\n", ngp_get_error());
         return 1;
     }
 
@@ -45,7 +44,7 @@ int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
         SDL_Event event;
         while(SDL_PollEvent(&event)) { }
 
-        draw(&ngctx, &ngp);
+        draw(&ngctx);
 
         // print FPS
         static uint32_t fps = 0;
@@ -60,7 +59,7 @@ int sample_app(void (*draw)(ng_context* ngctx, ngp_context* ngp)) {
     }
 
     // destroy
-    ngp_destroy(&ngp);
+    ngp_shutdown();
     ngctx_destroy(&ngctx);
     SDL_DestroyWindow(window);
     SDL_Quit();
