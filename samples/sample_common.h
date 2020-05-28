@@ -27,7 +27,9 @@ int sample_app(void (*draw)(ngctx_context ngctx)) {
 #endif
         .sample_count = 0
     };
-    ngctx_prepare_attributes(&ctx_desc);
+
+    if(ctx_desc.backend == NGCTX_BACKEND_GLCORE33)
+        ngctx_gl_prepare_attributes(&ctx_desc);
 
     // create window
     SDL_Window *window = SDL_CreateWindow("NGP Sample",

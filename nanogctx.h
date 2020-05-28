@@ -58,6 +58,8 @@ typedef enum ngctx_error {
     NGCTX_CREATE_RENDER_TARGET_FAILED,
     NGCTX_ACTIVATE_CONTEXT_FAILED,
     NGCTX_GRAPHICS_API_UNSUPPORTED,
+    NGCTX_SWAP_FAILED,
+    NGCTX_DEVICE_LOST,
     NGCTX_WMINFO_FAILED,
     NGCTX_INVALID_BACKEND
 } ngctx_error;
@@ -87,7 +89,7 @@ NANOGCTX_API void ngctx_gl_destroy(ngctx_gl_context* ngctx);
 NANOGCTX_API bool ngctx_gl_activate(ngctx_gl_context* ngctx);
 NANOGCTX_API ngctx_isize ngctx_gl_get_drawable_size(ngctx_gl_context* ngctx);
 NANOGCTX_API bool ngctx_gl_set_swap_interval(ngctx_gl_context* ngctx, int interval);
-NANOGCTX_API void ngctx_gl_swap(ngctx_gl_context* ngctx);
+NANOGCTX_API bool ngctx_gl_swap(ngctx_gl_context* ngctx);
 #endif // NANOGCTX_GLCORE33_BACKEND
 
 #ifdef NANOGCTX_D3D11_BACKEND
@@ -123,13 +125,12 @@ typedef struct ngctx_d3d11_context {
     ID3D11DepthStencilView* depth_stencil_view;
 } ngctx_d3d11_context;
 
-NANOGCTX_API void ngctx_d3d11_prepare_attributes(ngctx_desc* desc);
 NANOGCTX_API ngctx_d3d11_context* ngctx_d3d11_create(SDL_Window* window, ngctx_desc* desc);
 NANOGCTX_API void ngctx_d3d11_destroy(ngctx_d3d11_context* ngctx);
 NANOGCTX_API bool ngctx_d3d11_activate(ngctx_d3d11_context* ngctx);
 NANOGCTX_API ngctx_isize ngctx_d3d11_get_drawable_size(ngctx_d3d11_context* ngctx);
 NANOGCTX_API bool ngctx_d3d11_set_swap_interval(ngctx_d3d11_context* ngctx, int interval);
-NANOGCTX_API void ngctx_d3d11_swap(ngctx_d3d11_context* ngctx);
+NANOGCTX_API bool ngctx_d3d11_swap(ngctx_d3d11_context* ngctx);
 NANOGCTX_API const void* ngctx_d3d11_render_target_view();
 NANOGCTX_API const void* ngctx_d3d11_depth_stencil_view();
 
@@ -141,13 +142,12 @@ typedef struct ngctx_dummy_context{
     SDL_Window* window;
 } ngctx_dummy_context;
 
-NANOGCTX_API void ngctx_dummy_prepare_attributes(ngctx_desc* desc);
 NANOGCTX_API ngctx_dummy_context* ngctx_dummy_create(SDL_Window* window, ngctx_desc* desc);
 NANOGCTX_API void ngctx_dummy_destroy(ngctx_dummy_context* ngctx);
 NANOGCTX_API bool ngctx_dummy_activate(ngctx_dummy_context* ngctx);
 NANOGCTX_API ngctx_isize ngctx_dummy_get_drawable_size(ngctx_dummy_context* ngctx);
 NANOGCTX_API bool ngctx_dummy_set_swap_interval(ngctx_dummy_context* ngctx, int interval);
-NANOGCTX_API void ngctx_dummy_swap(ngctx_dummy_context* ngctx);
+NANOGCTX_API bool ngctx_dummy_swap(ngctx_dummy_context* ngctx);
 #endif // NANOGCTX_DUMMY_BACKEND
 
 typedef struct ngctx_context {
@@ -165,14 +165,13 @@ typedef struct ngctx_context {
     };
 } ngctx_context;
 
-NANOGCTX_API void ngctx_prepare_attributes(ngctx_desc* desc);
 NANOGCTX_API bool ngctx_create(ngctx_context* ngctx, SDL_Window* window, ngctx_desc* desc);
 NANOGCTX_API void ngctx_destroy(ngctx_context ngctx);
 NANOGCTX_API bool ngctx_activate(ngctx_context ngctx);
 NANOGCTX_API bool ngctx_is_valid(ngctx_context ngctx);
 NANOGCTX_API ngctx_isize ngctx_get_drawable_size(ngctx_context ngctx);
 NANOGCTX_API bool ngctx_set_swap_interval(ngctx_context ngctx, int interval);
-NANOGCTX_API void ngctx_swap(ngctx_context ngctx);
+NANOGCTX_API bool ngctx_swap(ngctx_context ngctx);
 NANOGCTX_API const char* ngctx_get_error();
 NANOGCTX_API ngctx_error ngctx_get_error_code();
 
@@ -271,7 +270,7 @@ ngctx_gl_context* ngctx_gl_create(SDL_Window* window, ngctx_desc* desc) {
     }
 
     ngctx_gl_context* ngctx = (ngctx_gl_context*)NANOGP_MALLOC(sizeof(ngctx_gl_context));
-    memset(ngctx, 0, sizeof(ngctx));
+    memset(ngctx, 0, sizeof(ngctx_gl_context));
     ngctx->init_cookie = _NGCTX_INIT_COOKIE;
     ngctx->context = context;
     ngctx->window = window;
@@ -304,9 +303,10 @@ bool ngctx_gl_set_swap_interval(ngctx_gl_context* ngctx, int interval) {
     return SDL_GL_SetSwapInterval(interval) == 0;
 }
 
-void ngctx_gl_swap(ngctx_gl_context* ngctx) {
+bool ngctx_gl_swap(ngctx_gl_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
     SDL_GL_SwapWindow(ngctx->window);
+    return true;
 }
 
 #endif // NANOGCTX_GLCORE33_BACKEND
@@ -318,18 +318,15 @@ void ngctx_gl_swap(ngctx_gl_context* ngctx) {
 
 static ngctx_d3d11_context* _ngctx_d3d11_active = NULL;
 
-void ngctx_d3d11_prepare_attributes(ngctx_desc* desc) {
-}
-
 bool _ngctx_d3d11_create_default_render_target(ngctx_d3d11_context* ngctx) {
-    HRESULT hr;
-    hr = IDXGISwapChain_GetBuffer(ngctx->swap_chain, 0, &IID_ID3D11Texture2D, (void**)&ngctx->render_target);
-    if(!SUCCEEDED(hr))
+    HRESULT result;
+    result = IDXGISwapChain_GetBuffer(ngctx->swap_chain, 0, &IID_ID3D11Texture2D, (void**)&ngctx->render_target);
+    if(!SUCCEEDED(result))
         return false;
 
     NANOGP_ASSERT(ngctx->render_target);
-    hr = ID3D11Device_CreateRenderTargetView(ngctx->device, (ID3D11Resource*)ngctx->render_target, NULL, &ngctx->render_target_view);
-    if(!SUCCEEDED(hr))
+    result = ID3D11Device_CreateRenderTargetView(ngctx->device, (ID3D11Resource*)ngctx->render_target, NULL, &ngctx->render_target_view);
+    if(!SUCCEEDED(result))
         return false;
     NANOGP_ASSERT(ngctx->render_target_view);
 
@@ -343,8 +340,8 @@ bool _ngctx_d3d11_create_default_render_target(ngctx_d3d11_context* ngctx) {
         .Usage = D3D11_USAGE_DEFAULT,
         .BindFlags = D3D11_BIND_DEPTH_STENCIL,
     };
-    hr = ID3D11Device_CreateTexture2D(ngctx->device, &ds_desc, NULL, &ngctx->depth_stencil_buffer);
-    if(!SUCCEEDED(hr))
+    result = ID3D11Device_CreateTexture2D(ngctx->device, &ds_desc, NULL, &ngctx->depth_stencil_buffer);
+    if(!SUCCEEDED(result))
         return false;
     NANOGP_ASSERT(ngctx->depth_stencil_buffer);
 
@@ -352,8 +349,8 @@ bool _ngctx_d3d11_create_default_render_target(ngctx_d3d11_context* ngctx) {
         .Format = ds_desc.Format,
         .ViewDimension = ngctx->desc.sample_count > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D
     };
-    hr = ID3D11Device_CreateDepthStencilView(ngctx->device, (ID3D11Resource*)ngctx->depth_stencil_buffer, &dsv_desc, &ngctx->depth_stencil_view);
-    if(!SUCCEEDED(hr))
+    result = ID3D11Device_CreateDepthStencilView(ngctx->device, (ID3D11Resource*)ngctx->depth_stencil_buffer, &dsv_desc, &ngctx->depth_stencil_view);
+    if(!SUCCEEDED(result))
         return false;
     NANOGP_ASSERT(ngctx->depth_stencil_view);
     return true;
@@ -366,12 +363,16 @@ void _ngctx_d3d11_destroy_default_render_target(ngctx_d3d11_context* ngctx) {
     SAFE_RELEASE(ID3D11DepthStencilView, ngctx->depth_stencil_view);
 }
 
-void _ngctx_d3d11_update_default_render_target(ngctx_d3d11_context* ngctx) {
-    if(ngctx->swap_chain) {
-        _ngctx_d3d11_destroy_default_render_target(ngctx);
-        IDXGISwapChain_ResizeBuffers(ngctx->swap_chain, 1, ngctx->width, ngctx->height, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
-        _ngctx_d3d11_create_default_render_target(ngctx);
-    }
+bool _ngctx_d3d11_update_default_render_target(ngctx_d3d11_context* ngctx) {
+    if(!ngctx->swap_chain)
+        return false;
+    _ngctx_d3d11_destroy_default_render_target(ngctx);
+    HRESULT result = IDXGISwapChain_ResizeBuffers(ngctx->swap_chain, 1, ngctx->width, ngctx->height, DXGI_FORMAT_UNKNOWN, 0);
+    if(FAILED(result))
+        return false;
+    if(!_ngctx_d3d11_create_default_render_target(ngctx))
+        return false;
+    return true;
 }
 
 bool _ngctx_d3d11_create_device(ngctx_d3d11_context* ngctx, HWND hwnd) {
@@ -397,20 +398,20 @@ bool _ngctx_d3d11_create_device(ngctx_d3d11_context* ngctx, HWND hwnd) {
     };
     int create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
     D3D_FEATURE_LEVEL feature_level = {0};
-    HRESULT hr = D3D11CreateDeviceAndSwapChain(
-        NULL,                       /* pAdapter (use default) */
-        D3D_DRIVER_TYPE_HARDWARE,   /* DriverType */
-        NULL,                       /* Software */
-        create_flags,               /* Flags */
-        NULL,                       /* pFeatureLevels */
-        0,                          /* FeatureLevels */
-        D3D11_SDK_VERSION,          /* SDKVersion */
-        &ngctx->swap_chain_desc,    /* pSwapChainDesc */
-        &ngctx->swap_chain,         /* ppSwapChain */
-        &ngctx->device,             /* ppDevice */
-        &feature_level,             /* pFeatureLevel */
-        &ngctx->device_context);    /* ppImmediateContext */
-    if(!SUCCEEDED(hr))
+    HRESULT result = D3D11CreateDeviceAndSwapChain(
+        NULL,                               /* pAdapter (use default) */
+        D3D_DRIVER_TYPE_HARDWARE,           /* DriverType */
+        NULL,                               /* Software */
+        D3D11_CREATE_DEVICE_SINGLETHREADED, /* Flags */
+        NULL,                               /* pFeatureLevels */
+        0,                                  /* FeatureLevels */
+        D3D11_SDK_VERSION,                  /* SDKVersion */
+        &ngctx->swap_chain_desc,            /* pSwapChainDesc */
+        &ngctx->swap_chain,                 /* ppSwapChain */
+        &ngctx->device,                     /* ppDevice */
+        &feature_level,                     /* pFeatureLevel */
+        &ngctx->device_context);            /* ppImmediateContext */
+    if(!SUCCEEDED(result))
         return false;
     NANOGP_ASSERT(ngctx->swap_chain && ngctx->device && ngctx->device_context);
     return true;
@@ -437,7 +438,7 @@ ngctx_d3d11_context* ngctx_d3d11_create(SDL_Window* window, ngctx_desc* desc) {
     SDL_GetWindowSize(window, &width, &height);
 
     ngctx_d3d11_context* ngctx = (ngctx_d3d11_context*)NANOGP_MALLOC(sizeof(ngctx_d3d11_context));
-    memset(ngctx, 0, sizeof(ngctx));
+    memset(ngctx, 0, sizeof(ngctx_d3d11_context));
     ngctx->init_cookie = _NGCTX_INIT_COOKIE;
     ngctx->desc = *desc;
     ngctx->window = window;
@@ -479,9 +480,7 @@ bool ngctx_d3d11_activate(ngctx_d3d11_context* ngctx) {
 
 ngctx_isize ngctx_d3d11_get_drawable_size(ngctx_d3d11_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
-    ngctx_isize size;
-    SDL_GetWindowSize(ngctx->window, &size.w, &size.h);
-    return size;
+    return (ngctx_isize){ngctx->width, ngctx->height};
 }
 
 bool ngctx_d3d11_set_swap_interval(ngctx_d3d11_context* ngctx, int interval) {
@@ -490,10 +489,25 @@ bool ngctx_d3d11_set_swap_interval(ngctx_d3d11_context* ngctx, int interval) {
     return true;
 }
 
-void ngctx_d3d11_swap(ngctx_d3d11_context* ngctx) {
+bool ngctx_d3d11_swap(ngctx_d3d11_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
 
-    IDXGISwapChain_Present(ngctx->swap_chain, ngctx->swap_interval, 0);
+    unsigned int flags = ngctx->swap_interval == 0 ? DXGI_PRESENT_DO_NOT_WAIT : 0;
+    HRESULT result = IDXGISwapChain_Present(ngctx->swap_chain, ngctx->swap_interval, flags);
+
+    bool update_render_target = false;
+    if(result == DXGI_ERROR_WAS_STILL_DRAWING) {
+        // it's pl
+    } else if(result == DXGI_ERROR_INVALID_CALL) {
+        // probably went through a fullscreen <-> windowed transition
+    } else if (result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET) {
+        // lost all resources
+        _ngctx_set_error(NGCTX_DEVICE_LOST, "D3D11 device lost");
+        return false;
+    } else if(FAILED(result)) {
+        _ngctx_set_error(NGCTX_SWAP_FAILED, "D3D11 present failed");
+        return false;
+    }
 
     // handle window resizing
     int width, height;
@@ -501,8 +515,13 @@ void ngctx_d3d11_swap(ngctx_d3d11_context* ngctx) {
     if(ngctx->width != width || ngctx->height != height) {
         ngctx->width = width;
         ngctx->height = height;
-        _ngctx_d3d11_update_default_render_target(ngctx);
+        if(!_ngctx_d3d11_update_default_render_target(ngctx)) {
+            _ngctx_set_error(NGCTX_CREATE_RENDER_TARGET_FAILED, "D3D11 failed to recreate default render target");
+            return false;
+        }
     }
+
+    return true;
 }
 
 const void* ngctx_d3d11_render_target_view() {
@@ -521,13 +540,10 @@ const void* ngctx_d3d11_depth_stencil_view() {
 
 #ifdef NANOGCTX_DUMMY_BACKEND
 
-void ngctx_dummy_prepare_attributes(ngctx_desc* desc) {
-}
-
 ngctx_dummy_context* ngctx_dummy_create(SDL_Window* window, ngctx_desc* desc) {
     NANOGP_ASSERT(window);
     ngctx_dummy_context* ngctx = (ngctx_dummy_context*)NANOGP_MALLOC(sizeof(ngctx_dummy_context));
-    memset(ngctx, 0, sizeof(ngctx));
+    memset(ngctx, 0, sizeof(ngctx_dummy_context));
     ngctx->init_cookie = _NGCTX_INIT_COOKIE;
     ngctx->window = window;
     return ngctx;
@@ -554,8 +570,9 @@ bool ngctx_dummy_set_swap_interval(ngctx_dummy_context* ngctx, int interval) {
     return true;
 }
 
-void ngctx_dummy_swap(ngctx_dummy_context* ngctx) {
+bool ngctx_dummy_swap(ngctx_dummy_context* ngctx) {
     NANOGP_ASSERT(ngctx->init_cookie == _NGCTX_INIT_COOKIE);
+    return true;
 }
 
 const char* ngctx_dummy_get_error(ngctx_dummy_context* ngctx) {
@@ -569,25 +586,6 @@ ngctx_error ngctx_dummy_get_error_code(ngctx_dummy_context* ngctx) {
 }
 
 #endif // NANOGCTX_DUMMY_BACKEND
-
-void ngctx_prepare_attributes(ngctx_desc* desc) {
-    switch(desc->backend) {
-        #ifdef NANOGCTX_GLCORE33_BACKEND
-        case NGCTX_BACKEND_GLCORE33:
-            ngctx_gl_prepare_attributes(desc); return;
-        #endif
-        #ifdef NANOGCTX_D3D11_BACKEND
-        case NGCTX_BACKEND_D3D11:
-            ngctx_d3d11_prepare_attributes(desc); return;
-        #endif
-        #ifdef NANOGCTX_DUMMY_BACKEND
-        case NGCTX_BACKEND_DUMMY:
-            ngctx_dummy_prepare_attributes(desc); return;
-        #endif
-        default:
-            NANOGP_UNREACHABLE; return;
-    }
-}
 
 bool ngctx_create(ngctx_context* ngctx, SDL_Window* window, ngctx_desc* desc) {
     bool ok = false;
@@ -699,22 +697,22 @@ bool ngctx_set_swap_interval(ngctx_context ngctx, int interval) {
     }
 }
 
-void ngctx_swap(ngctx_context ngctx) {
+bool ngctx_swap(ngctx_context ngctx) {
     switch(ngctx.backend) {
         #ifdef NANOGCTX_GLCORE33_BACKEND
         case NGCTX_BACKEND_GLCORE33:
-            ngctx_gl_swap(ngctx.gl); return;
+            return ngctx_gl_swap(ngctx.gl);
         #endif
         #ifdef NANOGCTX_D3D11_BACKEND
         case NGCTX_BACKEND_D3D11:
-            ngctx_d3d11_swap(ngctx.d3d11); return;
+            return ngctx_d3d11_swap(ngctx.d3d11);
         #endif
         #ifdef NANOGCTX_DUMMY_BACKEND
         case NGCTX_BACKEND_DUMMY:
-            ngctx_dummy_swap(ngctx.dummy); return;
+            return ngctx_dummy_swap(ngctx.dummy);
         #endif
         default:
-            NANOGP_UNREACHABLE; return;
+            NANOGP_UNREACHABLE; return false;
     }
 }
 
