@@ -31,6 +31,12 @@ SOFTWARE.
 #include <stdbool.h>
 #include <stdint.h>
 
+#define NANOGCTX_GLCORE33_BACKEND
+#ifdef WIN32
+#define NANOGCTX_D3D11_BACKEND
+#endif
+#define NANOGCTX_DUMMY_BACKEND
+
 #ifndef NANOGCTX_API
 #define NANOGCTX_API extern
 #endif

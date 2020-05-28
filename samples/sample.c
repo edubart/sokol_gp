@@ -94,7 +94,7 @@ void draw_triangles() {
     ngp_pop_transform();
 }
 
-void render(ngctx_context ngctx) {
+void draw(ngctx_context ngctx) {
     ngctx_isize size = ngctx_get_drawable_size(ngctx);
     ngp_set_clear_color(0.05f, 0.05f, 0.05f, 1.0f);
     ngp_begin(size.w, size.h);
@@ -131,11 +131,25 @@ void render(ngctx_context ngctx) {
     draw_lines();
 
     ngp_end();
-    ngctx_swap(ngctx);
 
     frame++;
 }
 
+bool init() {
+    sg_image image = sg_load_image("resources/cat.png");
+    if(image.id == SG_INVALID_ID)
+        return false;
+    return true;
+}
+
+void terminate() {
+
+}
+
 int main(int argc, char *argv[]) {
-    return sample_app(render);
+    return sample_app((sample_app_desc){
+        .init = init,
+        .terminate = terminate,
+        .draw = draw
+    });
 }

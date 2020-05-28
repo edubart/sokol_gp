@@ -31,17 +31,6 @@ SOFTWARE.
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef NANOGP_GLCORE33_BACKEND
-#define SOKOL_GLCORE33
-#endif
-#ifdef NANOGP_D3D11_BACKEND
-#define SOKOL_D3D11
-#endif
-#ifdef NANOGP_DUMMY_BACKEND
-#define SOKOL_DUMMY_BACKEND
-#endif
-#include "sokol_gfx.h"
-
 #ifndef NANOGP_API
 #define NANOGP_API extern
 #endif
@@ -103,7 +92,6 @@ typedef struct ngp_color {
 typedef struct ngp_desc {
     int max_vertices;
     int max_commands;
-    sg_desc sg;
 } ngp_desc;
 
 typedef struct ngp_state {
@@ -113,7 +101,9 @@ typedef struct ngp_state {
     ngp_mat3 proj;
     ngp_mat3 transform;
     ngp_mat3 mvp;
+    ngp_mat3 texture_matrix;
     ngp_color color;
+    sg_image texture;
 } ngp_state;
 
 // setup functions
@@ -129,19 +119,25 @@ NANOGP_API void ngp_end();
 NANOGP_API void ngp_set_clear_color(float r, float g, float b, float a);
 NANOGP_API void ngp_reset_clear_color();
 
+// state projection functions
+NANOGP_API void ngp_ortho(float left, float right, float top, float bottom);
+NANOGP_API void ngp_reset_proj();
+
 // state transform functions
 NANOGP_API void ngp_push_transform();
 NANOGP_API void ngp_pop_transform();
+NANOGP_API void ngp_reset_transform();
 NANOGP_API void ngp_translate(float x, float y);
 NANOGP_API void ngp_rotate(float theta);
 NANOGP_API void ngp_rotate_at(float theta, float x, float y);
 NANOGP_API void ngp_scale(float sx, float sy);
 NANOGP_API void ngp_scale_at(float sx, float sy, float x, float y);
-NANOGP_API void ngp_reset_transform();
 
-// state changing functions
+// state change functions
 NANOGP_API void ngp_set_color(float r, float g, float b, float a);
 NANOGP_API void ngp_reset_color();
+NANOGP_API void ngp_set_texture(sg_image image);
+NANOGP_API void ngp_reset_texture();
 NANOGP_API void ngp_viewport(int x, int y, int w, int h);
 NANOGP_API void ngp_reset_viewport();
 NANOGP_API void ngp_scissor(int x, int y, int w, int h);
@@ -159,6 +155,9 @@ NANOGP_API void ngp_draw_rects(const ngp_rect* rects, unsigned int count);
 NANOGP_API void ngp_draw_rect(float x, float y, float w, float h);
 NANOGP_API void ngp_draw_line_strip(const ngp_vec2* points, unsigned int count);
 NANOGP_API void ngp_draw_triangle_strip(const ngp_vec2* points, unsigned int count);
+
+NANOGP_API void ngp_draw_textured_rects(const ngp_rect* rect, const ngp_rect* src_rect);
+NANOGP_API void ngp_draw_textured_rect(ngp_rect rect, ngp_rect src_rect);
 
 // querying functions
 NANOGP_API ngp_state* ngp_query_state();
@@ -208,9 +207,6 @@ NANOGP_API ngp_desc ngp_query_desc();
 #define NANOGP_UNLIKELY(x) (x)
 #endif
 #define NANOGP_DEF(val, def) (((val) == 0) ? (def) : (val))
-
-#define SOKOL_IMPL
-#include "sokol_gfx.h"
 
 enum {
     _NGP_INIT_COOKIE = 0xCAFED00D,
@@ -311,7 +307,7 @@ void main() {
 
 @program shd vs fs
 */
-#if defined(NANOGP_GLCORE33_BACKEND)
+#if defined(SOKOL_GLCORE33)
 static const char fs_source[120] = {
     0x23,0x76,0x65,0x72,0x73,0x69,0x6f,0x6e,0x20,0x33,0x33,0x30,0x0a,0x0a,0x75,0x6e,
     0x69,0x66,0x6f,0x72,0x6d,0x20,0x76,0x65,0x63,0x34,0x20,0x63,0x6f,0x6c,0x6f,0x72,
@@ -332,7 +328,7 @@ static const char vs_source[116] = {
     0x69,0x6f,0x6e,0x2c,0x20,0x30,0x2e,0x30,0x2c,0x20,0x31,0x2e,0x30,0x29,0x3b,0x0a,
     0x7d,0x0a,0x0a,0x00,
 };
-#elif defined(NANOGP_D3D11_BACKEND)
+#elif defined(SOKOL_D3D11)
 static const char vs_source[498] = {
     0x73,0x74,0x61,0x74,0x69,0x63,0x20,0x66,0x6c,0x6f,0x61,0x74,0x34,0x20,0x67,0x6c,
     0x5f,0x50,0x6f,0x73,0x69,0x74,0x69,0x6f,0x6e,0x3b,0x0a,0x73,0x74,0x61,0x74,0x69,
@@ -391,7 +387,7 @@ static const char fs_source[338] = {
     0x20,0x73,0x74,0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x3b,0x0a,0x7d,
     0x0a,0x00,
 };
-#elif defined(NANOGP_DUMMY_BACKEND)
+#elif defined(SOKOL_DUMMY_BACKEND)
 static const char vs_source[] = "";
 static const char fs_source[] = "";
 #endif
@@ -516,7 +512,7 @@ const char* ngp_get_error() {
     return ngp.last_error;
 }
 
-static inline ngp_mat3 _ngp_proj2d(int width, int height) {
+static inline ngp_mat3 _ngp_default_proj(int width, int height) {
     // matrix to convert screen coordinate system
     // to the usual the coordinate system used on the backends
     return (ngp_mat3){
@@ -534,7 +530,7 @@ void ngp_begin(int width, int height) {
     ngp.state.frame_size = (ngp_isize){width, height};
     ngp.state.viewport = (ngp_irect){0, 0, width, height};
     ngp.state.scissor = (ngp_irect){0, 0, -1, -1};
-    ngp.state.proj = _ngp_proj2d(width, height);
+    ngp.state.proj = _ngp_default_proj(width, height);
     ngp.state.transform = _ngp_mat3_identity;
     ngp.state.mvp = ngp.state.proj;
     ngp.state.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
@@ -623,7 +619,7 @@ void ngp_reset_clear_color() {
     }
 }
 
-static inline ngp_mat3 ngp_mat3_mul(const ngp_mat3* a, const ngp_mat3* b) {
+static inline ngp_mat3 _ngp_mat3_mul(const ngp_mat3* a, const ngp_mat3* b) {
     ngp_mat3 p;
     p.v[0][0] = a->v[0][0]*b->v[0][0] + a->v[0][1]*b->v[1][0] + a->v[0][2]*b->v[2][0];
     p.v[0][1] = a->v[0][0]*b->v[0][1] + a->v[0][1]*b->v[1][1] + a->v[0][2]*b->v[2][1];
@@ -637,17 +633,36 @@ static inline ngp_mat3 ngp_mat3_mul(const ngp_mat3* a, const ngp_mat3* b) {
     return p;
 }
 
-static inline ngp_mat3 _ngp_mul_proj2d_transform(ngp_mat3* proj, ngp_mat3* transform) {
-    // this actually multiply matrix proj2d by transform matrix in an optimized way
-    // the effect is the same as "return ngp_mat3_mul(proj, transform);"
+static inline ngp_mat3 _ngp_mul_proj_transform(ngp_mat3* proj, ngp_mat3* transform) {
+    // this actually multiply matrix projection and transform matrix in an optimized way
+    // the effect is the same as "return _ngp_mat3_mul(proj, transform);"
     float x = proj->v[0][0], y = proj->v[1][1];
+    float tx = proj->v[0][2], ty = proj->v[1][2];
     float a = transform->v[2][0], b = transform->v[2][1], c = transform->v[2][2];
     return (ngp_mat3) {
-        x*transform->v[0][0]-a, x*transform->v[0][1]-b, x*transform->v[0][2]-c,
-        y*transform->v[1][0]+a, y*transform->v[1][1]+b, y*transform->v[1][2]+c,
+        x*transform->v[0][0]+a*tx, x*transform->v[0][1]+b*tx, x*transform->v[0][2]+c*tx,
+        y*transform->v[1][0]+a*ty, y*transform->v[1][1]+b*ty, y*transform->v[1][2]+c*ty,
         a, b, c
     };
 };
+
+void ngp_ortho(float left, float right, float top, float bottom) {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    float w = right - left;
+    float h = top - bottom;
+    ngp.state.proj = (ngp_mat3){
+        2.0f/w,   0.0f,  -(right+left)/w,
+        0.0f,   2.0f/h,  -(top+bottom)/h,
+        0.0f,     0.0f,             1.0f
+    };
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+}
+
+void ngp_reset_proj() {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    ngp.state.proj = _ngp_default_proj(ngp.state.viewport.w, ngp.state.viewport.h);
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+}
 
 void ngp_push_transform() {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
@@ -665,7 +680,13 @@ void ngp_pop_transform() {
         return;
     }
     ngp.state.transform = ngp.transform_stack[--ngp.cur_transform];
-    ngp.state.mvp = _ngp_mul_proj2d_transform(&ngp.state.proj, &ngp.state.transform);
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+}
+
+void ngp_reset_transform() {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    ngp.state.transform = _ngp_mat3_identity;
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
 }
 
 void ngp_translate(float x, float y) {
@@ -677,7 +698,7 @@ void ngp_translate(float x, float y) {
     ngp.state.transform.v[0][2] += x*ngp.state.transform.v[0][0] + y*ngp.state.transform.v[0][1];
     ngp.state.transform.v[1][2] += x*ngp.state.transform.v[1][0] + y*ngp.state.transform.v[1][1];
     ngp.state.transform.v[2][2] += x*ngp.state.transform.v[2][0] + y*ngp.state.transform.v[2][1];
-    ngp.state.mvp = _ngp_mul_proj2d_transform(&ngp.state.proj, &ngp.state.transform);
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
 }
 
 void ngp_rotate(float theta) {
@@ -692,7 +713,7 @@ void ngp_rotate(float theta) {
        sint*ngp.state.transform.v[1][0]+cost*ngp.state.transform.v[1][1], cost*ngp.state.transform.v[1][0]-sint*ngp.state.transform.v[1][1], ngp.state.transform.v[1][2],
        sint*ngp.state.transform.v[2][0]+cost*ngp.state.transform.v[2][1], cost*ngp.state.transform.v[2][0]-sint*ngp.state.transform.v[2][1], ngp.state.transform.v[2][2],
     };
-    ngp.state.mvp = _ngp_mul_proj2d_transform(&ngp.state.proj, &ngp.state.transform);
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
 }
 
 void ngp_rotate_at(float theta, float x, float y) {
@@ -710,7 +731,7 @@ void ngp_scale(float sx, float sy) {
     // 0.0f, 0.0f, 1.0f,
     ngp.state.transform.v[0][0] *= sx;
     ngp.state.transform.v[1][1] *= sy;
-    ngp.state.mvp = _ngp_mul_proj2d_transform(&ngp.state.proj, &ngp.state.transform);
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
 }
 
 void ngp_scale_at(float sx, float sy, float x, float y) {
@@ -718,12 +739,6 @@ void ngp_scale_at(float sx, float sy, float x, float y) {
     ngp_translate(x, y);
     ngp_scale(sx, sy);
     ngp_translate(-x, -y);
-}
-
-void ngp_reset_transform() {
-    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    ngp.state.transform = _ngp_mat3_identity;
-    ngp.state.mvp = _ngp_mul_proj2d_transform(&ngp.state.proj, &ngp.state.transform);
 }
 
 void ngp_set_color(float r, float g, float b, float a) {
@@ -734,6 +749,30 @@ void ngp_set_color(float r, float g, float b, float a) {
 void ngp_reset_color() {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     ngp.state.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
+}
+
+void ngp_set_texture(sg_image image) {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    if(ngp.state.texture.id == image.id)
+        return;
+    sg_image_info info = sg_query_image_info(image);
+    if(info.width > 0 && info.height > 0) {
+        float iw = 1.0f/info.width, ih = 1.0f/info.height;
+        ngp.state.texture_matrix = (ngp_mat3){
+              iw, 0.0f, 0.0f,
+            0.0f,   ih, 0.0f,
+            0.0f, 0.0f, 1.0f
+        };
+        ngp.state.texture = image;
+    } else {
+        ngp.state.texture_matrix = (ngp_mat3){0};
+        ngp.state.texture = (sg_image){0};
+    }
+}
+
+void ngp_reset_texture() {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    ngp.state.texture = (sg_image){0};
 }
 
 static ngp_vertex* _ngp_next_vertices(unsigned int count) {
@@ -802,8 +841,8 @@ void ngp_viewport(int x, int y, int w, int h) {
     }
 
     ngp.state.viewport = (ngp_irect){x, y, w, h};
-    ngp.state.proj = _ngp_proj2d(w, h);
-    ngp.state.mvp = _ngp_mul_proj2d_transform(&ngp.state.proj, &ngp.state.transform);
+    ngp.state.proj = _ngp_default_proj(w, h);
+    ngp.state.mvp = _ngp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
 }
 
 void ngp_reset_viewport() {
@@ -847,6 +886,7 @@ void ngp_reset_state() {
     ngp_reset_scissor();
     ngp_reset_transform();
     ngp_reset_color();
+    ngp_reset_texture();
 }
 
 static inline bool ngp_color_eq(ngp_color a, ngp_color b) {
@@ -984,6 +1024,10 @@ void ngp_draw_line_strip(const ngp_vec2* points, unsigned int count) {
 void ngp_draw_triangle_strip(const ngp_vec2* points, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     _ngp_draw_pip(ngp.triangle_strip_pip, points, count);
+}
+
+void ngp_draw_textured_rect(ngp_rect rect, ngp_rect src_rect) {
+    //TODO
 }
 
 ngp_desc ngp_query_desc() {
