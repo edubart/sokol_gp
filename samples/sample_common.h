@@ -1,5 +1,5 @@
 #define FLEXTGL_IMPL
-#include "flextgl.h"
+#include "thirdparty/flextgl.h"
 #define NANOGCTX_GLCORE33_BACKEND
 #ifdef WIN32
 #define NANOGCTX_D3D11_BACKEND
@@ -52,19 +52,25 @@ int sample_app(void (*draw)(ngctx_context ngctx)) {
     }
     ngctx_set_swap_interval(ngctx, 0);
 
-    ngp_desc desc = {0};
+    // setup sokol
+    sg_desc desc = {0};
 #ifdef NANOGCTX_D3D11_BACKEND
     if(ctx_desc.backend == NGCTX_BACKEND_D3D11) {
-        desc.sg.context.d3d11.device = ngctx.d3d11->device;
-        desc.sg.context.d3d11.device_context = ngctx.d3d11->device_context;
-        desc.sg.context.d3d11.render_target_view_cb = ngctx_d3d11_render_target_view;
-        desc.sg.context.d3d11.depth_stencil_view_cb = ngctx_d3d11_depth_stencil_view;
+        desc.context.d3d11.device = ngctx.d3d11->device;
+        desc.context.d3d11.device_context = ngctx.d3d11->device_context;
+        desc.context.d3d11.render_target_view_cb = ngctx_d3d11_render_target_view;
+        desc.context.d3d11.depth_stencil_view_cb = ngctx_d3d11_depth_stencil_view;
     }
 #endif
+    sg_setup(&desc);
+    if(!sg_isvalid()) {
+        fprintf(stderr, "Failed to create Sokol context\n");
+        return 1;
+    }
 
-    // create NanoGP context
-    if(!ngp_setup(&desc)) {
-        fprintf(stderr, "Failed to create NGP context: %s\n", ngp_get_error());
+    // setup NanoGP
+    if(!ngp_setup(&(ngp_desc){0})) {
+        fprintf(stderr, "Failed to create NanoGP context: %s\n", ngp_get_error());
         return 1;
     }
 
@@ -90,6 +96,7 @@ int sample_app(void (*draw)(ngctx_context ngctx)) {
 
     // destroy
     ngp_shutdown();
+    sg_shutdown();
     ngctx_destroy(ngctx);
     SDL_DestroyWindow(window);
     SDL_Quit();

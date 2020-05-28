@@ -221,8 +221,8 @@ enum {
 
 typedef struct ngp_draw_args {
     sg_pipeline pip;
-    unsigned int vertex_index;
     unsigned int uniform_index;
+    unsigned int vertex_index;
     unsigned int num_vertices;
 } ngp_draw_args;
 
@@ -251,6 +251,7 @@ typedef struct ngp_context {
     sg_pass_action pass_action;
 
     // resources
+    sg_shader solid_shader;
     sg_buffer vbuf;
     sg_bindings bind;
     sg_pipeline triangles_pip;
@@ -397,7 +398,7 @@ static const char fs_source[] = "";
 
 static void _ngp_setup_pipelines() {
     // create shaders
-    sg_shader solid_shader = sg_make_shader(&(sg_shader_desc){
+    ngp.solid_shader = sg_make_shader(&(sg_shader_desc){
         .vs.source = vs_source,
         .fs.source = fs_source,
         .fs.uniform_blocks[0] = {
@@ -411,27 +412,27 @@ static void _ngp_setup_pipelines() {
 
     // create pipelines
     ngp.triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = solid_shader,
+        .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     ngp.points_pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = solid_shader,
+        .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_POINTS,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     ngp.lines_pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = solid_shader,
+        .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINES,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     ngp.triangle_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = solid_shader,
+        .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     ngp.line_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = solid_shader,
+        .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINE_STRIP,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
@@ -439,13 +440,6 @@ static void _ngp_setup_pipelines() {
 
 bool ngp_setup(const ngp_desc* desc) {
     NANOGP_ASSERT(ngp.init_cookie == 0);
-
-    // setup sokol
-    sg_setup(&desc->sg);
-    if(!sg_isvalid()) {
-        _ngp_set_error(NGP_ERROR_SOKOL_INVALID, "sokol_gfx initialization failed");
-        return false;
-    }
 
     // init
     ngp.init_cookie = _NGP_INIT_COOKIE;
@@ -498,9 +492,13 @@ void ngp_shutdown() {
     NANOGP_FREE(ngp.vertices);
     NANOGP_FREE(ngp.uniforms);
     NANOGP_FREE(ngp.commands);
-    // no need to manually free sokol resources
-    // they are automatically freed on shutdown
-    sg_shutdown();
+    sg_destroy_pipeline(ngp.triangles_pip);
+    sg_destroy_pipeline(ngp.points_pip);
+    sg_destroy_pipeline(ngp.lines_pip);
+    sg_destroy_pipeline(ngp.triangle_strip_pip);
+    sg_destroy_pipeline(ngp.line_strip_pip);
+    sg_destroy_shader(ngp.solid_shader);
+    sg_destroy_buffer(ngp.vbuf);
     ngp = (ngp_context){0};
 }
 
@@ -882,8 +880,8 @@ static void _ngp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned
         cmd->cmd = NGP_COMMAND_DRAW,
         cmd->args.draw = (ngp_draw_args){
             .pip = pip,
-            .vertex_index = vertex_index,
             .uniform_index = uniform_index,
+            .vertex_index = vertex_index,
             .num_vertices = num_vertices,
         };
     }
