@@ -292,7 +292,25 @@ static void _ngp_set_error(ngp_error error_code, const char *error) {
     NANOGP_LOG(error);
 }
 
-#if defined(SOKOL_GLCORE33)
+/*
+@vs vs
+layout(location=0) in vec2 position;
+void main() {
+    gl_Position = vec4(position, 0.0, 1.0);
+}
+@end
+
+@fs fs
+out vec4 frag_color;
+uniform vec4 color;
+void main() {
+    frag_color = color;
+}
+@end
+
+@program shd vs fs
+*/
+#if defined(NANOGP_GLCORE33_BACKEND)
 static const char fs_source[120] = {
     0x23,0x76,0x65,0x72,0x73,0x69,0x6f,0x6e,0x20,0x33,0x33,0x30,0x0a,0x0a,0x75,0x6e,
     0x69,0x66,0x6f,0x72,0x6d,0x20,0x76,0x65,0x63,0x34,0x20,0x63,0x6f,0x6c,0x6f,0x72,
@@ -313,7 +331,7 @@ static const char vs_source[116] = {
     0x69,0x6f,0x6e,0x2c,0x20,0x30,0x2e,0x30,0x2c,0x20,0x31,0x2e,0x30,0x29,0x3b,0x0a,
     0x7d,0x0a,0x0a,0x00,
 };
-#elif defined(SOKOL_D3D11)
+#elif defined(NANOGP_D3D11_BACKEND)
 static const char vs_source[498] = {
     0x73,0x74,0x61,0x74,0x69,0x63,0x20,0x66,0x6c,0x6f,0x61,0x74,0x34,0x20,0x67,0x6c,
     0x5f,0x50,0x6f,0x73,0x69,0x74,0x69,0x6f,0x6e,0x3b,0x0a,0x73,0x74,0x61,0x74,0x69,
@@ -372,6 +390,9 @@ static const char fs_source[338] = {
     0x20,0x73,0x74,0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x3b,0x0a,0x7d,
     0x0a,0x00,
 };
+#elif defined(NANOGP_DUMMY_BACKEND)
+static const char vs_source[] = "";
+static const char fs_source[] = "";
 #endif
 
 static void _ngp_setup_pipelines() {
@@ -868,16 +889,18 @@ static void _ngp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned
     }
 }
 
-static inline ngp_vec2 ngp_mat3_vec2_mul(const ngp_mat3* m, ngp_vec2 v) {
+static inline ngp_vec2 ngp_mat3_vec2_mul(const ngp_mat3* m, const ngp_vec2* v) {
     return (ngp_vec2){
-        .x = m->v[0][0]*v.x + m->v[0][1]*v.y + m->v[0][2],
-        .y = m->v[1][0]*v.x + m->v[1][1]*v.y + m->v[1][2]
+        .x = m->v[0][0]*v->x + m->v[0][1]*v->y + m->v[0][2],
+        .y = m->v[1][0]*v->x + m->v[1][1]*v->y + m->v[1][2]
     };
 }
 
 static void _ngp_transform_vertices(ngp_vec2* dest, const ngp_vec2 *src, unsigned int count) {
+    // copy mvp matrix to stack to improve performance
+    ngp_mat3 mvp = ngp.state.mvp;
     for(unsigned int i=0;i<count;++i)
-        dest[i] = ngp_mat3_vec2_mul(&ngp.state.mvp, src[i]);
+        dest[i] = ngp_mat3_vec2_mul(&mvp, &src[i]);
 }
 
 static void _ngp_draw_pip(sg_pipeline pip, const ngp_vec2* vertices, unsigned int count) {
@@ -909,10 +932,11 @@ void ngp_draw_rects(const ngp_rect* rects, unsigned int count) {
     if(NANOGP_UNLIKELY(!vertices)) return;
 
     // compute vertices
-    for(unsigned int i=0;i<count;++i) {
+    ngp_vertex* v = vertices;
+    for(unsigned int i=0;i<count;v+=6, i++) {
         const ngp_rect* rect = &rects[i];
         float l = rect->x, t = rect->y;
-        float r = rect->x + rect->w, b = rect->y + rect->h;
+        float r = l + rect->w, b = t + rect->h;
         ngp_vec2 quad[4] = {
             {l, b}, // bottom left
             {r, b}, // bottom right
@@ -922,9 +946,8 @@ void ngp_draw_rects(const ngp_rect* rects, unsigned int count) {
         _ngp_transform_vertices(quad, quad, 4);
 
         // make a quad composed of 2 triangles
-        ngp_vertex* v = &vertices[count*6];
         v[0] = quad[0]; v[1] = quad[1]; v[2] = quad[2];
-        v[3] = quad[0]; v[4] = quad[2]; v[5] = quad[3];
+        v[3] = quad[3]; v[4] = quad[0]; v[5] = quad[2];
     }
 
     _ngp_queue_draw(ngp.triangles_pip, vertex_index, num_vertices);
@@ -932,28 +955,7 @@ void ngp_draw_rects(const ngp_rect* rects, unsigned int count) {
 
 void ngp_draw_rect(float x, float y, float w, float h) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-
-    // setup vertices
-    unsigned int vertex_index = ngp.cur_vertex;
-    ngp_vertex* vertices = _ngp_next_vertices(6);
-    if(NANOGP_UNLIKELY(!vertices)) return;
-
-    // compute vertices
-    float r = x + w, b = y + h;
-    ngp_vec2 quad[4] = {
-        {x, b}, // bottom left
-        {r, b}, // bottom right
-        {r, y}, // top right
-        {x, y}, // top left
-    };
-
-    _ngp_transform_vertices(quad, quad, 4);
-
-    // make a quad composed of 2 triangles
-    vertices[0] = quad[0]; vertices[1] = quad[1]; vertices[2] = quad[2];
-    vertices[3] = quad[0]; vertices[4] = quad[2]; vertices[5] = quad[3];
-
-    _ngp_queue_draw(ngp.triangles_pip, vertex_index, 6);
+    ngp_draw_rects(&(ngp_rect){x,y,w,h}, 1);
 }
 
 void ngp_draw_points(const ngp_vec2* points, unsigned int count) {
