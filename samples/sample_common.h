@@ -2,15 +2,15 @@
 #include <SDL2/SDL.h>
 #define FLEXTGL_IMPL
 #include "thirdparty/flextgl.h"
-#define NANOGCTX_IMPL
-#include "nanogctx.h"
+#define SOKOL_GCTX_IMPL
+#include "sokol_gctx.h"
 #define SOKOL_IMPL
-//#define SOKOL_GLCORE33
-#define SOKOL_D3D11
+#define SOKOL_GLCORE33
+//#define SOKOL_D3D11
 //#define SOKOL_DUMMY_BACKEND
 #include "sokol_gfx.h"
-#define NANOGP_IMPL
-#include "nanogp.h"
+#define SOKOL_GP_IMPL
+#include "sokol_gp.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -25,19 +25,19 @@ int sample_app(sample_app_desc app) {
     SDL_Init(SDL_INIT_VIDEO);
 
     // setup context attributes before window and context creation
-    ngctx_desc ctx_desc = {
+    sgctx_desc ctx_desc = {
 #if defined(SOKOL_GLCORE33)
-        .backend = NGCTX_BACKEND_GLCORE33,
+        .backend = SGCTX_BACKEND_GLCORE33,
 #elif defined(SOKOL_D3D11)
-        .backend = NGCTX_BACKEND_D3D11,
+        .backend = SGCTX_BACKEND_D3D11,
 #elif defined(SOKOL_DUMMY_BACKEND)
-        .backend = NGCTX_BACKEND_DUMMY,
+        .backend = SGCTX_BACKEND_DUMMY,
 #endif
         .sample_count = 0
     };
 
-    if(ctx_desc.backend == NGCTX_BACKEND_GLCORE33)
-        ngctx_gl_prepare_attributes(&ctx_desc);
+    if(ctx_desc.backend == SGCTX_BACKEND_GLCORE33)
+        sgctx_gl_prepare_attributes(&ctx_desc);
 
     // create window
     SDL_Window *window = SDL_CreateWindow("NGP Sample",
@@ -50,23 +50,23 @@ int sample_app(sample_app_desc app) {
     }
 
     // create graphics context
-    ngctx_context ngctx = {0};
-    if(!ngctx_create(&ngctx, window, &ctx_desc)) {
-        fprintf(stderr, "Failed to create NGCTX context: %s\n", ngctx_get_error());
+    sgctx_context sgctx = {0};
+    if(!sgctx_create(&sgctx, window, &ctx_desc)) {
+        fprintf(stderr, "Failed to create SGCTX context: %s\n", sgctx_get_error());
         return 1;
     }
-    ngctx_set_swap_interval(ngctx, 0);
+    sgctx_set_swap_interval(sgctx, 0);
 
     // setup sokol
     sg_desc desc = {
         .context.depth_format = SG_PIXELFORMAT_NONE
     };
 #ifdef SOKOL_D3D11
-    if(ctx_desc.backend == NGCTX_BACKEND_D3D11) {
-        desc.context.d3d11.device = ngctx.d3d11->device;
-        desc.context.d3d11.device_context = ngctx.d3d11->device_context;
-        desc.context.d3d11.render_target_view_cb = ngctx_d3d11_render_target_view;
-        desc.context.d3d11.depth_stencil_view_cb = ngctx_d3d11_depth_stencil_view;
+    if(ctx_desc.backend == SGCTX_BACKEND_D3D11) {
+        desc.context.d3d11.device = sgctx.d3d11->device;
+        desc.context.d3d11.device_context = sgctx.d3d11->device_context;
+        desc.context.d3d11.render_target_view_cb = sgctx_d3d11_render_target_view;
+        desc.context.d3d11.depth_stencil_view_cb = sgctx_d3d11_depth_stencil_view;
     }
 #endif
     sg_setup(&desc);
@@ -75,9 +75,9 @@ int sample_app(sample_app_desc app) {
         return 1;
     }
 
-    // setup NanoGP
-    if(!ngp_setup(&(ngp_desc){.max_vertices=262144, .max_commands=32768})) {
-        fprintf(stderr, "Failed to create NanoGP context: %s\n", ngp_get_error());
+    // setup sokol gp
+    if(!sgp_setup(&(sgp_desc){.max_vertices=262144, .max_commands=32768})) {
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error());
         return 1;
     }
 
@@ -89,13 +89,13 @@ int sample_app(sample_app_desc app) {
 
     // run loop
     while(!SDL_QuitRequested()) {
-        ngctx_isize size = ngctx_get_drawable_size(ngctx);
+        sgctx_isize size = sgctx_get_drawable_size(sgctx);
 
         // poll events
         SDL_Event event;
         while(SDL_PollEvent(&event)) { }
 
-        ngp_begin(size.w,  size.h);
+        sgp_begin(size.w,  size.h);
         app.draw(size.w, size.h);
 
         sg_begin_default_pass(&(sg_pass_action){
@@ -103,13 +103,13 @@ int sample_app(sample_app_desc app) {
             .depth.action = SG_ACTION_DONTCARE,
             .colors[0] = {.action = SG_ACTION_CLEAR, .val = {0.05f, 0.05f, 0.05f, 1.0f}}
         }, size.w, size.h);
-        ngp_flush();
+        sgp_flush();
         sg_end_pass();
-        ngp_end();
+        sgp_end();
         sg_commit();
 
-        if(!ngctx_swap(ngctx)) {
-            fprintf(stderr, "Failed to swap window buffers: %s\n", ngctx_get_error());
+        if(!sgctx_swap(sgctx)) {
+            fprintf(stderr, "Failed to swap window buffers: %s\n", sgctx_get_error());
             return 1;
         }
 
@@ -127,9 +127,9 @@ int sample_app(sample_app_desc app) {
 
     // destroy
     app.terminate();
-    ngp_shutdown();
+    sgp_shutdown();
     sg_shutdown();
-    ngctx_destroy(ngctx);
+    sgctx_destroy(sgctx);
     SDL_DestroyWindow(window);
     SDL_Quit();
 

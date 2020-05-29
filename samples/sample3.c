@@ -3,10 +3,10 @@
 sg_image fbo_image;
 sg_pass fbo_pass;
 
-static ngp_vec2 points_buffer[4096];
+static sgp_vec2 points_buffer[4096];
 
 void draw_triangles() {
-    ngp_irect viewport = ngp_query_state()->viewport;
+    sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
     float hw = width * 0.5f;
     float hh = height * 0.5f;
@@ -14,16 +14,16 @@ void draw_triangles() {
     int count = 0;
     float step = (2.0f*M_PI)/6.0f;
     for(float theta = 0.0f; theta <= 2.0f*M_PI + step*0.5f; theta+=step) {
-        points_buffer[count++] = (ngp_vec2){hw + w*cosf(theta), hh - w*sinf(theta)};
+        points_buffer[count++] = (sgp_vec2){hw + w*cosf(theta), hh - w*sinf(theta)};
         if(count % 3 == 1)
-            points_buffer[count++] = (ngp_vec2){hw, hh};
+            points_buffer[count++] = (sgp_vec2){hw, hh};
     }
-    ngp_set_color(1.0f, 0.0f, 1.0f, 1.0f);
-    ngp_draw_triangle_strip(points_buffer, count);
+    sgp_set_color(1.0f, 0.0f, 1.0f, 1.0f);
+    sgp_draw_triangle_strip(points_buffer, count);
 }
 
 void draw_fbo() {
-    ngp_begin(128, 128);
+    sgp_begin(128, 128);
     draw_triangles();
 
     sg_begin_pass(fbo_pass, &(sg_pass_action){
@@ -31,9 +31,9 @@ void draw_fbo() {
         .depth.action = SG_ACTION_DONTCARE,
         .colors[0] = {.action = SG_ACTION_CLEAR, .val = {0.0f, 0.0f, 0.0f, 0.0f}}
     });
-    ngp_flush();
+    sgp_flush();
     sg_end_pass();
-    ngp_end();
+    sgp_end();
 }
 
 void draw(int width, int height) {
@@ -41,10 +41,10 @@ void draw(int width, int height) {
     draw_fbo();
     for(int y=0;y<height;y+=128) {
         for(int x=0;x<width;x+=128) {
-            ngp_push_transform();
-            ngp_rotate_at(time, x+64, y+64);
-            ngp_draw_textured_rect(fbo_image, (ngp_rect){x, y, 128, 128}, NULL);
-            ngp_pop_transform();
+            sgp_push_transform();
+            sgp_rotate_at(time, x+64, y+64);
+            sgp_draw_textured_rect(fbo_image, (sgp_rect){x, y, 128, 128}, NULL);
+            sgp_pop_transform();
         }
     }
 }

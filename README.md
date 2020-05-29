@@ -1,4 +1,4 @@
-# NanoGP
+# Sokol GP
 
 Minimal efficient cross platform 2D graphics painter in C 
 using modern graphics API through sokol_gfx.
