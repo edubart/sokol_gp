@@ -79,13 +79,6 @@ typedef struct ngp_triangle {
     ngp_vec2 a, b, c;
 } ngp_triangle;
 
-typedef ngp_vec2 ngp_vertex;
-
-typedef struct ngp_texvertex {
-    ngp_vec2 position;
-    ngp_vec2 texcoord;
-} ngp_texvertex;
-
 typedef struct ngp_mat3 {
     float v[3][3];
 } ngp_mat3;
@@ -209,12 +202,29 @@ NANOGP_API ngp_desc ngp_query_desc();
 #endif
 #define NANOGP_DEF(val, def) (((val) == 0) ? (def) : (val))
 
+#define f2ushortn(x) (x > 1 ? 65535 : (x < 0 ? 0 : x*65535))
+
 enum {
     _NGP_INIT_COOKIE = 0xCAFED00D,
     _NGP_DEFAULT_MAX_VERTICES = 65536,
     _NGP_DEFAULT_MAX_COMMANDS = 16384,
     _NGP_MAX_STACK_DEPTH = 64,
 };
+
+typedef struct ngp_vec2s {
+    short x, y;
+} ngp_vec2s;
+
+typedef struct ngp_vec2us {
+    unsigned short x, y;
+} ngp_vec2us;
+
+typedef ngp_vec2 ngp_vertex;
+
+typedef struct ngp_texvertex {
+    ngp_vec2 position;
+    ngp_vec2us texcoord;
+} ngp_texvertex;
 
 typedef struct ngp_draw_args {
     sg_pipeline pip;
@@ -410,6 +420,8 @@ static const char solid_vs_source[498] = {
 #elif defined(SOKOL_DUMMY_BACKEND)
 static const char solid_vs_source[] = "";
 static const char solid_fs_source[] = "";
+static const char tex_vs_source[] = "";
+static const char tex_fs_source[] = "";
 #endif
 
 static void _ngp_setup_pipelines() {
@@ -446,7 +458,7 @@ static void _ngp_setup_pipelines() {
         .shader = ngp.tex_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
-        .layout.attrs[1] = { .offset=offsetof(ngp_texvertex, texcoord), .format=SG_VERTEXFORMAT_FLOAT2 },
+        .layout.attrs[1] = { .offset=offsetof(ngp_texvertex, texcoord), .format=SG_VERTEXFORMAT_USHORT2N },
     });
     NANOGP_ASSERT(ngp.textriangles_pip.id != SG_INVALID_ID);
     ngp.triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
@@ -505,13 +517,13 @@ bool ngp_setup(const ngp_desc* desc) {
 
     // create vertex buffer
     ngp.vertex_buf = sg_make_buffer(&(sg_buffer_desc){
-        .size = 65536 * sizeof(ngp_vertex),
+        .size = ngp.num_vertices * sizeof(ngp_vertex),
         .usage = SG_USAGE_STREAM,
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
     });
     NANOGP_ASSERT(ngp.vertex_buf.id != SG_INVALID_ID);
     ngp.texvertex_buf = sg_make_buffer(&(sg_buffer_desc){
-        .size = 65536 * sizeof(ngp_texvertex),
+        .size = ngp.num_vertices * sizeof(ngp_texvertex),
         .usage = SG_USAGE_STREAM,
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
     });
@@ -985,7 +997,7 @@ static inline ngp_vec2 ngp_mat3_vec2_mul(const ngp_mat3* m, const ngp_vec2* v) {
     };
 }
 
-static void _ngp_transform_vertices(ngp_mat3 matrix, ngp_vec2* dest, const ngp_vec2 *src, unsigned int count) {
+static void _ngp_transform_vertices(ngp_mat3 matrix, ngp_vertex* dest, const ngp_vec2 *src, unsigned int count) {
     for(unsigned int i=0;i<count;++i)
         dest[i] = ngp_mat3_vec2_mul(&matrix, &src[i]);
 }
@@ -1125,29 +1137,29 @@ void ngp_draw_textured_rects(sg_image image, const ngp_rect* rects, const ngp_re
         };
         _ngp_transform_vertices(ngp.state.mvp, quad, quad, 4);
 
-        ngp_vec2 texquad[4];
+        ngp_vec2us vtexquad[4];
         if(src_rect) {
-            float tl = src_rect->x*iw, tt = src_rect->y*ih;
-            float tr = l + src_rect->w*iw, tb = t + src_rect->h*ih;
-            texquad[0] = (ngp_vec2){tl, tb}; // bottom left
-            texquad[1] = (ngp_vec2){tr, tb}; // bottom right
-            texquad[2] = (ngp_vec2){tr, tt}; // top right
-            texquad[3] = (ngp_vec2){tl, tt}; // top left
+            unsigned short tl = f2ushortn(src_rect->x*iw), tt = f2ushortn(src_rect->y*ih);
+            unsigned short tr = f2ushortn(l + src_rect->w*iw), tb = f2ushortn(t + src_rect->h*ih);
+            vtexquad[0] = (ngp_vec2us){tl, tb}; // bottom left
+            vtexquad[1] = (ngp_vec2us){tr, tb}; // bottom right
+            vtexquad[2] = (ngp_vec2us){tr, tt}; // top right
+            vtexquad[3] = (ngp_vec2us){tl, tt}; // top left
             src_rect++;
         } else {
-            texquad[0] = (ngp_vec2){0.0f, 1.0f}; // bottom left
-            texquad[1] = (ngp_vec2){1.0f, 1.0f}; // bottom right
-            texquad[2] = (ngp_vec2){1.0f, 0.0f}; // top right
-            texquad[3] = (ngp_vec2){0.0f, 0.0f}; // top left
+            vtexquad[0] = (ngp_vec2us){    0, 65535}; // bottom left
+            vtexquad[1] = (ngp_vec2us){65535, 65535}; // bottom right
+            vtexquad[2] = (ngp_vec2us){65535,     0}; // top right
+            vtexquad[3] = (ngp_vec2us){    0,     0}; // top left
         }
 
         // make a quad composed of 2 triangles
-        v[0] = (ngp_texvertex){quad[0], texquad[0]};
-        v[1] = (ngp_texvertex){quad[1], texquad[1]};
-        v[2] = (ngp_texvertex){quad[2], texquad[2]};
-        v[3] = (ngp_texvertex){quad[3], texquad[3]};
-        v[4] = (ngp_texvertex){quad[0], texquad[0]};
-        v[5] = (ngp_texvertex){quad[2], texquad[2]};
+        v[0] = (ngp_texvertex){quad[0], vtexquad[0]};
+        v[1] = (ngp_texvertex){quad[1], vtexquad[1]};
+        v[2] = (ngp_texvertex){quad[2], vtexquad[2]};
+        v[3] = (ngp_texvertex){quad[3], vtexquad[3]};
+        v[4] = (ngp_texvertex){quad[0], vtexquad[0]};
+        v[5] = (ngp_texvertex){quad[2], vtexquad[2]};
     }
 
     _ngp_queue_draw(ngp.textriangles_pip, vertex_index, num_vertices, image);

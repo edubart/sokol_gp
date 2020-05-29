@@ -1,7 +1,3 @@
-#define NANOGP_GLCORE33_BACKEND
-//#define NANOGP_D3D11_BACKEND
-//#define NANOGP_DUMMY_BACKEND
-
 #include "sample_common.h"
 
 int frame = 0;

@@ -81,7 +81,7 @@ int sample_app(sample_app_desc app) {
         fprintf(stderr, "Failed to create NGCTX context: %s\n", ngctx_get_error());
         return 1;
     }
-    ngctx_set_swap_interval(ngctx, 1);
+    ngctx_set_swap_interval(ngctx, 0);
 
     // setup sokol
     sg_desc desc = {0};
@@ -100,7 +100,7 @@ int sample_app(sample_app_desc app) {
     }
 
     // setup NanoGP
-    if(!ngp_setup(&(ngp_desc){0})) {
+    if(!ngp_setup(&(ngp_desc){.max_vertices=262144, .max_commands=32768})) {
         fprintf(stderr, "Failed to create NanoGP context: %s\n", ngp_get_error());
         return 1;
     }
