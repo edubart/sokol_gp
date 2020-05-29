@@ -94,12 +94,11 @@ void draw_triangles() {
     ngp_pop_transform();
 }
 
-void draw(ngctx_context ngctx) {
-    ngctx_isize size = ngctx_get_drawable_size(ngctx);
+void draw(int width, int height) {
     ngp_set_clear_color(0.05f, 0.05f, 0.05f, 1.0f);
-    ngp_begin(size.w, size.h);
-    int hw = size.w / 2;
-    int hh = size.h / 2;
+    ngp_begin(width, height);
+    int hw = width / 2;
+    int hh = height / 2;
 
     // top left
     ngp_viewport(0, 0, hw, hh);

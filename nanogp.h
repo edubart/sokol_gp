@@ -81,6 +81,11 @@ typedef struct ngp_triangle {
 
 typedef ngp_vec2 ngp_vertex;
 
+typedef struct ngp_texvertex {
+    ngp_vec2 position;
+    ngp_vec2 texcoord;
+} ngp_texvertex;
+
 typedef struct ngp_mat3 {
     float v[3][3];
 } ngp_mat3;
@@ -101,9 +106,7 @@ typedef struct ngp_state {
     ngp_mat3 proj;
     ngp_mat3 transform;
     ngp_mat3 mvp;
-    ngp_mat3 texture_matrix;
     ngp_color color;
-    sg_image texture;
 } ngp_state;
 
 // setup functions
@@ -136,8 +139,6 @@ NANOGP_API void ngp_scale_at(float sx, float sy, float x, float y);
 // state change functions
 NANOGP_API void ngp_set_color(float r, float g, float b, float a);
 NANOGP_API void ngp_reset_color();
-NANOGP_API void ngp_set_texture(sg_image image);
-NANOGP_API void ngp_reset_texture();
 NANOGP_API void ngp_viewport(int x, int y, int w, int h);
 NANOGP_API void ngp_reset_viewport();
 NANOGP_API void ngp_scissor(int x, int y, int w, int h);
@@ -156,8 +157,8 @@ NANOGP_API void ngp_draw_rect(float x, float y, float w, float h);
 NANOGP_API void ngp_draw_line_strip(const ngp_vec2* points, unsigned int count);
 NANOGP_API void ngp_draw_triangle_strip(const ngp_vec2* points, unsigned int count);
 
-NANOGP_API void ngp_draw_textured_rects(const ngp_rect* rect, const ngp_rect* src_rect);
-NANOGP_API void ngp_draw_textured_rect(ngp_rect rect, ngp_rect src_rect);
+NANOGP_API void ngp_draw_textured_rects(sg_image image, const ngp_rect* rects, const ngp_rect* src_rects, unsigned int count);
+NANOGP_API void ngp_draw_textured_rect(sg_image image, ngp_rect rect, const ngp_rect* src_rect);
 
 // querying functions
 NANOGP_API ngp_state* ngp_query_state();
@@ -217,6 +218,7 @@ enum {
 
 typedef struct ngp_draw_args {
     sg_pipeline pip;
+    sg_image img;
     unsigned int uniform_index;
     unsigned int vertex_index;
     unsigned int num_vertices;
@@ -248,8 +250,12 @@ typedef struct ngp_context {
 
     // resources
     sg_shader solid_shader;
-    sg_buffer vbuf;
-    sg_bindings bind;
+    sg_shader tex_shader;
+    sg_buffer vertex_buf;
+    sg_buffer texvertex_buf;
+    sg_bindings vertex_bind;
+    sg_bindings texvertex_bind;
+    sg_pipeline textriangles_pip;
     sg_pipeline triangles_pip;
     sg_pipeline points_pip;
     sg_pipeline lines_pip;
@@ -258,12 +264,14 @@ typedef struct ngp_context {
 
     // command queue
     unsigned int cur_vertex;
+    unsigned int cur_texvertex;
     unsigned int cur_uniform;
     unsigned int cur_command;
     unsigned int num_vertices;
     unsigned int num_uniforms;
     unsigned int num_commands;
     ngp_vertex* vertices;
+    ngp_texvertex* texvertices;
     ngp_uniform* uniforms;
     ngp_command* commands;
 
@@ -308,28 +316,64 @@ void main() {
 @program shd vs fs
 */
 #if defined(SOKOL_GLCORE33)
-static const char fs_source[120] = {
-    0x23,0x76,0x65,0x72,0x73,0x69,0x6f,0x6e,0x20,0x33,0x33,0x30,0x0a,0x0a,0x75,0x6e,
-    0x69,0x66,0x6f,0x72,0x6d,0x20,0x76,0x65,0x63,0x34,0x20,0x63,0x6f,0x6c,0x6f,0x72,
-    0x3b,0x0a,0x0a,0x6c,0x61,0x79,0x6f,0x75,0x74,0x28,0x6c,0x6f,0x63,0x61,0x74,0x69,
-    0x6f,0x6e,0x20,0x3d,0x20,0x30,0x29,0x20,0x6f,0x75,0x74,0x20,0x76,0x65,0x63,0x34,
-    0x20,0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x3b,0x0a,0x0a,0x76,0x6f,
-    0x69,0x64,0x20,0x6d,0x61,0x69,0x6e,0x28,0x29,0x0a,0x7b,0x0a,0x20,0x20,0x20,0x20,
-    0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x20,0x3d,0x20,0x63,0x6f,0x6c,
-    0x6f,0x72,0x3b,0x0a,0x7d,0x0a,0x0a,0x00,
-};
-static const char vs_source[116] = {
-    0x23,0x76,0x65,0x72,0x73,0x69,0x6f,0x6e,0x20,0x33,0x33,0x30,0x0a,0x0a,0x6c,0x61,
-    0x79,0x6f,0x75,0x74,0x28,0x6c,0x6f,0x63,0x61,0x74,0x69,0x6f,0x6e,0x20,0x3d,0x20,
-    0x30,0x29,0x20,0x69,0x6e,0x20,0x76,0x65,0x63,0x32,0x20,0x70,0x6f,0x73,0x69,0x74,
-    0x69,0x6f,0x6e,0x3b,0x0a,0x0a,0x76,0x6f,0x69,0x64,0x20,0x6d,0x61,0x69,0x6e,0x28,
-    0x29,0x0a,0x7b,0x0a,0x20,0x20,0x20,0x20,0x67,0x6c,0x5f,0x50,0x6f,0x73,0x69,0x74,
-    0x69,0x6f,0x6e,0x20,0x3d,0x20,0x76,0x65,0x63,0x34,0x28,0x70,0x6f,0x73,0x69,0x74,
-    0x69,0x6f,0x6e,0x2c,0x20,0x30,0x2e,0x30,0x2c,0x20,0x31,0x2e,0x30,0x29,0x3b,0x0a,
-    0x7d,0x0a,0x0a,0x00,
-};
+static const char* solid_vs_source =
+"#version 330\n"
+"layout(location=0) in vec2 position;\n"
+"void main() {\n"
+"    gl_Position = vec4(position, 0.0, 1.0);\n"
+"}\n";
+static const char* solid_fs_source =
+"#version 330\n"
+"uniform vec4 color;\n"
+"out vec4 frag_color;\n"
+"void main() {\n"
+"    frag_color = color;\n"
+"}\n";
+static const char* tex_vs_source =
+"#version 330\n"
+"layout(location=0) in vec2 position;\n"
+"layout(location=1) in vec2 texcoord;\n"
+"out vec2 uv;\n"
+"void main() {\n"
+"    gl_Position = vec4(position, 0.0, 1.0);\n"
+"    uv = texcoord;\n"
+"}\n";
+static const char* tex_fs_source =
+"#version 330\n"
+"uniform sampler2D tex;\n"
+"uniform vec4 color;\n"
+"in vec2 uv;\n"
+"out vec4 frag_color;\n"
+"void main() {\n"
+"    frag_color = texture(tex, uv) * color;\n"
+"}\n";
+
 #elif defined(SOKOL_D3D11)
-static const char vs_source[498] = {
+static const char solid_fs_source[338] = {
+    0x75,0x6e,0x69,0x66,0x6f,0x72,0x6d,0x20,0x66,0x6c,0x6f,0x61,0x74,0x34,0x20,0x63,
+    0x6f,0x6c,0x6f,0x72,0x3b,0x0a,0x0a,0x73,0x74,0x61,0x74,0x69,0x63,0x20,0x66,0x6c,
+    0x6f,0x61,0x74,0x34,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x3b,
+    0x0a,0x0a,0x73,0x74,0x72,0x75,0x63,0x74,0x20,0x53,0x50,0x49,0x52,0x56,0x5f,0x43,
+    0x72,0x6f,0x73,0x73,0x5f,0x4f,0x75,0x74,0x70,0x75,0x74,0x0a,0x7b,0x0a,0x20,0x20,
+    0x20,0x20,0x66,0x6c,0x6f,0x61,0x74,0x34,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,
+    0x6c,0x6f,0x72,0x20,0x3a,0x20,0x53,0x56,0x5f,0x54,0x61,0x72,0x67,0x65,0x74,0x30,
+    0x3b,0x0a,0x7d,0x3b,0x0a,0x0a,0x23,0x6c,0x69,0x6e,0x65,0x20,0x39,0x20,0x22,0x22,
+    0x0a,0x76,0x6f,0x69,0x64,0x20,0x66,0x72,0x61,0x67,0x5f,0x6d,0x61,0x69,0x6e,0x28,
+    0x29,0x0a,0x7b,0x0a,0x23,0x6c,0x69,0x6e,0x65,0x20,0x39,0x20,0x22,0x22,0x0a,0x20,
+    0x20,0x20,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x20,0x3d,0x20,
+    0x63,0x6f,0x6c,0x6f,0x72,0x3b,0x0a,0x7d,0x0a,0x0a,0x53,0x50,0x49,0x52,0x56,0x5f,
+    0x43,0x72,0x6f,0x73,0x73,0x5f,0x4f,0x75,0x74,0x70,0x75,0x74,0x20,0x6d,0x61,0x69,
+    0x6e,0x28,0x29,0x0a,0x7b,0x0a,0x20,0x20,0x20,0x20,0x66,0x72,0x61,0x67,0x5f,0x6d,
+    0x61,0x69,0x6e,0x28,0x29,0x3b,0x0a,0x20,0x20,0x20,0x20,0x53,0x50,0x49,0x52,0x56,
+    0x5f,0x43,0x72,0x6f,0x73,0x73,0x5f,0x4f,0x75,0x74,0x70,0x75,0x74,0x20,0x73,0x74,
+    0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x3b,0x0a,0x20,0x20,0x20,0x20,
+    0x73,0x74,0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x2e,0x66,0x72,0x61,
+    0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x20,0x3d,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,
+    0x6f,0x6c,0x6f,0x72,0x3b,0x0a,0x20,0x20,0x20,0x20,0x72,0x65,0x74,0x75,0x72,0x6e,
+    0x20,0x73,0x74,0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x3b,0x0a,0x7d,
+    0x0a,0x00,
+};
+static const char solid_vs_source[498] = {
     0x73,0x74,0x61,0x74,0x69,0x63,0x20,0x66,0x6c,0x6f,0x61,0x74,0x34,0x20,0x67,0x6c,
     0x5f,0x50,0x6f,0x73,0x69,0x74,0x69,0x6f,0x6e,0x3b,0x0a,0x73,0x74,0x61,0x74,0x69,
     0x63,0x20,0x66,0x6c,0x6f,0x61,0x74,0x32,0x20,0x70,0x6f,0x73,0x69,0x74,0x69,0x6f,
@@ -363,40 +407,16 @@ static const char vs_source[498] = {
     0x20,0x73,0x74,0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x3b,0x0a,0x7d,
     0x0a,0x00,
 };
-static const char fs_source[338] = {
-    0x75,0x6e,0x69,0x66,0x6f,0x72,0x6d,0x20,0x66,0x6c,0x6f,0x61,0x74,0x34,0x20,0x63,
-    0x6f,0x6c,0x6f,0x72,0x3b,0x0a,0x0a,0x73,0x74,0x61,0x74,0x69,0x63,0x20,0x66,0x6c,
-    0x6f,0x61,0x74,0x34,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x3b,
-    0x0a,0x0a,0x73,0x74,0x72,0x75,0x63,0x74,0x20,0x53,0x50,0x49,0x52,0x56,0x5f,0x43,
-    0x72,0x6f,0x73,0x73,0x5f,0x4f,0x75,0x74,0x70,0x75,0x74,0x0a,0x7b,0x0a,0x20,0x20,
-    0x20,0x20,0x66,0x6c,0x6f,0x61,0x74,0x34,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,
-    0x6c,0x6f,0x72,0x20,0x3a,0x20,0x53,0x56,0x5f,0x54,0x61,0x72,0x67,0x65,0x74,0x30,
-    0x3b,0x0a,0x7d,0x3b,0x0a,0x0a,0x23,0x6c,0x69,0x6e,0x65,0x20,0x39,0x20,0x22,0x22,
-    0x0a,0x76,0x6f,0x69,0x64,0x20,0x66,0x72,0x61,0x67,0x5f,0x6d,0x61,0x69,0x6e,0x28,
-    0x29,0x0a,0x7b,0x0a,0x23,0x6c,0x69,0x6e,0x65,0x20,0x39,0x20,0x22,0x22,0x0a,0x20,
-    0x20,0x20,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x20,0x3d,0x20,
-    0x63,0x6f,0x6c,0x6f,0x72,0x3b,0x0a,0x7d,0x0a,0x0a,0x53,0x50,0x49,0x52,0x56,0x5f,
-    0x43,0x72,0x6f,0x73,0x73,0x5f,0x4f,0x75,0x74,0x70,0x75,0x74,0x20,0x6d,0x61,0x69,
-    0x6e,0x28,0x29,0x0a,0x7b,0x0a,0x20,0x20,0x20,0x20,0x66,0x72,0x61,0x67,0x5f,0x6d,
-    0x61,0x69,0x6e,0x28,0x29,0x3b,0x0a,0x20,0x20,0x20,0x20,0x53,0x50,0x49,0x52,0x56,
-    0x5f,0x43,0x72,0x6f,0x73,0x73,0x5f,0x4f,0x75,0x74,0x70,0x75,0x74,0x20,0x73,0x74,
-    0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x3b,0x0a,0x20,0x20,0x20,0x20,
-    0x73,0x74,0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x2e,0x66,0x72,0x61,
-    0x67,0x5f,0x63,0x6f,0x6c,0x6f,0x72,0x20,0x3d,0x20,0x66,0x72,0x61,0x67,0x5f,0x63,
-    0x6f,0x6c,0x6f,0x72,0x3b,0x0a,0x20,0x20,0x20,0x20,0x72,0x65,0x74,0x75,0x72,0x6e,
-    0x20,0x73,0x74,0x61,0x67,0x65,0x5f,0x6f,0x75,0x74,0x70,0x75,0x74,0x3b,0x0a,0x7d,
-    0x0a,0x00,
-};
 #elif defined(SOKOL_DUMMY_BACKEND)
-static const char vs_source[] = "";
-static const char fs_source[] = "";
+static const char solid_vs_source[] = "";
+static const char solid_fs_source[] = "";
 #endif
 
 static void _ngp_setup_pipelines() {
     // create shaders
     ngp.solid_shader = sg_make_shader(&(sg_shader_desc){
-        .vs.source = vs_source,
-        .fs.source = fs_source,
+        .vs.source = solid_vs_source,
+        .fs.source = solid_fs_source,
         .fs.uniform_blocks[0] = {
             .uniforms[0] = {.name="color", .type=SG_UNIFORMTYPE_FLOAT4},
             .size = 4*sizeof(float),
@@ -405,33 +425,60 @@ static void _ngp_setup_pipelines() {
             [0] = {.name="position", .sem_name="TEXCOORD"},
         },
     });
+    NANOGP_ASSERT(ngp.solid_shader.id != SG_INVALID_ID);
+    ngp.tex_shader = sg_make_shader(&(sg_shader_desc){
+        .vs.source = tex_vs_source,
+        .fs.source = tex_fs_source,
+        .fs.uniform_blocks[0] = {
+            .uniforms[0] = {.name="color", .type=SG_UNIFORMTYPE_FLOAT4},
+            .size = 4*sizeof(float),
+        },
+        .fs.images[0] = {.name = "tex", .type=SG_IMAGETYPE_2D},
+        .attrs = {
+            [0] = {.name="position", .sem_name="TEXCOORD"},
+            [1] = {.name="texcoord", .sem_name="TEXCOORD"},
+        },
+    });
+    NANOGP_ASSERT(ngp.tex_shader.id != SG_INVALID_ID);
 
     // create pipelines
+    ngp.textriangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = ngp.tex_shader,
+        .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+        .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
+        .layout.attrs[1] = { .offset=offsetof(ngp_texvertex, texcoord), .format=SG_VERTEXFORMAT_FLOAT2 },
+    });
+    NANOGP_ASSERT(ngp.textriangles_pip.id != SG_INVALID_ID);
     ngp.triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
+    NANOGP_ASSERT(ngp.triangles_pip.id != SG_INVALID_ID);
     ngp.points_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_POINTS,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
+    NANOGP_ASSERT(ngp.points_pip.id != SG_INVALID_ID);
     ngp.lines_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINES,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
+    NANOGP_ASSERT(ngp.lines_pip.id != SG_INVALID_ID);
     ngp.triangle_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
+    NANOGP_ASSERT(ngp.triangle_strip_pip.id != SG_INVALID_ID);
     ngp.line_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINE_STRIP,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
+    NANOGP_ASSERT(ngp.line_strip_pip.id != SG_INVALID_ID);
 }
 
 bool ngp_setup(const ngp_desc* desc) {
@@ -451,20 +498,31 @@ bool ngp_setup(const ngp_desc* desc) {
     ngp.num_commands = ngp.desc.max_commands;
     ngp.num_uniforms = ngp.desc.max_commands;
     ngp.vertices = (ngp_vertex*) NANOGP_MALLOC(ngp.num_vertices * sizeof(ngp_vertex));
+    ngp.texvertices = (ngp_texvertex*) NANOGP_MALLOC(ngp.num_vertices * sizeof(ngp_texvertex));
     ngp.uniforms = (ngp_uniform*) NANOGP_MALLOC(ngp.num_uniforms * sizeof(ngp_uniform));
     ngp.commands = (ngp_command*) NANOGP_MALLOC(ngp.num_commands * sizeof(ngp_command));
     NANOGP_ASSERT(ngp.commands && ngp.uniforms && ngp.uniforms);
 
     // create vertex buffer
-    ngp.vbuf = sg_make_buffer(&(sg_buffer_desc){
-        .size = 65536 * sizeof(ngp_vec2),
+    ngp.vertex_buf = sg_make_buffer(&(sg_buffer_desc){
+        .size = 65536 * sizeof(ngp_vertex),
         .usage = SG_USAGE_STREAM,
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
     });
+    NANOGP_ASSERT(ngp.vertex_buf.id != SG_INVALID_ID);
+    ngp.texvertex_buf = sg_make_buffer(&(sg_buffer_desc){
+        .size = 65536 * sizeof(ngp_texvertex),
+        .usage = SG_USAGE_STREAM,
+        .type = SG_BUFFERTYPE_VERTEXBUFFER,
+    });
+    NANOGP_ASSERT(ngp.texvertex_buf.id != SG_INVALID_ID);
 
     // define the resource bindings
-    ngp.bind = (sg_bindings){
-        .vertex_buffers[0] = ngp.vbuf,
+    ngp.vertex_bind = (sg_bindings){
+        .vertex_buffers[0] = ngp.vertex_buf,
+    };
+    ngp.texvertex_bind = (sg_bindings){
+        .vertex_buffers[0] = ngp.texvertex_buf,
     };
 
     // disable default render clear color
@@ -486,15 +544,18 @@ void ngp_shutdown() {
     if(ngp.init_cookie == 0) return; // not initialized
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
     NANOGP_FREE(ngp.vertices);
+    NANOGP_FREE(ngp.texvertices);
     NANOGP_FREE(ngp.uniforms);
     NANOGP_FREE(ngp.commands);
+    sg_destroy_pipeline(ngp.textriangles_pip);
     sg_destroy_pipeline(ngp.triangles_pip);
     sg_destroy_pipeline(ngp.points_pip);
     sg_destroy_pipeline(ngp.lines_pip);
     sg_destroy_pipeline(ngp.triangle_strip_pip);
     sg_destroy_pipeline(ngp.line_strip_pip);
     sg_destroy_shader(ngp.solid_shader);
-    sg_destroy_buffer(ngp.vbuf);
+    sg_destroy_buffer(ngp.vertex_buf);
+    sg_destroy_buffer(ngp.texvertex_buf);
     ngp = (ngp_context){0};
 }
 
@@ -540,6 +601,7 @@ static void _ngp_rewind() {
     ngp.last_error = "";
     ngp.last_error_code = NGP_NO_ERROR;
     ngp.cur_vertex = 0;
+    ngp.cur_texvertex = 0;
     ngp.cur_uniform = 0;
     ngp.cur_command = 0;
 }
@@ -549,8 +611,10 @@ static void _ngp_flush_commands() {
         return;
 
     uint32_t cur_pip_id = SG_INVALID_ID;
+    uint32_t cur_img_id = SG_INVALID_ID;
     int cur_uniform_index = -1;
-    sg_update_buffer(ngp.vbuf, ngp.vertices, ngp.cur_vertex * sizeof(ngp_vertex));
+    sg_update_buffer(ngp.vertex_buf, ngp.vertices, ngp.cur_vertex * sizeof(ngp_vertex));
+    sg_update_buffer(ngp.texvertex_buf, ngp.texvertices, ngp.cur_texvertex * sizeof(ngp_texvertex));
     for(unsigned int i = 0; i < ngp.cur_command; ++i) {
         ngp_command* cmd = &ngp.commands[i];
         switch(cmd->cmd) {
@@ -571,17 +635,26 @@ static void _ngp_flush_commands() {
                     sg_apply_pipeline(args->pip);
                     cur_pip_id = args->pip.id;
                     // when pipeline changes, also need to re-apply uniforms and bindings
+                    cur_img_id = SG_INVALID_ID;
                     cur_uniform_index = -1;
                     pip_changed = true;
                 }
-                if(pip_changed) {
-                    sg_apply_bindings(&ngp.bind);
+                if(pip_changed || cur_img_id != args->img.id) {
+                    if(args->img.id != SG_INVALID_ID) {
+                        ngp.texvertex_bind.fs_images[0] = args->img;
+                        sg_apply_bindings(&ngp.texvertex_bind);
+                    } else {
+                        sg_apply_bindings(&ngp.vertex_bind);
+                    }
+                    cur_img_id = args->img.id;
                 }
                 if(cur_uniform_index != args->uniform_index) {
                     sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &ngp.uniforms[args->uniform_index], sizeof(ngp_uniform));
                     cur_uniform_index = args->uniform_index;
                 }
-                sg_draw(args->vertex_index, args->num_vertices, 1);
+                if(args->num_vertices > 0) {
+                    sg_draw(args->vertex_index, args->num_vertices, 1);
+                }
                 break;
             }
             default: {
@@ -751,30 +824,6 @@ void ngp_reset_color() {
     ngp.state.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
-void ngp_set_texture(sg_image image) {
-    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    if(ngp.state.texture.id == image.id)
-        return;
-    sg_image_info info = sg_query_image_info(image);
-    if(info.width > 0 && info.height > 0) {
-        float iw = 1.0f/info.width, ih = 1.0f/info.height;
-        ngp.state.texture_matrix = (ngp_mat3){
-              iw, 0.0f, 0.0f,
-            0.0f,   ih, 0.0f,
-            0.0f, 0.0f, 1.0f
-        };
-        ngp.state.texture = image;
-    } else {
-        ngp.state.texture_matrix = (ngp_mat3){0};
-        ngp.state.texture = (sg_image){0};
-    }
-}
-
-void ngp_reset_texture() {
-    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    ngp.state.texture = (sg_image){0};
-}
-
 static ngp_vertex* _ngp_next_vertices(unsigned int count) {
     if(NANOGP_LIKELY(ngp.cur_vertex + count <= ngp.num_vertices)) {
         ngp_vertex *vertices = &ngp.vertices[ngp.cur_vertex];
@@ -785,6 +834,7 @@ static ngp_vertex* _ngp_next_vertices(unsigned int count) {
         return NULL;
     }
 }
+
 static ngp_uniform* _ngp_prev_uniform() {
     if(NANOGP_LIKELY(ngp.cur_uniform > 0)) {
         return &ngp.uniforms[ngp.cur_uniform-1];
@@ -886,14 +936,13 @@ void ngp_reset_state() {
     ngp_reset_scissor();
     ngp_reset_transform();
     ngp_reset_color();
-    ngp_reset_texture();
 }
 
 static inline bool ngp_color_eq(ngp_color a, ngp_color b) {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 
-static void _ngp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned int num_vertices) {
+static void _ngp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned int num_vertices, sg_image img) {
     // setup uniform, try to reuse previous uniform when possible
     ngp_uniform *prev_uniform = _ngp_prev_uniform();
     bool reuse_uniform = prev_uniform && ngp_color_eq(prev_uniform->color, ngp.state.color);
@@ -909,6 +958,7 @@ static void _ngp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned
     bool merge_cmd = prev_cmd &&
                      prev_cmd->cmd == NGP_COMMAND_DRAW &&
                      prev_cmd->args.draw.pip.id == pip.id &&
+                     prev_cmd->args.draw.img.id == img.id &&
                      prev_cmd->args.draw.uniform_index == uniform_index;
     if(merge_cmd) {
         // merge command for batched rendering
@@ -920,6 +970,7 @@ static void _ngp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned
         cmd->cmd = NGP_COMMAND_DRAW,
         cmd->args.draw = (ngp_draw_args){
             .pip = pip,
+            .img = img,
             .uniform_index = uniform_index,
             .vertex_index = vertex_index,
             .num_vertices = num_vertices,
@@ -934,25 +985,23 @@ static inline ngp_vec2 ngp_mat3_vec2_mul(const ngp_mat3* m, const ngp_vec2* v) {
     };
 }
 
-static void _ngp_transform_vertices(ngp_vec2* dest, const ngp_vec2 *src, unsigned int count) {
-    // copy mvp matrix to stack to improve performance
-    ngp_mat3 mvp = ngp.state.mvp;
+static void _ngp_transform_vertices(ngp_mat3 matrix, ngp_vec2* dest, const ngp_vec2 *src, unsigned int count) {
     for(unsigned int i=0;i<count;++i)
-        dest[i] = ngp_mat3_vec2_mul(&mvp, &src[i]);
+        dest[i] = ngp_mat3_vec2_mul(&matrix, &src[i]);
 }
 
-static void _ngp_draw_pip(sg_pipeline pip, const ngp_vec2* vertices, unsigned int count) {
+static void _ngp_draw_solid_pip(sg_pipeline pip, const ngp_vec2* vertices, unsigned int count) {
     unsigned int vertex_index = ngp.cur_vertex;
     ngp_vertex* transformed_vertices = _ngp_next_vertices(count);
     if(NANOGP_UNLIKELY(!vertices)) return;
 
-    _ngp_transform_vertices(transformed_vertices, vertices, count);
-    _ngp_queue_draw(pip, vertex_index, count);
+    _ngp_transform_vertices(ngp.state.mvp, transformed_vertices, vertices, count);
+    _ngp_queue_draw(pip, vertex_index, count, (sg_image){0});
 }
 
 void ngp_draw_triangles(const ngp_triangle* triangles, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    _ngp_draw_pip(ngp.triangles_pip, (const ngp_vec2*)triangles, count*3);
+    _ngp_draw_solid_pip(ngp.triangles_pip, (const ngp_vec2*)triangles, count*3);
 }
 
 void ngp_draw_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
@@ -971,8 +1020,8 @@ void ngp_draw_rects(const ngp_rect* rects, unsigned int count) {
 
     // compute vertices
     ngp_vertex* v = vertices;
-    for(unsigned int i=0;i<count;v+=6, i++) {
-        const ngp_rect* rect = &rects[i];
+    const ngp_rect* rect = rects;
+    for(unsigned int i=0;i<count;v+=6, i++, rect++) {
         float l = rect->x, t = rect->y;
         float r = l + rect->w, b = t + rect->h;
         ngp_vec2 quad[4] = {
@@ -981,14 +1030,18 @@ void ngp_draw_rects(const ngp_rect* rects, unsigned int count) {
             {r, t}, // top right
             {l, t}, // top left
         };
-        _ngp_transform_vertices(quad, quad, 4);
+        _ngp_transform_vertices(ngp.state.mvp, quad, quad, 4);
 
         // make a quad composed of 2 triangles
-        v[0] = quad[0]; v[1] = quad[1]; v[2] = quad[2];
-        v[3] = quad[3]; v[4] = quad[0]; v[5] = quad[2];
+        v[0] = quad[0];
+        v[1] = quad[1];
+        v[2] = quad[2];
+        v[3] = quad[3];
+        v[4] = quad[0];
+        v[5] = quad[2];
     }
 
-    _ngp_queue_draw(ngp.triangles_pip, vertex_index, num_vertices);
+    _ngp_queue_draw(ngp.triangles_pip, vertex_index, num_vertices, (sg_image){0});
 }
 
 void ngp_draw_rect(float x, float y, float w, float h) {
@@ -998,7 +1051,7 @@ void ngp_draw_rect(float x, float y, float w, float h) {
 
 void ngp_draw_points(const ngp_vec2* points, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    _ngp_draw_pip(ngp.points_pip, points, count);
+    _ngp_draw_solid_pip(ngp.points_pip, points, count);
 }
 
 void ngp_draw_point(float x, float y) {
@@ -1008,7 +1061,7 @@ void ngp_draw_point(float x, float y) {
 
 void ngp_draw_lines(const ngp_line* lines, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    _ngp_draw_pip(ngp.lines_pip, (const ngp_vec2*)lines, count*2);
+    _ngp_draw_solid_pip(ngp.lines_pip, (const ngp_vec2*)lines, count*2);
 }
 
 void ngp_draw_line(float ax, float ay, float bx, float by) {
@@ -1018,16 +1071,91 @@ void ngp_draw_line(float ax, float ay, float bx, float by) {
 
 void ngp_draw_line_strip(const ngp_vec2* points, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    _ngp_draw_pip(ngp.line_strip_pip, points, count);
+    _ngp_draw_solid_pip(ngp.line_strip_pip, points, count);
 }
 
 void ngp_draw_triangle_strip(const ngp_vec2* points, unsigned int count) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    _ngp_draw_pip(ngp.triangle_strip_pip, points, count);
+    _ngp_draw_solid_pip(ngp.triangle_strip_pip, points, count);
 }
 
-void ngp_draw_textured_rect(ngp_rect rect, ngp_rect src_rect) {
-    //TODO
+static ngp_texvertex* _ngp_next_texvertices(unsigned int count) {
+    if(NANOGP_LIKELY(ngp.cur_texvertex + count <= ngp.num_vertices)) {
+        ngp_texvertex *texvertices = &ngp.texvertices[ngp.cur_texvertex];
+        ngp.cur_texvertex += count;
+        return texvertices;
+    } else {
+        _ngp_set_error(NGP_ERROR_VERTICES_FULL, "NGP vertices buffer is full");
+        return NULL;
+    }
+}
+
+void ngp_draw_textured_rects(sg_image image, const ngp_rect* rects, const ngp_rect* src_rects, unsigned int count) {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    NANOGP_ASSERT(image.id != SG_INVALID_ID);
+
+    // setup vertices
+    unsigned int num_vertices = count * 6;
+    unsigned int vertex_index = ngp.cur_texvertex;
+    ngp_texvertex* texvertices = _ngp_next_texvertices(num_vertices);
+    if(NANOGP_UNLIKELY(!texvertices)) return;
+
+    float iw = 0.0f, ih = 0.0f;
+    if(src_rects) {
+        //TODO: benchmark this query and optimize
+        sg_image_info info = sg_query_image_info(image);
+        if(NANOGP_LIKELY(info.width != 0 && info.height != 0)) {
+            iw = 1.0f/info.width;
+            ih = 1.0f/info.height;
+        }
+    }
+
+    // compute vertices
+    ngp_texvertex* v = texvertices;
+    const ngp_rect* rect = rects;
+    const ngp_rect* src_rect = src_rects;
+    for(unsigned int i=0;i<count;v+=6, i++, rect++) {
+        float l = rect->x, t = rect->y;
+        float r = l + rect->w, b = t + rect->h;
+        ngp_vec2 quad[4] = {
+            {l, b}, // bottom left
+            {r, b}, // bottom right
+            {r, t}, // top right
+            {l, t}, // top left
+        };
+        _ngp_transform_vertices(ngp.state.mvp, quad, quad, 4);
+
+        ngp_vec2 texquad[4];
+        if(src_rect) {
+            float tl = src_rect->x*iw, tt = src_rect->y*ih;
+            float tr = l + src_rect->w*iw, tb = t + src_rect->h*ih;
+            texquad[0] = (ngp_vec2){tl, tb}; // bottom left
+            texquad[1] = (ngp_vec2){tr, tb}; // bottom right
+            texquad[2] = (ngp_vec2){tr, tt}; // top right
+            texquad[3] = (ngp_vec2){tl, tt}; // top left
+            src_rect++;
+        } else {
+            texquad[0] = (ngp_vec2){0.0f, 1.0f}; // bottom left
+            texquad[1] = (ngp_vec2){1.0f, 1.0f}; // bottom right
+            texquad[2] = (ngp_vec2){1.0f, 0.0f}; // top right
+            texquad[3] = (ngp_vec2){0.0f, 0.0f}; // top left
+        }
+
+        // make a quad composed of 2 triangles
+        v[0] = (ngp_texvertex){quad[0], texquad[0]};
+        v[1] = (ngp_texvertex){quad[1], texquad[1]};
+        v[2] = (ngp_texvertex){quad[2], texquad[2]};
+        v[3] = (ngp_texvertex){quad[3], texquad[3]};
+        v[4] = (ngp_texvertex){quad[0], texquad[0]};
+        v[5] = (ngp_texvertex){quad[2], texquad[2]};
+    }
+
+    _ngp_queue_draw(ngp.textriangles_pip, vertex_index, num_vertices, image);
+}
+
+void ngp_draw_textured_rect(sg_image image, ngp_rect rect, const ngp_rect* src_rect) {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
+    ngp_draw_textured_rects(image, &rect, src_rect, 1);
 }
 
 ngp_desc ngp_query_desc() {

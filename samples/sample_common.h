@@ -113,11 +113,13 @@ int sample_app(sample_app_desc app) {
 
     // run loop
     while(!SDL_QuitRequested()) {
+        ngctx_isize size = ngctx_get_drawable_size(ngctx);
+
         // poll events
         SDL_Event event;
         while(SDL_PollEvent(&event)) { }
 
-        app.draw(ngctx);
+        app.draw(size.w, size.h);
         if(!ngctx_swap(ngctx)) {
             fprintf(stderr, "Failed to swap window buffers: %s\n", ngctx_get_error());
             return 1;

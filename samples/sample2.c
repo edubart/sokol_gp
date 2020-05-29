@@ -5,19 +5,23 @@
 #include "sample_common.h"
 
 sg_image image;
+float image_ratio;
 
-void draw(ngctx_context ngctx) {
-    ngctx_isize size = ngctx_get_drawable_size(ngctx);
+void draw(int width, int height) {
     ngp_set_clear_color(0.05f, 0.05f, 0.05f, 1.0f);
-    ngp_begin(size.w, size.h);
+    ngp_begin(width, height);
 
-    ngp_ortho(-1.0f, 1.0f, -1.0f, 1.0f);
-    ngp_draw_rect(0.0f, 0.0f, 0.5f, 0.5f);
+    float ih = 512.0f;
+    float iw = ih * image_ratio;
+    ngp_translate((width - iw) / 2.0f, (height - ih) / 2.0f);
+    ngp_draw_textured_rect(image, (ngp_rect){0, 0, iw, ih}, NULL);
     ngp_end();
 }
 
 bool init() {
     image = sg_load_image("resources/cat.png");
+    sg_image_info imginfo = sg_query_image_info(image);
+    image_ratio = imginfo.width / (float)imginfo.height;
     if(image.id == SG_INVALID_ID)
         return false;
     return true;
