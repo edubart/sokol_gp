@@ -66,7 +66,6 @@ void draw_lines() {
 void draw_triangles() {
     ngp_irect viewport = ngp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
-    float time = frame / 60.0f;
     float hw = width * 0.5f;
     float hh = height * 0.5f;
     float w = height*0.2f;
@@ -91,8 +90,6 @@ void draw_triangles() {
 }
 
 void draw(int width, int height) {
-    ngp_set_clear_color(0.05f, 0.05f, 0.05f, 1.0f);
-    ngp_begin(width, height);
     int hw = width / 2;
     int hh = height / 2;
 
@@ -125,20 +122,14 @@ void draw(int width, int height) {
     ngp_draw_rect(0, 0, hw, hh);
     draw_lines();
 
-    ngp_end();
-
     frame++;
 }
 
 bool init() {
-    sg_image image = sg_load_image("resources/cat.png");
-    if(image.id == SG_INVALID_ID)
-        return false;
     return true;
 }
 
 void terminate() {
-
 }
 
 int main(int argc, char *argv[]) {

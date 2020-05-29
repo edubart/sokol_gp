@@ -1,12 +1,15 @@
 #include "sample_common.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#define STBI_NO_SIMD
+#define STBI_NO_THREAD_LOCALS
+#include "thirdparty/stb_image.h"
+
 sg_image image;
 float image_ratio;
 
 void draw(int width, int height) {
-    ngp_set_clear_color(0.05f, 0.05f, 0.05f, 1.0f);
-    ngp_begin(width, height);
-
     float ih = 512.0f;
     float iw = ih * image_ratio;
     ngp_translate((width - iw) / 2.0f, (height - ih) / 2.0f);
@@ -26,7 +29,28 @@ void draw(int width, int height) {
         }
     }
 */
-    ngp_end();
+}
+
+sg_image sg_load_image(const char *filename) {
+    int width, height;
+    unsigned char* data = stbi_load(filename, &width, &height, NULL, 4);
+    if(!data) {
+        fprintf(stderr, "failed to load image '%s': stbi_load failed\n", filename);
+        return (sg_image){0};
+    }
+    sg_image image = sg_make_image(&(sg_image_desc){
+        .width = width,
+        .height = height,
+        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+        .content.subimage[0][0] = {.ptr = data, .size = width * height * 4}
+    });
+    stbi_image_free(data);
+    if(image.id == SG_INVALID_ID) {
+        fprintf(stderr, "failed to load image '%s': sg_make_image failed\n", filename);
+        return (sg_image){0};
+    }
+    return image;
 }
 
 bool init() {

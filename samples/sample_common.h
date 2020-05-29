@@ -2,44 +2,17 @@
 #include <SDL2/SDL.h>
 #define FLEXTGL_IMPL
 #include "thirdparty/flextgl.h"
-#define STB_IMAGE_IMPLEMENTATION
-#define STBI_ONLY_PNG
-#define STBI_NO_SIMD
-#define STBI_NO_THREAD_LOCALS
-#include "thirdparty/stb_image.h"
 #define NANOGCTX_IMPL
 #include "nanogctx.h"
 #define SOKOL_IMPL
-#define SOKOL_GLCORE33
-//#define SOKOL_D3D11
+//#define SOKOL_GLCORE33
+#define SOKOL_D3D11
 //#define SOKOL_DUMMY_BACKEND
 #include "sokol_gfx.h"
 #define NANOGP_IMPL
 #include "nanogp.h"
 #include <stdio.h>
 #include <math.h>
-
-sg_image sg_load_image(const char *filename) {
-    int width, height;
-    unsigned char* data = stbi_load(filename, &width, &height, NULL, 4);
-    if(!data) {
-        fprintf(stderr, "failed to load image '%s': stbi_load failed\n", filename);
-        return (sg_image){0};
-    }
-    sg_image image = sg_make_image(&(sg_image_desc){
-        .width = width,
-        .height = height,
-        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        .content.subimage[0][0] = {.ptr = data, .size = width * height * 4}
-    });
-    stbi_image_free(data);
-    if(image.id == SG_INVALID_ID) {
-        fprintf(stderr, "failed to load image '%s': sg_make_image failed\n", filename);
-        return (sg_image){0};
-    }
-    return image;
-}
 
 typedef struct sample_app_desc {
     bool (*init)();
@@ -85,7 +58,9 @@ int sample_app(sample_app_desc app) {
     ngctx_set_swap_interval(ngctx, 0);
 
     // setup sokol
-    sg_desc desc = {0};
+    sg_desc desc = {
+        .context.depth_format = SG_PIXELFORMAT_NONE
+    };
 #ifdef SOKOL_D3D11
     if(ctx_desc.backend == NGCTX_BACKEND_D3D11) {
         desc.context.d3d11.device = ngctx.d3d11->device;
@@ -120,7 +95,19 @@ int sample_app(sample_app_desc app) {
         SDL_Event event;
         while(SDL_PollEvent(&event)) { }
 
+        ngp_begin(size.w,  size.h);
         app.draw(size.w, size.h);
+
+        sg_begin_default_pass(&(sg_pass_action){
+            .stencil.action = SG_ACTION_DONTCARE,
+            .depth.action = SG_ACTION_DONTCARE,
+            .colors[0] = {.action = SG_ACTION_CLEAR, .val = {0.05f, 0.05f, 0.05f, 1.0f}}
+        }, size.w, size.h);
+        ngp_flush();
+        sg_end_pass();
+        ngp_end();
+        sg_commit();
+
         if(!ngctx_swap(ngctx)) {
             fprintf(stderr, "Failed to swap window buffers: %s\n", ngctx_get_error());
             return 1;

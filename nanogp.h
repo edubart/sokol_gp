@@ -47,6 +47,8 @@ typedef enum ngp_error {
     NGP_ERROR_COMMANDS_FULL,
     NGP_ERROR_TRANSFORM_STACK_OVERFLOW,
     NGP_ERROR_TRANSFORM_STACK_UNDERFLOW,
+    NGP_ERROR_STATE_STACK_OVERFLOW,
+    NGP_ERROR_STATE_STACK_UNDERFLOW
 } ngp_error;
 
 typedef enum ngp_command_type {
@@ -104,6 +106,10 @@ typedef struct ngp_state {
     ngp_mat3 transform;
     ngp_mat3 mvp;
     ngp_uniform uniform;
+    unsigned int _base_vertex;
+    unsigned int _base_texvertex;
+    unsigned int _base_uniform;
+    unsigned int _base_command;
 } ngp_state;
 
 // setup functions
@@ -115,9 +121,8 @@ NANOGP_API const char* ngp_get_error();
 
 // rendering functions
 NANOGP_API void ngp_begin(int width, int height);
+NANOGP_API void ngp_flush();
 NANOGP_API void ngp_end();
-NANOGP_API void ngp_set_clear_color(float r, float g, float b, float a);
-NANOGP_API void ngp_reset_clear_color();
 
 // state projection functions
 NANOGP_API void ngp_ortho(float left, float right, float top, float bottom);
@@ -255,9 +260,6 @@ typedef struct ngp_context {
     ngp_error last_error_code;
     ngp_desc desc;
 
-    // default render pass
-    sg_pass_action pass_action;
-
     // resources
     sg_shader solid_shader;
     sg_shader tex_shader;
@@ -290,7 +292,9 @@ typedef struct ngp_context {
 
     // matrix stack
     unsigned int cur_transform;
+    unsigned int cur_state;
     ngp_mat3 transform_stack[_NGP_MAX_STACK_DEPTH];
+    ngp_state state_stack[_NGP_MAX_STACK_DEPTH];
 } ngp_context;
 
 static ngp_context ngp;
@@ -381,6 +385,15 @@ static const char tex_fs_source[] = "";
 #endif
 
 static void _ngp_setup_pipelines() {
+    sg_blend_state default_blend = {
+        .enabled = true,
+        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+        .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+        .src_factor_alpha = SG_BLENDFACTOR_ONE,
+        .dst_factor_alpha = SG_BLENDFACTOR_ONE,
+        .depth_format = SG_PIXELFORMAT_NONE
+    };
+
     // create shaders
     ngp.solid_shader = sg_make_shader(&(sg_shader_desc){
         .vs.source = solid_vs_source,
@@ -413,37 +426,48 @@ static void _ngp_setup_pipelines() {
     ngp.textriangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.tex_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+        .blend = default_blend,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
         .layout.attrs[1] = { .offset=offsetof(ngp_texvertex, texcoord), .format=SG_VERTEXFORMAT_USHORT2N },
     });
     NANOGP_ASSERT(ngp.textriangles_pip.id != SG_INVALID_ID);
+
     ngp.triangles_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
+        .blend = default_blend,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     NANOGP_ASSERT(ngp.triangles_pip.id != SG_INVALID_ID);
+
     ngp.points_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_POINTS,
+        .blend = default_blend,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     NANOGP_ASSERT(ngp.points_pip.id != SG_INVALID_ID);
+
     ngp.lines_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINES,
+        .blend = default_blend,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     NANOGP_ASSERT(ngp.lines_pip.id != SG_INVALID_ID);
+
     ngp.triangle_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+        .blend = default_blend,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     NANOGP_ASSERT(ngp.triangle_strip_pip.id != SG_INVALID_ID);
+
     ngp.line_strip_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = ngp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINE_STRIP,
+        .blend = default_blend,
         .layout.attrs[0] = { .offset=0, .format=SG_VERTEXFORMAT_FLOAT2 },
     });
     NANOGP_ASSERT(ngp.line_strip_pip.id != SG_INVALID_ID);
@@ -492,17 +516,6 @@ bool ngp_setup(const ngp_desc* desc) {
     ngp.texvertex_bind = (sg_bindings){
         .vertex_buffers[0] = ngp.texvertex_buf,
     };
-
-    // disable default render clear color
-    ngp.pass_action = (sg_pass_action){
-        .stencil = {.action = SG_ACTION_DONTCARE },
-        .depth = {.action = SG_ACTION_DONTCARE }
-    };
-    for(unsigned int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
-        ngp.pass_action.colors[i] = (sg_color_attachment_action) {
-            .action = SG_ACTION_DONTCARE,
-        };
-    }
 
     _ngp_setup_pipelines();
     return true;
@@ -553,9 +566,21 @@ static inline ngp_mat3 _ngp_default_proj(int width, int height) {
 
 void ngp_begin(int width, int height) {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    sg_begin_default_pass(&ngp.pass_action, width, height);
+    if(NANOGP_UNLIKELY(ngp.cur_state >= _NGP_MAX_STACK_DEPTH)) {
+        _ngp_set_error(NGP_ERROR_STATE_STACK_OVERFLOW, "NGP state stack overflow");
+        return;
+    }
 
-    // default state
+    // first begin
+    if(ngp.cur_state == 0) {
+        ngp.last_error = "";
+        ngp.last_error_code = NGP_NO_ERROR;
+    }
+
+    // save current state
+    ngp.state_stack[ngp.cur_state++] = ngp.state;
+
+    // reset to default state
     ngp.state.frame_size = (ngp_isize){width, height};
     ngp.state.viewport = (ngp_irect){0, 0, width, height};
     ngp.state.scissor = (ngp_irect){0, 0, -1, -1};
@@ -563,27 +588,30 @@ void ngp_begin(int width, int height) {
     ngp.state.transform = _ngp_mat3_identity;
     ngp.state.mvp = ngp.state.proj;
     ngp.state.uniform.color = (ngp_color){1.0f, 1.0f, 1.0f, 1.0f};
+    ngp.state._base_vertex = ngp.cur_vertex;
+    ngp.state._base_texvertex = ngp.cur_texvertex;
+    ngp.state._base_uniform = ngp.cur_uniform;
+    ngp.state._base_command = ngp.cur_command;
 }
 
-static void _ngp_rewind() {
-    ngp.last_error = "";
-    ngp.last_error_code = NGP_NO_ERROR;
-    ngp.cur_vertex = 0;
-    ngp.cur_texvertex = 0;
-    ngp.cur_uniform = 0;
-    ngp.cur_command = 0;
-}
+void ngp_flush() {
+    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
 
-static void _ngp_flush_commands() {
     if(ngp.last_error_code != NGP_NO_ERROR || ngp.cur_command <= 0)
         return;
 
+    // flush commands
     uint32_t cur_pip_id = SG_INVALID_ID;
     uint32_t cur_img_id = SG_INVALID_ID;
     int cur_uniform_index = -1;
-    sg_update_buffer(ngp.vertex_buf, ngp.vertices, ngp.cur_vertex * sizeof(ngp_vertex));
-    sg_update_buffer(ngp.texvertex_buf, ngp.texvertices, ngp.cur_texvertex * sizeof(ngp_texvertex));
-    for(unsigned int i = 0; i < ngp.cur_command; ++i) {
+    unsigned int cur_base_vertex = 0;
+    unsigned int base_vertex = ngp.state._base_vertex;
+    unsigned int base_texvertex = ngp.state._base_texvertex;
+    unsigned int num_vertices = (ngp.cur_vertex - base_vertex) * sizeof(ngp_vertex);
+    unsigned int num_texvertices = (ngp.cur_texvertex - base_texvertex) * sizeof(ngp_texvertex);
+    sg_update_buffer(ngp.vertex_buf, &ngp.vertices[base_vertex], num_vertices);
+    sg_update_buffer(ngp.texvertex_buf, &ngp.texvertices[base_texvertex], num_texvertices);
+    for(unsigned int i = ngp.state._base_command; i < ngp.cur_command; ++i) {
         ngp_command* cmd = &ngp.commands[i];
         switch(cmd->cmd) {
             case NGP_COMMAND_VIEWPORT: {
@@ -611,8 +639,10 @@ static void _ngp_flush_commands() {
                     if(args->img.id != SG_INVALID_ID) {
                         ngp.texvertex_bind.fs_images[0] = args->img;
                         sg_apply_bindings(&ngp.texvertex_bind);
+                        cur_base_vertex = base_texvertex;
                     } else {
                         sg_apply_bindings(&ngp.vertex_bind);
+                        cur_base_vertex = base_vertex;
                     }
                     cur_img_id = args->img.id;
                 }
@@ -621,7 +651,7 @@ static void _ngp_flush_commands() {
                     cur_uniform_index = args->uniform_index;
                 }
                 if(args->num_vertices > 0) {
-                    sg_draw(args->vertex_index, args->num_vertices, 1);
+                    sg_draw(args->vertex_index - cur_base_vertex, args->num_vertices, 1);
                 }
                 break;
             }
@@ -631,33 +661,23 @@ static void _ngp_flush_commands() {
             }
         }
     }
-    _ngp_rewind();
+
+    // rewind indexes
+    ngp.cur_vertex = ngp.state._base_vertex;
+    ngp.cur_texvertex = ngp.state._base_texvertex;
+    ngp.cur_uniform = ngp.state._base_uniform;
+    ngp.cur_command = ngp.state._base_command;
 }
 
 void ngp_end() {
     NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    _ngp_flush_commands();
-    sg_end_pass();
-    sg_commit();
-}
-
-void ngp_set_clear_color(float r, float g, float b, float a) {
-    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    for(unsigned int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
-        ngp.pass_action.colors[i] = (sg_color_attachment_action) {
-            .action = SG_ACTION_CLEAR,
-            .val = {r,g,b,a}
-        };
+    if(NANOGP_UNLIKELY(ngp.cur_state <= 0)) {
+        _ngp_set_error(NGP_ERROR_STATE_STACK_UNDERFLOW, "NGP state stack underflow");
+        return;
     }
-}
 
-void ngp_reset_clear_color() {
-    NANOGP_ASSERT(ngp.init_cookie == _NGP_INIT_COOKIE);
-    for(unsigned int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
-        ngp.pass_action.colors[i] = (sg_color_attachment_action) {
-            .action = SG_ACTION_DONTCARE,
-        };
-    }
+    // restore old state
+    ngp.state = ngp.state_stack[--ngp.cur_state];
 }
 
 static inline ngp_mat3 _ngp_mat3_mul(const ngp_mat3* a, const ngp_mat3* b) {
