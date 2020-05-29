@@ -5,6 +5,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #define STBI_NO_SIMD
+#define STBI_NO_THREAD_LOCALS
 #include "thirdparty/stb_image.h"
 #define NANOGCTX_IMPL
 #include "nanogctx.h"

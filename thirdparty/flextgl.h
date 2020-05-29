@@ -2380,9 +2380,9 @@ static GLPROC get_proc(const char *proc)
 {
     GLPROC res;
 
-    res = wglGetProcAddress(proc);
+    res = (GLPROC)wglGetProcAddress(proc);
     if (!res)
-        res = GetProcAddress(libgl, proc);
+        res = (GLPROC)GetProcAddress(libgl, proc);
     return res;
 }
 #elif defined(__APPLE__) || defined(__APPLE_CC__)
