@@ -27,7 +27,7 @@ void draw_fbo() {
     draw_triangles();
 
     sg_pass_action pass_action = {
-        .colors = {{.action = SG_ACTION_CLEAR, .val = {0.0f, 0.0f, 0.0f, 0.0f}}},
+        .colors = {{.action = SG_ACTION_CLEAR, .val = {1.0f, 1.0f, 1.0f, 0.2f}}},
         .depth = {.action = SG_ACTION_DONTCARE},
         .stencil = {.action = SG_ACTION_DONTCARE},
     };
@@ -40,11 +40,11 @@ void draw_fbo() {
 void draw(int width, int height) {
     float time = SDL_GetTicks() / 1000.0f;
     draw_fbo();
-    for(int y=0;y<height;y+=128) {
-        for(int x=0;x<width;x+=128) {
+    for(int y=0;y<height;y+=192) {
+        for(int x=0;x<width;x+=192) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
-            sgp_draw_textured_rect(fbo_image, (sgp_rect){(float)x, (float)y, 128, 128}, NULL);
+            sgp_draw_textured_rect(fbo_image, x, y, 128, 128);
             sgp_pop_transform();
         }
     }

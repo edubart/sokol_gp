@@ -13,7 +13,7 @@ void draw(int width, int height) {
     float ih = 512.0f;
     float iw = ih * image_ratio;
     sgp_translate((width - iw) / 2.0f, (height - ih) / 2.0f);
-    sgp_draw_textured_rect(image, (sgp_rect){0, 0, iw, ih}, NULL);
+    sgp_draw_textured_rect(image, 0, 0, iw, ih);
 
 /*
     for(int y=0;y<64;++y) {
