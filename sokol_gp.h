@@ -136,6 +136,7 @@ SOKOL_API_DECL void sgp_reset_scissor();
 SOKOL_API_DECL void sgp_reset_state();
 
 // drawing functions
+SOKOL_API_DECL void sgp_clear();
 SOKOL_API_DECL void sgp_draw_points(const sgp_vec2* points, unsigned int count);
 SOKOL_API_DECL void sgp_draw_point(float x, float y);
 SOKOL_API_DECL void sgp_draw_lines(const sgp_line* lines, unsigned int count);
@@ -257,6 +258,7 @@ typedef struct sgp_context {
     sg_buffer texvertex_buf;
     sg_bindings vertex_bind;
     sg_bindings texvertex_bind;
+    sg_pipeline clear_pip;
     sg_pipeline textriangles_pip;
     sg_pipeline triangles_pip;
     sg_pipeline points_pip;
@@ -287,7 +289,7 @@ typedef struct sgp_context {
     sgp_state state_stack[_SGP_MAX_STACK_DEPTH];
 } sgp_context;
 
-static sgp_context ngp;
+static sgp_context _sgp;
 
 static const sgp_mat3 _sgp_mat3_identity = {{
     {1.0f, 0.0f, 0.0f},
@@ -296,8 +298,8 @@ static const sgp_mat3 _sgp_mat3_identity = {{
 }};
 
 static void _sgp_set_error(sgp_error error_code, const char *error) {
-    ngp.last_error_code = error_code;
-    ngp.last_error = error;
+    _sgp.last_error_code = error_code;
+    _sgp.last_error = error;
     SOKOL_LOG(error);
 }
 
@@ -398,8 +400,8 @@ static void _sgp_setup_pipelines() {
             }},
         },
     };
-    ngp.solid_shader = sg_make_shader(&solid_shader_desc);
-    SOKOL_ASSERT(ngp.solid_shader.id != SG_INVALID_ID);
+    _sgp.solid_shader = sg_make_shader(&solid_shader_desc);
+    SOKOL_ASSERT(_sgp.solid_shader.id != SG_INVALID_ID);
 
     sg_shader_desc tex_shader_desc = {
         .attrs = {
@@ -416,113 +418,121 @@ static void _sgp_setup_pipelines() {
             .images = {{.name = "tex", .type=SG_IMAGETYPE_2D}},
         },
     };
-    ngp.tex_shader = sg_make_shader(&tex_shader_desc);
-    SOKOL_ASSERT(ngp.tex_shader.id != SG_INVALID_ID);
+    _sgp.tex_shader = sg_make_shader(&tex_shader_desc);
+    SOKOL_ASSERT(_sgp.tex_shader.id != SG_INVALID_ID);
 
     // create pipelines
+    sg_pipeline_desc clear_pip_desc = {
+        .layout = {.attrs = {{.offset=0, .format=SG_VERTEXFORMAT_FLOAT2}}},
+        .shader = _sgp.solid_shader,
+        .primitive_type = SG_PRIMITIVETYPE_TRIANGLES
+    };
+    _sgp.clear_pip = sg_make_pipeline(&clear_pip_desc);
+    SOKOL_ASSERT(_sgp.clear_pip.id != SG_INVALID_ID);
+
     sg_pipeline_desc textriangles_pip_desc = {
         .layout = {.attrs = {
             {.offset=0, .format=SG_VERTEXFORMAT_FLOAT2},
             {.offset=offsetof(sgp_texvertex, texcoord), .format=SG_VERTEXFORMAT_USHORT2N},
         }},
-        .shader = ngp.tex_shader,
+        .shader = _sgp.tex_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .blend = default_blend,
     };
-    ngp.textriangles_pip = sg_make_pipeline(&textriangles_pip_desc);
-    SOKOL_ASSERT(ngp.textriangles_pip.id != SG_INVALID_ID);
+    _sgp.textriangles_pip = sg_make_pipeline(&textriangles_pip_desc);
+    SOKOL_ASSERT(_sgp.textriangles_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc triangles_pip_desc = {
         .layout = {.attrs = {{.offset=0, .format=SG_VERTEXFORMAT_FLOAT2}}},
-        .shader = ngp.solid_shader,
+        .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .blend = default_blend,
     };
-    ngp.triangles_pip = sg_make_pipeline(&triangles_pip_desc);
-    SOKOL_ASSERT(ngp.triangles_pip.id != SG_INVALID_ID);
+    _sgp.triangles_pip = sg_make_pipeline(&triangles_pip_desc);
+    SOKOL_ASSERT(_sgp.triangles_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc points_pip_desc = {
         .layout = {.attrs = {{.offset=0, .format=SG_VERTEXFORMAT_FLOAT2}}},
-        .shader = ngp.solid_shader,
+        .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_POINTS,
         .blend = default_blend,
     };
-    ngp.points_pip = sg_make_pipeline(&points_pip_desc);
-    SOKOL_ASSERT(ngp.points_pip.id != SG_INVALID_ID);
+    _sgp.points_pip = sg_make_pipeline(&points_pip_desc);
+    SOKOL_ASSERT(_sgp.points_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc lines_pip_desc = {
         .layout = {.attrs = {{.offset=0, .format=SG_VERTEXFORMAT_FLOAT2}}},
-        .shader = ngp.solid_shader,
+        .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINES,
         .blend = default_blend,
     };
-    ngp.lines_pip = sg_make_pipeline(&lines_pip_desc);
-    SOKOL_ASSERT(ngp.lines_pip.id != SG_INVALID_ID);
+    _sgp.lines_pip = sg_make_pipeline(&lines_pip_desc);
+    SOKOL_ASSERT(_sgp.lines_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc triangle_strip_pip_desc = {
         .layout = {.attrs = {{.offset=0, .format=SG_VERTEXFORMAT_FLOAT2}}},
-        .shader = ngp.solid_shader,
+        .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .blend = default_blend,
     };
-    ngp.triangle_strip_pip = sg_make_pipeline(&triangle_strip_pip_desc);
-    SOKOL_ASSERT(ngp.triangle_strip_pip.id != SG_INVALID_ID);
+    _sgp.triangle_strip_pip = sg_make_pipeline(&triangle_strip_pip_desc);
+    SOKOL_ASSERT(_sgp.triangle_strip_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc line_strip_pip_desc = {
         .layout = {.attrs = {{.offset=0, .format=SG_VERTEXFORMAT_FLOAT2}}},
-        .shader = ngp.solid_shader,
+        .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINE_STRIP,
         .blend = default_blend,
     };
-    ngp.line_strip_pip = sg_make_pipeline(&line_strip_pip_desc);
-    SOKOL_ASSERT(ngp.line_strip_pip.id != SG_INVALID_ID);
+    _sgp.line_strip_pip = sg_make_pipeline(&line_strip_pip_desc);
+    SOKOL_ASSERT(_sgp.line_strip_pip.id != SG_INVALID_ID);
 }
 
 bool sgp_setup(const sgp_desc* desc) {
-    SOKOL_ASSERT(ngp.init_cookie == 0);
+    SOKOL_ASSERT(_sgp.init_cookie == 0);
 
     // init
-    ngp.init_cookie = _SGP_INIT_COOKIE;
-    ngp.last_error = "";
+    _sgp.init_cookie = _SGP_INIT_COOKIE;
+    _sgp.last_error = "";
 
     // set desc default values
-    ngp.desc = *desc;
-    ngp.desc.max_vertices = SOKOL_DEF(desc->max_vertices, _SGP_DEFAULT_MAX_VERTICES);
-    ngp.desc.max_commands = SOKOL_DEF(desc->max_commands, _SGP_DEFAULT_MAX_COMMANDS);
+    _sgp.desc = *desc;
+    _sgp.desc.max_vertices = SOKOL_DEF(desc->max_vertices, _SGP_DEFAULT_MAX_VERTICES);
+    _sgp.desc.max_commands = SOKOL_DEF(desc->max_commands, _SGP_DEFAULT_MAX_COMMANDS);
 
     // allocate buffers
-    ngp.num_vertices = ngp.desc.max_vertices;
-    ngp.num_commands = ngp.desc.max_commands;
-    ngp.num_uniforms = ngp.desc.max_commands;
-    ngp.vertices = (sgp_vertex*) SOKOL_MALLOC(ngp.num_vertices * sizeof(sgp_vertex));
-    ngp.texvertices = (sgp_texvertex*) SOKOL_MALLOC(ngp.num_vertices * sizeof(sgp_texvertex));
-    ngp.uniforms = (sgp_uniform*) SOKOL_MALLOC(ngp.num_uniforms * sizeof(sgp_uniform));
-    ngp.commands = (sgp_command*) SOKOL_MALLOC(ngp.num_commands * sizeof(sgp_command));
-    SOKOL_ASSERT(ngp.commands && ngp.uniforms && ngp.uniforms);
+    _sgp.num_vertices = _sgp.desc.max_vertices;
+    _sgp.num_commands = _sgp.desc.max_commands;
+    _sgp.num_uniforms = _sgp.desc.max_commands;
+    _sgp.vertices = (sgp_vertex*) SOKOL_MALLOC(_sgp.num_vertices * sizeof(sgp_vertex));
+    _sgp.texvertices = (sgp_texvertex*) SOKOL_MALLOC(_sgp.num_vertices * sizeof(sgp_texvertex));
+    _sgp.uniforms = (sgp_uniform*) SOKOL_MALLOC(_sgp.num_uniforms * sizeof(sgp_uniform));
+    _sgp.commands = (sgp_command*) SOKOL_MALLOC(_sgp.num_commands * sizeof(sgp_command));
+    SOKOL_ASSERT(_sgp.commands && _sgp.uniforms && _sgp.uniforms);
 
     // create vertex buffer
     sg_buffer_desc vertex_buf_desc = {
-        .size = (int)(ngp.num_vertices * sizeof(sgp_vertex)),
+        .size = (int)(_sgp.num_vertices * sizeof(sgp_vertex)),
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
     };
-    ngp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
-    SOKOL_ASSERT(ngp.vertex_buf.id != SG_INVALID_ID);
+    _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
+    SOKOL_ASSERT(_sgp.vertex_buf.id != SG_INVALID_ID);
 
     sg_buffer_desc texvertex_buf_desc = {
-        .size = (int)(ngp.num_vertices * sizeof(sgp_texvertex)),
+        .size = (int)(_sgp.num_vertices * sizeof(sgp_texvertex)),
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
     };
-    ngp.texvertex_buf = sg_make_buffer(&texvertex_buf_desc);
-    SOKOL_ASSERT(ngp.texvertex_buf.id != SG_INVALID_ID);
+    _sgp.texvertex_buf = sg_make_buffer(&texvertex_buf_desc);
+    SOKOL_ASSERT(_sgp.texvertex_buf.id != SG_INVALID_ID);
 
     // define the resource bindings
-    ngp.vertex_bind = (sg_bindings){
-        .vertex_buffers = {ngp.vertex_buf},
+    _sgp.vertex_bind = (sg_bindings){
+        .vertex_buffers = {_sgp.vertex_buf},
     };
-    ngp.texvertex_bind = (sg_bindings){
-        .vertex_buffers = {ngp.texvertex_buf},
+    _sgp.texvertex_bind = (sg_bindings){
+        .vertex_buffers = {_sgp.texvertex_buf},
     };
 
     _sgp_setup_pipelines();
@@ -530,36 +540,37 @@ bool sgp_setup(const sgp_desc* desc) {
 }
 
 void sgp_shutdown() {
-    if(ngp.init_cookie == 0) return; // not initialized
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_FREE(ngp.vertices);
-    SOKOL_FREE(ngp.texvertices);
-    SOKOL_FREE(ngp.uniforms);
-    SOKOL_FREE(ngp.commands);
-    sg_destroy_pipeline(ngp.textriangles_pip);
-    sg_destroy_pipeline(ngp.triangles_pip);
-    sg_destroy_pipeline(ngp.points_pip);
-    sg_destroy_pipeline(ngp.lines_pip);
-    sg_destroy_pipeline(ngp.triangle_strip_pip);
-    sg_destroy_pipeline(ngp.line_strip_pip);
-    sg_destroy_shader(ngp.solid_shader);
-    sg_destroy_buffer(ngp.vertex_buf);
-    sg_destroy_buffer(ngp.texvertex_buf);
-    ngp = (sgp_context){.init_cookie=0};
+    if(_sgp.init_cookie == 0) return; // not initialized
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_FREE(_sgp.vertices);
+    SOKOL_FREE(_sgp.texvertices);
+    SOKOL_FREE(_sgp.uniforms);
+    SOKOL_FREE(_sgp.commands);
+    sg_destroy_pipeline(_sgp.clear_pip);
+    sg_destroy_pipeline(_sgp.textriangles_pip);
+    sg_destroy_pipeline(_sgp.triangles_pip);
+    sg_destroy_pipeline(_sgp.points_pip);
+    sg_destroy_pipeline(_sgp.lines_pip);
+    sg_destroy_pipeline(_sgp.triangle_strip_pip);
+    sg_destroy_pipeline(_sgp.line_strip_pip);
+    sg_destroy_shader(_sgp.solid_shader);
+    sg_destroy_buffer(_sgp.vertex_buf);
+    sg_destroy_buffer(_sgp.texvertex_buf);
+    _sgp = (sgp_context){.init_cookie=0};
 }
 
 bool sgp_is_valid() {
-    return ngp.init_cookie == _SGP_INIT_COOKIE;
+    return _sgp.init_cookie == _SGP_INIT_COOKIE;
 }
 
 sgp_error sgp_get_error_code() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    return ngp.last_error_code;
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    return _sgp.last_error_code;
 }
 
 const char* sgp_get_error() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    return ngp.last_error;
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    return _sgp.last_error;
 }
 
 static inline sgp_mat3 _sgp_default_proj(int width, int height) {
@@ -573,39 +584,39 @@ static inline sgp_mat3 _sgp_default_proj(int width, int height) {
 }
 
 void sgp_begin(int width, int height) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(ngp.cur_state >= _SGP_MAX_STACK_DEPTH)) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    if(SOKOL_UNLIKELY(_sgp.cur_state >= _SGP_MAX_STACK_DEPTH)) {
         _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW, "NGP state stack overflow");
         return;
     }
 
     // first begin
-    if(ngp.cur_state == 0) {
-        ngp.last_error = "";
-        ngp.last_error_code = SGP_NO_ERROR;
+    if(_sgp.cur_state == 0) {
+        _sgp.last_error = "";
+        _sgp.last_error_code = SGP_NO_ERROR;
     }
 
     // save current state
-    ngp.state_stack[ngp.cur_state++] = ngp.state;
+    _sgp.state_stack[_sgp.cur_state++] = _sgp.state;
 
     // reset to default state
-    ngp.state.frame_size = (sgp_isize){width, height};
-    ngp.state.viewport = (sgp_irect){0, 0, width, height};
-    ngp.state.scissor = (sgp_irect){0, 0, -1, -1};
-    ngp.state.proj = _sgp_default_proj(width, height);
-    ngp.state.transform = _sgp_mat3_identity;
-    ngp.state.mvp = ngp.state.proj;
-    ngp.state.uniform.color = (sgp_color){1.0f, 1.0f, 1.0f, 1.0f};
-    ngp.state._base_vertex = ngp.cur_vertex;
-    ngp.state._base_texvertex = ngp.cur_texvertex;
-    ngp.state._base_uniform = ngp.cur_uniform;
-    ngp.state._base_command = ngp.cur_command;
+    _sgp.state.frame_size = (sgp_isize){width, height};
+    _sgp.state.viewport = (sgp_irect){0, 0, width, height};
+    _sgp.state.scissor = (sgp_irect){0, 0, -1, -1};
+    _sgp.state.proj = _sgp_default_proj(width, height);
+    _sgp.state.transform = _sgp_mat3_identity;
+    _sgp.state.mvp = _sgp.state.proj;
+    _sgp.state.uniform.color = (sgp_color){1.0f, 1.0f, 1.0f, 1.0f};
+    _sgp.state._base_vertex = _sgp.cur_vertex;
+    _sgp.state._base_texvertex = _sgp.cur_texvertex;
+    _sgp.state._base_uniform = _sgp.cur_uniform;
+    _sgp.state._base_command = _sgp.cur_command;
 }
 
 void sgp_flush() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
 
-    if(ngp.last_error_code != SGP_NO_ERROR || ngp.cur_command <= 0)
+    if(_sgp.last_error_code != SGP_NO_ERROR || _sgp.cur_command <= 0)
         return;
 
     // flush commands
@@ -613,14 +624,14 @@ void sgp_flush() {
     uint32_t cur_img_id = SG_INVALID_ID;
     unsigned int cur_uniform_index = (unsigned int)(-1);
     unsigned int cur_base_vertex = 0;
-    unsigned int base_vertex = ngp.state._base_vertex;
-    unsigned int base_texvertex = ngp.state._base_texvertex;
-    unsigned int num_vertices = (ngp.cur_vertex - base_vertex) * sizeof(sgp_vertex);
-    unsigned int num_texvertices = (ngp.cur_texvertex - base_texvertex) * sizeof(sgp_texvertex);
-    sg_update_buffer(ngp.vertex_buf, &ngp.vertices[base_vertex], num_vertices);
-    sg_update_buffer(ngp.texvertex_buf, &ngp.texvertices[base_texvertex], num_texvertices);
-    for(unsigned int i = ngp.state._base_command; i < ngp.cur_command; ++i) {
-        sgp_command* cmd = &ngp.commands[i];
+    unsigned int base_vertex = _sgp.state._base_vertex;
+    unsigned int base_texvertex = _sgp.state._base_texvertex;
+    unsigned int num_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(sgp_vertex);
+    unsigned int num_texvertices = (_sgp.cur_texvertex - base_texvertex) * sizeof(sgp_texvertex);
+    sg_update_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], num_vertices);
+    sg_update_buffer(_sgp.texvertex_buf, &_sgp.texvertices[base_texvertex], num_texvertices);
+    for(unsigned int i = _sgp.state._base_command; i < _sgp.cur_command; ++i) {
+        sgp_command* cmd = &_sgp.commands[i];
         switch(cmd->cmd) {
             case SGP_COMMAND_VIEWPORT: {
                 sgp_irect* args = &cmd->args.viewport;
@@ -645,17 +656,17 @@ void sgp_flush() {
                 }
                 if(pip_changed || cur_img_id != args->img.id) {
                     if(args->img.id != SG_INVALID_ID) {
-                        ngp.texvertex_bind.fs_images[0] = args->img;
-                        sg_apply_bindings(&ngp.texvertex_bind);
+                        _sgp.texvertex_bind.fs_images[0] = args->img;
+                        sg_apply_bindings(&_sgp.texvertex_bind);
                         cur_base_vertex = base_texvertex;
                     } else {
-                        sg_apply_bindings(&ngp.vertex_bind);
+                        sg_apply_bindings(&_sgp.vertex_bind);
                         cur_base_vertex = base_vertex;
                     }
                     cur_img_id = args->img.id;
                 }
                 if(cur_uniform_index != args->uniform_index) {
-                    sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &ngp.uniforms[args->uniform_index], sizeof(sgp_uniform));
+                    sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &_sgp.uniforms[args->uniform_index], sizeof(sgp_uniform));
                     cur_uniform_index = args->uniform_index;
                 }
                 if(args->num_vertices > 0) {
@@ -671,21 +682,21 @@ void sgp_flush() {
     }
 
     // rewind indexes
-    ngp.cur_vertex = ngp.state._base_vertex;
-    ngp.cur_texvertex = ngp.state._base_texvertex;
-    ngp.cur_uniform = ngp.state._base_uniform;
-    ngp.cur_command = ngp.state._base_command;
+    _sgp.cur_vertex = _sgp.state._base_vertex;
+    _sgp.cur_texvertex = _sgp.state._base_texvertex;
+    _sgp.cur_uniform = _sgp.state._base_uniform;
+    _sgp.cur_command = _sgp.state._base_command;
 }
 
 void sgp_end() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(ngp.cur_state <= 0)) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    if(SOKOL_UNLIKELY(_sgp.cur_state <= 0)) {
         _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW, "NGP state stack underflow");
         return;
     }
 
     // restore old state
-    ngp.state = ngp.state_stack[--ngp.cur_state];
+    _sgp.state = _sgp.state_stack[--_sgp.cur_state];
 }
 
 static inline sgp_mat3 _sgp_mat3_mul(const sgp_mat3* a, const sgp_mat3* b) {
@@ -716,114 +727,114 @@ static inline sgp_mat3 _sgp_mul_proj_transform(sgp_mat3* proj, sgp_mat3* transfo
 }
 
 void sgp_ortho(float left, float right, float top, float bottom) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     float w = right - left;
     float h = top - bottom;
-    ngp.state.proj = (sgp_mat3){{
+    _sgp.state.proj = (sgp_mat3){{
         {2.0f/w,   0.0f,  -(right+left)/w},
         {0.0f,   2.0f/h,  -(top+bottom)/h},
         {0.0f,     0.0f,             1.0f}
     }};
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_reset_proj() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    ngp.state.proj = _sgp_default_proj(ngp.state.viewport.w, ngp.state.viewport.h);
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    _sgp.state.proj = _sgp_default_proj(_sgp.state.viewport.w, _sgp.state.viewport.h);
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_push_transform() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(ngp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    if(SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
         _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
         return;
     }
-    ngp.transform_stack[ngp.cur_transform++] = ngp.state.transform;
+    _sgp.transform_stack[_sgp.cur_transform++] = _sgp.state.transform;
 }
 
 void sgp_pop_transform() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(ngp.cur_transform <= 0)) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    if(SOKOL_UNLIKELY(_sgp.cur_transform <= 0)) {
         _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
         return;
     }
-    ngp.state.transform = ngp.transform_stack[--ngp.cur_transform];
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    _sgp.state.transform = _sgp.transform_stack[--_sgp.cur_transform];
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_reset_transform() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    ngp.state.transform = _sgp_mat3_identity;
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    _sgp.state.transform = _sgp_mat3_identity;
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_translate(float x, float y) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     // multiply by translate matrix:
     // 1.0f, 0.0f,    x,
     // 0.0f, 1.0f,    y,
     // 0.0f, 0.0f, 1.0f,
-    ngp.state.transform.v[0][2] += x*ngp.state.transform.v[0][0] + y*ngp.state.transform.v[0][1];
-    ngp.state.transform.v[1][2] += x*ngp.state.transform.v[1][0] + y*ngp.state.transform.v[1][1];
-    ngp.state.transform.v[2][2] += x*ngp.state.transform.v[2][0] + y*ngp.state.transform.v[2][1];
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    _sgp.state.transform.v[0][2] += x*_sgp.state.transform.v[0][0] + y*_sgp.state.transform.v[0][1];
+    _sgp.state.transform.v[1][2] += x*_sgp.state.transform.v[1][0] + y*_sgp.state.transform.v[1][1];
+    _sgp.state.transform.v[2][2] += x*_sgp.state.transform.v[2][0] + y*_sgp.state.transform.v[2][1];
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_rotate(float theta) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     float sint = sinf(theta), cost = cosf(theta);
     // multiply by rotation matrix:
     // sint,  cost, 0.0f,
     // cost, -sint, 0.0f,
     // 0.0f,  0.0f, 1.0f,
-    ngp.state.transform = (sgp_mat3){{
-       {sint*ngp.state.transform.v[0][0]+cost*ngp.state.transform.v[0][1], cost*ngp.state.transform.v[0][0]-sint*ngp.state.transform.v[0][1], ngp.state.transform.v[0][2]},
-       {sint*ngp.state.transform.v[1][0]+cost*ngp.state.transform.v[1][1], cost*ngp.state.transform.v[1][0]-sint*ngp.state.transform.v[1][1], ngp.state.transform.v[1][2]},
-       {sint*ngp.state.transform.v[2][0]+cost*ngp.state.transform.v[2][1], cost*ngp.state.transform.v[2][0]-sint*ngp.state.transform.v[2][1], ngp.state.transform.v[2][2]}
+    _sgp.state.transform = (sgp_mat3){{
+       {sint*_sgp.state.transform.v[0][0]+cost*_sgp.state.transform.v[0][1], cost*_sgp.state.transform.v[0][0]-sint*_sgp.state.transform.v[0][1], _sgp.state.transform.v[0][2]},
+       {sint*_sgp.state.transform.v[1][0]+cost*_sgp.state.transform.v[1][1], cost*_sgp.state.transform.v[1][0]-sint*_sgp.state.transform.v[1][1], _sgp.state.transform.v[1][2]},
+       {sint*_sgp.state.transform.v[2][0]+cost*_sgp.state.transform.v[2][1], cost*_sgp.state.transform.v[2][0]-sint*_sgp.state.transform.v[2][1], _sgp.state.transform.v[2][2]}
     }};
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_rotate_at(float theta, float x, float y) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_translate(x, y);
     sgp_rotate(theta);
     sgp_translate(-x, -y);
 }
 
 void sgp_scale(float sx, float sy) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     // multiply by scale matrix:
     //   sx, 0.0f, 0.0f,
     // 0.0f,   sy, 0.0f,
     // 0.0f, 0.0f, 1.0f,
-    ngp.state.transform.v[0][0] *= sx;
-    ngp.state.transform.v[1][1] *= sy;
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    _sgp.state.transform.v[0][0] *= sx;
+    _sgp.state.transform.v[1][1] *= sy;
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_scale_at(float sx, float sy, float x, float y) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_translate(x, y);
     sgp_scale(sx, sy);
     sgp_translate(-x, -y);
 }
 
 void sgp_set_color(float r, float g, float b, float a) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    ngp.state.uniform.color = (sgp_color){r,g,b,a};
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    _sgp.state.uniform.color = (sgp_color){r,g,b,a};
 }
 
 void sgp_reset_color() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    ngp.state.uniform.color = (sgp_color){1.0f, 1.0f, 1.0f, 1.0f};
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    _sgp.state.uniform.color = (sgp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
 static sgp_vertex* _sgp_next_vertices(unsigned int count) {
-    if(SOKOL_LIKELY(ngp.cur_vertex + count <= ngp.num_vertices)) {
-        sgp_vertex *vertices = &ngp.vertices[ngp.cur_vertex];
-        ngp.cur_vertex += count;
+    if(SOKOL_LIKELY(_sgp.cur_vertex + count <= _sgp.num_vertices)) {
+        sgp_vertex *vertices = &_sgp.vertices[_sgp.cur_vertex];
+        _sgp.cur_vertex += count;
         return vertices;
     } else {
         _sgp_set_error(SGP_ERROR_VERTICES_FULL, "NGP vertices buffer is full");
@@ -832,16 +843,16 @@ static sgp_vertex* _sgp_next_vertices(unsigned int count) {
 }
 
 static sgp_uniform* _sgp_prev_uniform() {
-    if(SOKOL_LIKELY(ngp.cur_uniform > 0)) {
-        return &ngp.uniforms[ngp.cur_uniform-1];
+    if(SOKOL_LIKELY(_sgp.cur_uniform > 0)) {
+        return &_sgp.uniforms[_sgp.cur_uniform-1];
     } else {
         return NULL;
     }
 }
 
 static sgp_uniform* _sgp_next_uniform() {
-    if(SOKOL_LIKELY(ngp.cur_uniform < ngp.num_uniforms)) {
-        return &ngp.uniforms[ngp.cur_uniform++];
+    if(SOKOL_LIKELY(_sgp.cur_uniform < _sgp.num_uniforms)) {
+        return &_sgp.uniforms[_sgp.cur_uniform++];
     } else {
         _sgp_set_error(SGP_ERROR_UNIFORMS_FULL, "NGP uniform buffer is full");
         return NULL;
@@ -849,16 +860,16 @@ static sgp_uniform* _sgp_next_uniform() {
 }
 
 static sgp_command* _sgp_prev_command() {
-    if(SOKOL_LIKELY(ngp.cur_command > 0)) {
-        return &ngp.commands[ngp.cur_command-1];
+    if(SOKOL_LIKELY(_sgp.cur_command > 0)) {
+        return &_sgp.commands[_sgp.cur_command-1];
     } else {
         return NULL;
     }
 }
 
 static sgp_command* _sgp_next_command() {
-    if(SOKOL_LIKELY(ngp.cur_command < ngp.num_commands)) {
-        return &ngp.commands[ngp.cur_command++];
+    if(SOKOL_LIKELY(_sgp.cur_command < _sgp.num_commands)) {
+        return &_sgp.commands[_sgp.cur_command++];
     } else {
         _sgp_set_error(SGP_ERROR_COMMANDS_FULL, "NGP command buffer is full");
         return NULL;
@@ -866,11 +877,11 @@ static sgp_command* _sgp_next_command() {
 }
 
 void sgp_viewport(int x, int y, int w, int h) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
 
     // skip in case of the same viewport
-    if(ngp.state.viewport.x == x && ngp.state.viewport.y == y &&
-       ngp.state.viewport.w == w && ngp.state.viewport.h == h)
+    if(_sgp.state.viewport.x == x && _sgp.state.viewport.y == y &&
+       _sgp.state.viewport.w == w && _sgp.state.viewport.h == h)
         return;
 
     sgp_command* cmd = _sgp_next_command();
@@ -881,53 +892,53 @@ void sgp_viewport(int x, int y, int w, int h) {
     };
 
     // adjust current scissor relative offset
-    if(!(ngp.state.scissor.w == -1 && ngp.state.scissor.h == -1 && ngp.state.scissor.x == 0 && ngp.state.scissor.y == 0)) {
-        ngp.state.scissor.x += x - ngp.state.viewport.x;
-        ngp.state.scissor.y += y - ngp.state.viewport.y;
+    if(!(_sgp.state.scissor.w < 0 && _sgp.state.scissor.h < 0)) {
+        _sgp.state.scissor.x += x - _sgp.state.viewport.x;
+        _sgp.state.scissor.y += y - _sgp.state.viewport.y;
     }
 
-    ngp.state.viewport = (sgp_irect){x, y, w, h};
-    ngp.state.proj = _sgp_default_proj(w, h);
-    ngp.state.mvp = _sgp_mul_proj_transform(&ngp.state.proj, &ngp.state.transform);
+    _sgp.state.viewport = (sgp_irect){x, y, w, h};
+    _sgp.state.proj = _sgp_default_proj(w, h);
+    _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_reset_viewport() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    sgp_viewport(0, 0, ngp.state.frame_size.w, ngp.state.frame_size.h);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    sgp_viewport(0, 0, _sgp.state.frame_size.w, _sgp.state.frame_size.h);
 }
 
 void sgp_scissor(int x, int y, int w, int h) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
 
     // skip in case of the same scissor
-    if(ngp.state.scissor.x == x && ngp.state.scissor.y == y &&
-       ngp.state.scissor.w == w && ngp.state.scissor.h == h)
+    if(_sgp.state.scissor.x == x && _sgp.state.scissor.y == y &&
+       _sgp.state.scissor.w == w && _sgp.state.scissor.h == h)
         return;
 
     sgp_command* cmd = _sgp_next_command();
     if(SOKOL_UNLIKELY(!cmd)) return;
 
     // coordinate scissor in viewport subspace
-    sgp_irect viewport_scissor = {ngp.state.viewport.x + x, ngp.state.viewport.y + y, w, h};
+    sgp_irect viewport_scissor = {_sgp.state.viewport.x + x, _sgp.state.viewport.y + y, w, h};
 
     // reset scissor
-    if(w == -1 && h == -1 && x == 0 && y == 0)
-        viewport_scissor = (sgp_irect){0, 0, ngp.state.frame_size.w, ngp.state.frame_size.h};
+    if(w < 0 && h  < 0)
+        viewport_scissor = (sgp_irect){0, 0, _sgp.state.frame_size.w, _sgp.state.frame_size.h};
 
     *cmd = (sgp_command) {
         .cmd = SGP_COMMAND_SCISSOR,
         .args = {.scissor = viewport_scissor},
     };
-    ngp.state.scissor = (sgp_irect){x, y, w, h};
+    _sgp.state.scissor = (sgp_irect){x, y, w, h};
 }
 
 void sgp_reset_scissor() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_scissor(0, 0, -1, -1);
 }
 
 void sgp_reset_state() {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_reset_viewport();
     sgp_reset_scissor();
     sgp_reset_transform();
@@ -941,14 +952,14 @@ static inline bool sgp_color_eq(sgp_color a, sgp_color b) {
 static void _sgp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned int num_vertices, sg_image img) {
     // setup uniform, try to reuse previous uniform when possible
     sgp_uniform *prev_uniform = _sgp_prev_uniform();
-    bool reuse_uniform = prev_uniform && memcmp(prev_uniform, &ngp.state.uniform, sizeof(sgp_uniform)) == 0;
+    bool reuse_uniform = prev_uniform && memcmp(prev_uniform, &_sgp.state.uniform, sizeof(sgp_uniform)) == 0;
     if(!reuse_uniform) {
         // append new uniform
         sgp_uniform *uniform = _sgp_next_uniform();
         if(SOKOL_UNLIKELY(!uniform)) return;
-        *uniform = ngp.state.uniform;
+        *uniform = _sgp.state.uniform;
     }
-    unsigned int uniform_index = ngp.cur_uniform - 1;
+    unsigned int uniform_index = _sgp.cur_uniform - 1;
 
     sgp_command* prev_cmd = _sgp_prev_command();
     bool merge_cmd = prev_cmd &&
@@ -987,77 +998,106 @@ static inline void _sgp_transform_vertices(sgp_mat3* matrix, sgp_vertex* dest, c
 }
 
 static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, unsigned int count) {
-    unsigned int vertex_index = ngp.cur_vertex;
+    unsigned int vertex_index = _sgp.cur_vertex;
     sgp_vertex* transformed_vertices = _sgp_next_vertices(count);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
-    sgp_mat3 mvp = ngp.state.mvp; // copy to stack for more efficiency
+    sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_transform_vertices(&mvp, transformed_vertices, vertices, count);
     _sgp_queue_draw(pip, vertex_index, count, (sg_image){0});
 }
 
+void sgp_clear() {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+
+    // setup vertices
+    unsigned int num_vertices = 6;
+    unsigned int vertex_index = _sgp.cur_vertex;
+    sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
+    if(SOKOL_UNLIKELY(!vertices)) return;
+
+    // compute vertices
+    sgp_vertex* v = vertices;
+    const sgp_vec2 quad[4] = {
+        {-1.0f, -1.0f}, // bottom left
+        { 1.0f, -1.0f}, // bottom right
+        { 1.0f,  1.0f}, // top right
+        {-1.0f,  1.0f}, // top left
+    };
+
+    // make a quad composed of 2 triangles
+    v[0] = quad[0];
+    v[1] = quad[1];
+    v[2] = quad[2];
+    v[3] = quad[3];
+    v[4] = quad[0];
+    v[5] = quad[2];
+
+    _sgp_queue_draw(_sgp.clear_pip, vertex_index, num_vertices, (sg_image){0});
+}
+
 void sgp_draw_points(const sgp_vec2* points, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(count == 0) return;
-    _sgp_draw_solid_pip(ngp.points_pip, points, count);
+    _sgp_draw_solid_pip(_sgp.points_pip, points, count);
 }
 
 void sgp_draw_point(float x, float y) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_vec2 point = {x, y};
     sgp_draw_points(&point, 1);
 }
 
 void sgp_draw_lines(const sgp_line* lines, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(count == 0) return;
-    _sgp_draw_solid_pip(ngp.lines_pip, (const sgp_vec2*)lines, count*2);
+    _sgp_draw_solid_pip(_sgp.lines_pip, (const sgp_vec2*)lines, count*2);
 }
 
 void sgp_draw_line(float ax, float ay, float bx, float by) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_line line = {{ax,ay},{bx, by}};
     sgp_draw_lines(&line, 1);
 }
 
 void sgp_draw_line_strip(const sgp_vec2* points, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(count == 0) return;
-    _sgp_draw_solid_pip(ngp.line_strip_pip, points, count);
+    _sgp_draw_solid_pip(_sgp.line_strip_pip, points, count);
 }
 
 void sgp_draw_filled_triangles(const sgp_triangle* triangles, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(count == 0) return;
-    _sgp_draw_solid_pip(ngp.triangles_pip, (const sgp_vec2*)triangles, count*3);
+    _sgp_draw_solid_pip(_sgp.triangles_pip, (const sgp_vec2*)triangles, count*3);
 }
 
 void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_triangle triangle = {{ax,ay},{bx, by},{cx, cy}};
     sgp_draw_filled_triangles(&triangle, 1);
 }
 
 void sgp_draw_filled_triangle_strip(const sgp_vec2* points, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(count == 0) return;
-    _sgp_draw_solid_pip(ngp.triangle_strip_pip, points, count);
+    _sgp_draw_solid_pip(_sgp.triangle_strip_pip, points, count);
 }
 
 void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(count == 0) return;
 
     // setup vertices
     unsigned int num_vertices = count * 6;
-    unsigned int vertex_index = ngp.cur_vertex;
+    unsigned int vertex_index = _sgp.cur_vertex;
     sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
     // compute vertices
     sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
-    sgp_mat3 mvp = ngp.state.mvp; // copy to stack for more efficiency
+    sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     for(unsigned int i=0;i<count;v+=6, i++, rect++) {
         float l = rect->x, t = rect->y;
         float r = l + rect->w, b = t + rect->h;
@@ -1078,19 +1118,19 @@ void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
         v[5] = quad[2];
     }
 
-    _sgp_queue_draw(ngp.triangles_pip, vertex_index, num_vertices, (sg_image){0});
+    _sgp_queue_draw(_sgp.triangles_pip, vertex_index, num_vertices, (sg_image){0});
 }
 
 void sgp_draw_filled_rect(float x, float y, float w, float h) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_rect rect = {x,y,w,h};
     sgp_draw_filled_rects(&rect, 1);
 }
 
 static sgp_texvertex* _sgp_next_texvertices(unsigned int count) {
-    if(SOKOL_LIKELY(ngp.cur_texvertex + count <= ngp.num_vertices)) {
-        sgp_texvertex *texvertices = &ngp.texvertices[ngp.cur_texvertex];
-        ngp.cur_texvertex += count;
+    if(SOKOL_LIKELY(_sgp.cur_texvertex + count <= _sgp.num_vertices)) {
+        sgp_texvertex *texvertices = &_sgp.texvertices[_sgp.cur_texvertex];
+        _sgp.cur_texvertex += count;
         return texvertices;
     } else {
         _sgp_set_error(SGP_ERROR_VERTICES_FULL, "NGP vertices buffer is full");
@@ -1099,12 +1139,12 @@ static sgp_texvertex* _sgp_next_texvertices(unsigned int count) {
 }
 
 void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, const sgp_rect* src_rects, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(count == 0 || image.id == SG_INVALID_ID) return;
 
     // setup vertices
     unsigned int num_vertices = count * 6;
-    unsigned int vertex_index = ngp.cur_texvertex;
+    unsigned int vertex_index = _sgp.cur_texvertex;
     sgp_texvertex* texvertices = _sgp_next_texvertices(num_vertices);
     if(SOKOL_UNLIKELY(!texvertices)) return;
 
@@ -1112,7 +1152,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, const sgp_re
     sgp_texvertex* v = texvertices;
     const sgp_rect* rect = rects;
     const sgp_rect* src_rect = src_rects;
-    sgp_mat3 mvp = ngp.state.mvp; // copy to stack for more efficiency
+    sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
 
     // split in two branches outside the loop so the compiler can vectorize better
     if(!src_rect) {
@@ -1179,20 +1219,20 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, const sgp_re
         }
     }
 
-    _sgp_queue_draw(ngp.textriangles_pip, vertex_index, num_vertices, image);
+    _sgp_queue_draw(_sgp.textriangles_pip, vertex_index, num_vertices, image);
 }
 
 void sgp_draw_textured_rect(sg_image image, sgp_rect rect, const sgp_rect* src_rect) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     sgp_draw_textured_rects(image, &rect, src_rect, 1);
 }
 
 sgp_desc sgp_query_desc() {
-    return ngp.desc;
+    return _sgp.desc;
 }
 
 sgp_state* sgp_query_state() {
-    return &ngp.state;
+    return &_sgp.state;
 }
 
 #endif // SOKOL_GP_IMPL_INCLUDED

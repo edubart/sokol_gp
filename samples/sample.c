@@ -96,7 +96,8 @@ void draw(int width, int height) {
     // top left
     sgp_viewport(0, 0, hw, hh);
     sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
-    sgp_draw_filled_rect(0, 0, hw, hh);
+    sgp_clear();
+    sgp_reset_color();
     sgp_push_transform();
     sgp_translate(0.0f, -hh / 4.0f);
     draw_rects();
@@ -119,7 +120,8 @@ void draw(int width, int height) {
     // bottom right
     sgp_viewport(hw, hh, hw, hh);
     sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
-    sgp_draw_filled_rect(0, 0, hw, hh);
+    sgp_clear();
+    sgp_reset_color();
     draw_lines();
 
     frame++;

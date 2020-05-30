@@ -490,7 +490,7 @@ bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx) {
 
     bool update_render_target = false;
     if(result == DXGI_ERROR_WAS_STILL_DRAWING) {
-        // it's pl
+        // it's ok
     } else if(result == DXGI_ERROR_INVALID_CALL) {
         // probably went through a fullscreen <-> windowed transition
     } else if (result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET) {
