@@ -1331,6 +1331,7 @@ typedef void (APIENTRY PFNGLVERTEXATTRIBP4UI_PROC (GLuint index, GLenum type, GL
 typedef void (APIENTRY PFNGLVERTEXATTRIBP4UIV_PROC (GLuint index, GLenum type, GLboolean normalized, const GLuint * value));
 
 typedef union {
+const char * fpc[283];
 void * fp[283];
 struct {
 
@@ -2029,7 +2030,7 @@ void flextLoadOpenGLFunctions(void)
 
     int i;
     for(i = 0 ; i < 283 ; i++){
-        glpf.fp[i] = get_proc(glpf.fp[i]);
+        glpf.fp[i] = (void*)get_proc(glpf.fpc[i]);
     }
 }
 
@@ -2355,6 +2356,7 @@ GLPF glpf = { {
 
 static void add_extension(const char* extension)
 {
+    (void)extension;
 }
 
 
@@ -2458,7 +2460,7 @@ static GLPROC get_proc(const char *proc)
 
     res = glXGetProcAddress((const GLubyte *) proc);
     if (!res) {
-        FLEXT_C_EXTENSION(res = dlsym(libgl, proc));
+        FLEXT_C_EXTENSION(res = (GLPROC)dlsym(libgl, proc));
     }
     return res;
 }

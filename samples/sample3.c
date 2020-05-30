@@ -26,11 +26,12 @@ void draw_fbo() {
     sgp_begin(128, 128);
     draw_triangles();
 
-    sg_begin_pass(fbo_pass, &(sg_pass_action){
-        .stencil.action = SG_ACTION_DONTCARE,
-        .depth.action = SG_ACTION_DONTCARE,
-        .colors[0] = {.action = SG_ACTION_CLEAR, .val = {0.0f, 0.0f, 0.0f, 0.0f}}
-    });
+    sg_pass_action pass_action = {
+        .colors = {{.action = SG_ACTION_CLEAR, .val = {0.0f, 0.0f, 0.0f, 0.0f}}},
+        .depth = {.action = SG_ACTION_DONTCARE},
+        .stencil = {.action = SG_ACTION_DONTCARE},
+    };
+    sg_begin_pass(fbo_pass, &pass_action);
     sgp_flush();
     sg_end_pass();
     sgp_end();
@@ -43,27 +44,29 @@ void draw(int width, int height) {
         for(int x=0;x<width;x+=128) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
-            sgp_draw_textured_rect(fbo_image, (sgp_rect){x, y, 128, 128}, NULL);
+            sgp_draw_textured_rect(fbo_image, (sgp_rect){(float)x, (float)y, 128, 128}, NULL);
             sgp_pop_transform();
         }
     }
 }
 
 bool init() {
-    fbo_image = sg_make_image(&(sg_image_desc){
+    sg_image_desc fbo_image_desc = {
+        .render_target = true,
         .width = 128,
         .height = 128,
-        .render_target = true,
         .min_filter = SG_FILTER_LINEAR,
         .mag_filter = SG_FILTER_LINEAR,
         .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v = SG_WRAP_CLAMP_TO_EDGE
-    });
+        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+    };
+    fbo_image = sg_make_image(&fbo_image_desc);
     if(fbo_image.id == SG_INVALID_ID)
         return false;
-    fbo_pass = sg_make_pass(&(sg_pass_desc){
-        .color_attachments[0].image = fbo_image
-    });
+    sg_pass_desc pass_desc = {
+        .color_attachments = {{.image = fbo_image}},
+    };
+    fbo_pass = sg_make_pass(&pass_desc);
     if(fbo_pass.id == SG_INVALID_ID)
         return false;
     return true;
@@ -71,13 +74,15 @@ bool init() {
 
 void terminate() {
     sg_destroy_image(fbo_image);
-    sg_pass_desc(fbo_pass);
+    sg_destroy_pass(fbo_pass);
 }
 
 int main(int argc, char *argv[]) {
     return sample_app((sample_app_desc){
         .init = init,
         .terminate = terminate,
-        .draw = draw
+        .draw = draw,
+        .argc = argc,
+        .argv = argv
     });
 }

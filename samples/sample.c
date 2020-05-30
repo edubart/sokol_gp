@@ -44,7 +44,7 @@ void draw_points() {
     unsigned int count = 0;
     for(int y=64;y<height-64 && count < 4096;y+=8) {
         for(int x=64;x<width-64 && count < 4096;x+=8) {
-            points_buffer[count++] = (sgp_vec2){x,y};
+            points_buffer[count++] = (sgp_vec2){(float)x,(float)y};
         }
     }
     sgp_draw_points(points_buffer, count);
@@ -54,7 +54,7 @@ void draw_lines() {
     sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
     unsigned int count = 0;
     sgp_irect viewport = sgp_query_state()->viewport;
-    sgp_vec2 c = {viewport.w / 2, viewport.h / 2};
+    sgp_vec2 c = {viewport.w / 2.0f, viewport.h / 2.0f};
     points_buffer[count++] = c;
     for(float theta = 0.0f; theta <= M_PI*8.0f; theta+=M_PI/16.0f) {
         float r = 10.0f*theta;
@@ -136,6 +136,8 @@ int main(int argc, char *argv[]) {
     return sample_app((sample_app_desc){
         .init = init,
         .terminate = terminate,
-        .draw = draw
+        .draw = draw,
+        .argc = argc,
+        .argv = argv
     });
 }

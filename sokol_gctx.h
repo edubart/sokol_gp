@@ -191,8 +191,10 @@ SOKOL_API_DECL sgctx_error sgctx_get_error_code();
 #define SOKOL_MALLOC(s) malloc(s)
 #define SOKOL_FREE(p) free(p)
 #endif
+#ifndef SOKOL_DEBUG
 #ifndef NDEBUG
 #define SOKOL_DEBUG
+#endif
 #endif
 #ifndef SOKOL_LOG
 #ifdef SOKOL_DEBUG
@@ -205,12 +207,15 @@ SOKOL_API_DECL sgctx_error sgctx_get_error_code();
 #ifndef SOKOL_UNREACHABLE
 #define SOKOL_UNREACHABLE SOKOL_ASSERT(false)
 #endif
+#ifndef _SOKOL_UNUSED
+#define _SOKOL_UNUSED(x) (void)(x)
+#endif
 
 #include <string.h>
 #include <SDL2/SDL.h>
 
 enum {
-    _SGCTX_INIT_COOKIE = 0xCAFED00D
+    _SGCTX_INIT_COOKIE = 0xCAFED0D
 };
 
 static sgctx_error_desc sgctx_last_error = {SGCTX_NO_ERROR, ""};
@@ -243,6 +248,7 @@ void sgctx_gl_prepare_attributes(sgctx_desc* desc) {
 
 sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc) {
     SOKOL_ASSERT(window);
+    _SOKOL_UNUSED(desc);
 
     SDL_GLContext context = SDL_GL_CreateContext(window);
     if(!context) {
@@ -286,6 +292,7 @@ sgctx_isize sgctx_gl_get_drawable_size(sgctx_gl_context* sgctx) {
 
 bool sgctx_gl_set_swap_interval(sgctx_gl_context* sgctx, int interval) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
+    _SOKOL_UNUSED(sgctx);
     return SDL_GL_SetSwapInterval(interval) == 0;
 }
 
@@ -383,7 +390,7 @@ bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
         .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT
     };
     int create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
-    D3D_FEATURE_LEVEL feature_level = {0};
+    D3D_FEATURE_LEVEL feature_level;
     HRESULT result = D3D11CreateDeviceAndSwapChain(
         NULL,                               /* pAdapter (use default) */
         D3D_DRIVER_TYPE_HARDWARE,           /* DriverType */
@@ -528,6 +535,7 @@ const void* sgctx_d3d11_depth_stencil_view() {
 
 sgctx_dummy_context* sgctx_dummy_create(SDL_Window* window, sgctx_desc* desc) {
     SOKOL_ASSERT(window);
+    _SOKOL_UNUSED(desc);
     sgctx_dummy_context* sgctx = (sgctx_dummy_context*)SOKOL_MALLOC(sizeof(sgctx_dummy_context));
     memset(sgctx, 0, sizeof(sgctx_dummy_context));
     sgctx->init_cookie = _SGCTX_INIT_COOKIE;
@@ -541,6 +549,8 @@ void sgctx_dummy_destroy(sgctx_dummy_context* sgctx) {
 }
 
 bool sgctx_dummy_activate(sgctx_dummy_context* sgctx) {
+    SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
+    _SOKOL_UNUSED(sgctx);
     return true;
 }
 
@@ -553,54 +563,46 @@ sgctx_isize sgctx_dummy_get_drawable_size(sgctx_dummy_context* sgctx) {
 
 bool sgctx_dummy_set_swap_interval(sgctx_dummy_context* sgctx, int interval) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
+    _SOKOL_UNUSED(sgctx);
+    _SOKOL_UNUSED(interval);
     return true;
 }
 
 bool sgctx_dummy_swap(sgctx_dummy_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
+    _SOKOL_UNUSED(sgctx);
     return true;
-}
-
-const char* sgctx_dummy_get_error(sgctx_dummy_context* sgctx) {
-    SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
-    return "";
-}
-
-sgctx_error sgctx_dummy_get_error_code(sgctx_dummy_context* sgctx) {
-    SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
-    return SGCTX_NO_ERROR;
 }
 
 #endif // SOKOL_GCTX_DUMMY_BACKEND
 
 bool sgctx_create(sgctx_context* sgctx, SDL_Window* window, sgctx_desc* desc) {
-    bool ok = false;
     switch(desc->backend) {
         #ifdef SOKOL_GCTX_GLCORE33_BACKEND
         case SGCTX_BACKEND_GLCORE33:
             sgctx->gl = sgctx_gl_create(window, desc);
-            ok = sgctx->gl != NULL;
+            sgctx->backend = SGCTX_BACKEND_GLCORE33;
             break;
         #endif
         #ifdef SOKOL_GCTX_D3D11_BACKEND
         case SGCTX_BACKEND_D3D11:
             sgctx->d3d11 = sgctx_d3d11_create(window, desc);
-            ok = sgctx->d3d11 != NULL;
+            sgctx->backend = SGCTX_BACKEND_D3D11;
             break;
         #endif
         #ifdef SOKOL_GCTX_DUMMY_BACKEND
         case SGCTX_BACKEND_DUMMY:
             sgctx->dummy = sgctx_dummy_create(window, desc);
-            ok = sgctx->dummy != NULL;
+            sgctx->backend = SGCTX_BACKEND_DUMMY;
             break;
         #endif
         default:
+            sgctx->backend = SGCTX_BACKEND_INVALID;
+            sgctx->p = NULL;
             _sgctx_set_error(SGCTX_INVALID_BACKEND, "invalid backend");
             break;
     }
-    if(ok)
-        sgctx->backend = desc->backend;
-    return ok;
+    return sgctx->backend != SGCTX_BACKEND_INVALID;
 }
 
 void sgctx_destroy(sgctx_context* sgctx) {
@@ -621,7 +623,7 @@ void sgctx_destroy(sgctx_context* sgctx) {
             // already destroyed
             break;
     }
-    *sgctx = (sgctx_context){0};
+    *sgctx = (sgctx_context){.backend=SGCTX_BACKEND_INVALID,.p=NULL};
 }
 
 bool sgctx_activate(sgctx_context sgctx) {
@@ -664,7 +666,7 @@ sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx) {
             return sgctx_dummy_get_drawable_size(sgctx.dummy);
         #endif
         default:
-            SOKOL_UNREACHABLE; return (sgctx_isize){0};
+            SOKOL_UNREACHABLE; return (sgctx_isize){0,0};
     }
 }
 

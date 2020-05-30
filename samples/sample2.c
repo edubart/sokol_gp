@@ -38,13 +38,14 @@ sg_image sg_load_image(const char *filename) {
         fprintf(stderr, "failed to load image '%s': stbi_load failed\n", filename);
         return (sg_image){0};
     }
-    sg_image image = sg_make_image(&(sg_image_desc){
+    sg_image_desc image_desc = {
         .width = width,
         .height = height,
         .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
         .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        .content.subimage[0][0] = {.ptr = data, .size = width * height * 4}
-    });
+        .content = {.subimage = {{{.ptr = data, .size = width * height * 4}}}},
+    };
+    sg_image image = sg_make_image(&image_desc);
     stbi_image_free(data);
     if(image.id == SG_INVALID_ID) {
         fprintf(stderr, "failed to load image '%s': sg_make_image failed\n", filename);
@@ -70,6 +71,8 @@ int main(int argc, char *argv[]) {
     return sample_app((sample_app_desc){
         .init = init,
         .terminate = terminate,
-        .draw = draw
+        .draw = draw,
+        .argc = argc,
+        .argv = argv
     });
 }

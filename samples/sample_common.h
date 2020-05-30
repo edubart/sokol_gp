@@ -14,10 +14,16 @@
 #include <stdio.h>
 #include <math.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846264338327
+#endif
+
 typedef struct sample_app_desc {
     bool (*init)();
     void (*terminate)();
-    void (*draw)();
+    void (*draw)(int, int);
+    int argc;
+    char **argv;
 } sample_app_desc;
 
 int sample_app(sample_app_desc app) {
@@ -50,12 +56,12 @@ int sample_app(sample_app_desc app) {
     }
 
     // create graphics context
-    sgctx_context sgctx = {0};
+    sgctx_context sgctx;
     if(!sgctx_create(&sgctx, window, &ctx_desc)) {
         fprintf(stderr, "Failed to create SGCTX context: %s\n", sgctx_get_error());
         return 1;
     }
-    sgctx_set_swap_interval(sgctx, 0);
+    sgctx_set_swap_interval(sgctx, 1);
 
 #if defined(SOKOL_GLCORE33)
     // load opengl api
@@ -67,7 +73,7 @@ int sample_app(sample_app_desc app) {
 
     // setup sokol
     sg_desc desc = {
-        .context.depth_format = SG_PIXELFORMAT_NONE
+        .context = {.depth_format = SG_PIXELFORMAT_NONE}
     };
 #ifdef SOKOL_D3D11
     if(ctx_desc.backend == SGCTX_BACKEND_D3D11) {
@@ -84,7 +90,11 @@ int sample_app(sample_app_desc app) {
     }
 
     // setup sokol gp
-    if(!sgp_setup(&(sgp_desc){.max_vertices=262144, .max_commands=32768})) {
+    sgp_desc sample_sgp_desc = {
+        .max_vertices=262144,
+        .max_commands=32768,
+    };
+    if(!sgp_setup(&sample_sgp_desc)) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error());
         return 1;
     }
@@ -106,11 +116,12 @@ int sample_app(sample_app_desc app) {
         sgp_begin(size.w,  size.h);
         app.draw(size.w, size.h);
 
-        sg_begin_default_pass(&(sg_pass_action){
-            .stencil.action = SG_ACTION_DONTCARE,
-            .depth.action = SG_ACTION_DONTCARE,
-            .colors[0] = {.action = SG_ACTION_CLEAR, .val = {0.05f, 0.05f, 0.05f, 1.0f}}
-        }, size.w, size.h);
+        sg_pass_action default_pass_action = {
+            .colors = {{.action = SG_ACTION_CLEAR, .val = {0.05f, 0.05f, 0.05f, 1.0f}}},
+            .depth = {.action = SG_ACTION_DONTCARE},
+            .stencil = {.action = SG_ACTION_DONTCARE},
+        };
+        sg_begin_default_pass(&default_pass_action, size.w, size.h);
         sgp_flush();
         sg_end_pass();
         sgp_end();
