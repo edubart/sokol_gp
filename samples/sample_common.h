@@ -57,6 +57,14 @@ int sample_app(sample_app_desc app) {
     }
     sgctx_set_swap_interval(sgctx, 0);
 
+#if defined(SOKOL_GLCORE33)
+    // load opengl api
+    if(!flextInit()) {
+        fprintf(stderr, "OpenGL version 3.3 unsupported");
+        return 1;
+    }
+#endif
+
     // setup sokol
     sg_desc desc = {
         .context.depth_format = SG_PIXELFORMAT_NONE
@@ -129,7 +137,7 @@ int sample_app(sample_app_desc app) {
     app.terminate();
     sgp_shutdown();
     sg_shutdown();
-    sgctx_destroy(sgctx);
+    sgctx_destroy(&sgctx);
     SDL_DestroyWindow(window);
     SDL_Quit();
 

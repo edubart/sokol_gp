@@ -19,7 +19,7 @@ void draw_triangles() {
             points_buffer[count++] = (sgp_vec2){hw, hh};
     }
     sgp_set_color(1.0f, 0.0f, 1.0f, 1.0f);
-    sgp_draw_triangle_strip(points_buffer, count);
+    sgp_draw_filled_triangle_strip(points_buffer, count);
 }
 
 void draw_fbo() {

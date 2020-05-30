@@ -140,13 +140,12 @@ SOKOL_API_DECL void sgp_draw_points(const sgp_vec2* points, unsigned int count);
 SOKOL_API_DECL void sgp_draw_point(float x, float y);
 SOKOL_API_DECL void sgp_draw_lines(const sgp_line* lines, unsigned int count);
 SOKOL_API_DECL void sgp_draw_line(float ax, float ay, float bx, float by);
-SOKOL_API_DECL void sgp_draw_triangles(const sgp_triangle* triangles, unsigned int count);
-SOKOL_API_DECL void sgp_draw_triangle(float ax, float ay, float bx, float by, float cx, float cy);
-SOKOL_API_DECL void sgp_draw_rects(const sgp_rect* rects, unsigned int count);
-SOKOL_API_DECL void sgp_draw_rect(float x, float y, float w, float h);
 SOKOL_API_DECL void sgp_draw_line_strip(const sgp_vec2* points, unsigned int count);
-SOKOL_API_DECL void sgp_draw_triangle_strip(const sgp_vec2* points, unsigned int count);
-
+SOKOL_API_DECL void sgp_draw_filled_triangles(const sgp_triangle* triangles, unsigned int count);
+SOKOL_API_DECL void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy);
+SOKOL_API_DECL void sgp_draw_filled_triangle_strip(const sgp_vec2* points, unsigned int count);
+SOKOL_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count);
+SOKOL_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);
 SOKOL_API_DECL void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, const sgp_rect* src_rects, unsigned int count);
 SOKOL_API_DECL void sgp_draw_textured_rect(sg_image image, sgp_rect rect, const sgp_rect* src_rect);
 
@@ -166,6 +165,7 @@ SOKOL_API_DECL sgp_desc sgp_query_desc();
 
 #include <string.h>
 #include <math.h>
+#include <stddef.h>
 
 #ifndef SOKOL_ASSERT
 #include <assert.h>
@@ -591,7 +591,7 @@ void sgp_flush() {
     // flush commands
     uint32_t cur_pip_id = SG_INVALID_ID;
     uint32_t cur_img_id = SG_INVALID_ID;
-    int cur_uniform_index = -1;
+    unsigned int cur_uniform_index = (unsigned int)(-1);
     unsigned int cur_base_vertex = 0;
     unsigned int base_vertex = ngp.state._base_vertex;
     unsigned int base_texvertex = ngp.state._base_texvertex;
@@ -976,18 +976,54 @@ static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, unsig
     _sgp_queue_draw(pip, vertex_index, count, (sg_image){0});
 }
 
-void sgp_draw_triangles(const sgp_triangle* triangles, unsigned int count) {
+void sgp_draw_points(const sgp_vec2* points, unsigned int count) {
     SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    if(count == 0) return;
+    _sgp_draw_solid_pip(ngp.points_pip, points, count);
+}
+
+void sgp_draw_point(float x, float y) {
+    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    sgp_draw_points(&(sgp_vec2){x, y}, 1);
+}
+
+void sgp_draw_lines(const sgp_line* lines, unsigned int count) {
+    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    if(count == 0) return;
+    _sgp_draw_solid_pip(ngp.lines_pip, (const sgp_vec2*)lines, count*2);
+}
+
+void sgp_draw_line(float ax, float ay, float bx, float by) {
+    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    sgp_draw_lines(&(sgp_line){{ax,ay},{bx, by}}, 1);
+}
+
+void sgp_draw_line_strip(const sgp_vec2* points, unsigned int count) {
+    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    if(count == 0) return;
+    _sgp_draw_solid_pip(ngp.line_strip_pip, points, count);
+}
+
+void sgp_draw_filled_triangles(const sgp_triangle* triangles, unsigned int count) {
+    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    if(count == 0) return;
     _sgp_draw_solid_pip(ngp.triangles_pip, (const sgp_vec2*)triangles, count*3);
 }
 
-void sgp_draw_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
+void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
     SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    sgp_draw_triangles(&(sgp_triangle){{ax,ay},{bx, by},{cx, cy}}, 1);
+    sgp_draw_filled_triangles(&(sgp_triangle){{ax,ay},{bx, by},{cx, cy}}, 1);
 }
 
-void sgp_draw_rects(const sgp_rect* rects, unsigned int count) {
+void sgp_draw_filled_triangle_strip(const sgp_vec2* points, unsigned int count) {
     SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    if(count == 0) return;
+    _sgp_draw_solid_pip(ngp.triangle_strip_pip, points, count);
+}
+
+void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
+    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
+    if(count == 0) return;
 
     // setup vertices
     unsigned int num_vertices = count * 6;
@@ -1022,39 +1058,9 @@ void sgp_draw_rects(const sgp_rect* rects, unsigned int count) {
     _sgp_queue_draw(ngp.triangles_pip, vertex_index, num_vertices, (sg_image){0});
 }
 
-void sgp_draw_rect(float x, float y, float w, float h) {
+void sgp_draw_filled_rect(float x, float y, float w, float h) {
     SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    sgp_draw_rects(&(sgp_rect){x,y,w,h}, 1);
-}
-
-void sgp_draw_points(const sgp_vec2* points, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    _sgp_draw_solid_pip(ngp.points_pip, points, count);
-}
-
-void sgp_draw_point(float x, float y) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    sgp_draw_points(&(sgp_vec2){x, y}, 1);
-}
-
-void sgp_draw_lines(const sgp_line* lines, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    _sgp_draw_solid_pip(ngp.lines_pip, (const sgp_vec2*)lines, count*2);
-}
-
-void sgp_draw_line(float ax, float ay, float bx, float by) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    sgp_draw_lines(&(sgp_line){{ax,ay},{bx, by}}, 1);
-}
-
-void sgp_draw_line_strip(const sgp_vec2* points, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    _sgp_draw_solid_pip(ngp.line_strip_pip, points, count);
-}
-
-void sgp_draw_triangle_strip(const sgp_vec2* points, unsigned int count) {
-    SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    _sgp_draw_solid_pip(ngp.triangle_strip_pip, points, count);
+    sgp_draw_filled_rects(&(sgp_rect){x,y,w,h}, 1);
 }
 
 static sgp_texvertex* _sgp_next_texvertices(unsigned int count) {
@@ -1070,7 +1076,7 @@ static sgp_texvertex* _sgp_next_texvertices(unsigned int count) {
 
 void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, const sgp_rect* src_rects, unsigned int count) {
     SOKOL_ASSERT(ngp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(image.id != SG_INVALID_ID);
+    if(count == 0 || image.id == SG_INVALID_ID) return;
 
     // setup vertices
     unsigned int num_vertices = count * 6;

@@ -143,6 +143,7 @@ SOKOL_API_DECL bool sgctx_dummy_swap(sgctx_dummy_context* sgctx);
 typedef struct sgctx_context {
     sgctx_backend backend;
     union {
+        void *p;
         #ifdef SOKOL_GCTX_GLCORE33_BACKEND
         sgctx_gl_context* gl;
         #endif
@@ -156,7 +157,7 @@ typedef struct sgctx_context {
 } sgctx_context;
 
 SOKOL_API_DECL bool sgctx_create(sgctx_context* sgctx, SDL_Window* window, sgctx_desc* desc);
-SOKOL_API_DECL void sgctx_destroy(sgctx_context sgctx);
+SOKOL_API_DECL void sgctx_destroy(sgctx_context* sgctx);
 SOKOL_API_DECL bool sgctx_activate(sgctx_context sgctx);
 SOKOL_API_DECL bool sgctx_is_valid(sgctx_context sgctx);
 SOKOL_API_DECL sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx);
@@ -251,11 +252,6 @@ sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc) {
     if(SDL_GL_MakeCurrent(window, context) != 0) {
         _sgctx_set_error(SGCTX_ACTIVATE_CONTEXT_FAILED, SDL_GetError());
         SDL_GL_DeleteContext(context);
-        return NULL;
-    }
-
-    if(!flextInit()) {
-        _sgctx_set_error(SGCTX_GRAPHICS_API_UNSUPPORTED, "OpenGL version 3.3 unsupported");
         return NULL;
     }
 
@@ -607,26 +603,29 @@ bool sgctx_create(sgctx_context* sgctx, SDL_Window* window, sgctx_desc* desc) {
     return ok;
 }
 
-void sgctx_destroy(sgctx_context sgctx) {
-    switch(sgctx.backend) {
+void sgctx_destroy(sgctx_context* sgctx) {
+    switch(sgctx->backend) {
         #ifdef SOKOL_GCTX_GLCORE33_BACKEND
         case SGCTX_BACKEND_GLCORE33:
-            sgctx_gl_destroy(sgctx.gl); break;
+            sgctx_gl_destroy(sgctx->gl); break;
         #endif
         #ifdef SOKOL_GCTX_D3D11_BACKEND
         case SGCTX_BACKEND_D3D11:
-            sgctx_d3d11_destroy(sgctx.d3d11); break;
+            sgctx_d3d11_destroy(sgctx->d3d11); break;
         #endif
         #ifdef SOKOL_GCTX_DUMMY_BACKEND
         case SGCTX_BACKEND_DUMMY:
-            sgctx_dummy_destroy(sgctx.dummy); break;
+            sgctx_dummy_destroy(sgctx->dummy); break;
         #endif
         default:
-            SOKOL_UNREACHABLE; break;
+            // already destroyed
+            break;
     }
+    *sgctx = (sgctx_context){0};
 }
 
 bool sgctx_activate(sgctx_context sgctx) {
+    SOKOL_ASSERT(sgctx.p);
     switch(sgctx.backend) {
         #ifdef SOKOL_GCTX_GLCORE33_BACKEND
         case SGCTX_BACKEND_GLCORE33:
@@ -646,10 +645,11 @@ bool sgctx_activate(sgctx_context sgctx) {
 }
 
 bool sgctx_is_valid(sgctx_context sgctx) {
-    return sgctx.backend != SGCTX_BACKEND_INVALID;
+    return sgctx.backend != SGCTX_BACKEND_INVALID && sgctx.p != NULL;
 }
 
 sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx) {
+    SOKOL_ASSERT(sgctx.p);
     switch(sgctx.backend) {
         #ifdef SOKOL_GCTX_GLCORE33_BACKEND
         case SGCTX_BACKEND_GLCORE33:
@@ -669,6 +669,7 @@ sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx) {
 }
 
 bool sgctx_set_swap_interval(sgctx_context sgctx, int interval) {
+    SOKOL_ASSERT(sgctx.p);
     switch(sgctx.backend) {
         #ifdef SOKOL_GCTX_GLCORE33_BACKEND
         case SGCTX_BACKEND_GLCORE33:
@@ -688,6 +689,7 @@ bool sgctx_set_swap_interval(sgctx_context sgctx, int interval) {
 }
 
 bool sgctx_swap(sgctx_context sgctx) {
+    SOKOL_ASSERT(sgctx.p);
     switch(sgctx.backend) {
         #ifdef SOKOL_GCTX_GLCORE33_BACKEND
         case SGCTX_BACKEND_GLCORE33:

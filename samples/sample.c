@@ -17,7 +17,7 @@ void draw_rects() {
     sgp_translate(width*0.25f - hsize, height*0.5f - hsize);
     sgp_translate(0.0f, 2*size*t - size);
     sgp_set_color(t, 0.3f, 1.0f-t, 1.0f);
-    sgp_draw_rect(0, 0, size, size);
+    sgp_draw_filled_rect(0, 0, size, size);
     sgp_pop_transform();
 
     // middle
@@ -25,7 +25,7 @@ void draw_rects() {
     sgp_translate(width*0.5f - hsize, height*0.5f - hsize);
     sgp_rotate_at(time, hsize, hsize);
     sgp_set_color(t, 1.0f - t, 0.3f, 1.0f);
-    sgp_draw_rect(0, 0, size, size);
+    sgp_draw_filled_rect(0, 0, size, size);
     sgp_pop_transform();
 
     // right
@@ -33,7 +33,7 @@ void draw_rects() {
     sgp_translate(width*0.75f - hsize, height*0.5f - hsize);
     sgp_scale_at(t + 0.25f, t + 0.5f, hsize, hsize);
     sgp_set_color(0.3f, t, 1.0f - t, 1.0f);
-    sgp_draw_rect(0, 0, size, size);
+    sgp_draw_filled_rect(0, 0, size, size);
     sgp_pop_transform();
 }
 
@@ -75,7 +75,7 @@ void draw_triangles() {
     sgp_set_color(1.0f, 0.0f, 1.0f, 1.0f);
     sgp_push_transform();
     sgp_translate(-w*1.5f, 0.0f);
-    sgp_draw_triangle(ax, ay, bx, by, cx, cy);
+    sgp_draw_filled_triangle(ax, ay, bx, by, cx, cy);
     sgp_translate(w*3.0f, 0.0f);
     int count = 0;
     float step = (2.0f*M_PI)/6.0f;
@@ -85,7 +85,7 @@ void draw_triangles() {
             points_buffer[count++] = (sgp_vec2){hw, hh};
     }
     sgp_set_color(0.0f, 1.0f, 1.0f, 1.0f);
-    sgp_draw_triangle_strip(points_buffer, count);
+    sgp_draw_filled_triangle_strip(points_buffer, count);
     sgp_pop_transform();
 }
 
@@ -96,7 +96,7 @@ void draw(int width, int height) {
     // top left
     sgp_viewport(0, 0, hw, hh);
     sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
-    sgp_draw_rect(0, 0, hw, hh);
+    sgp_draw_filled_rect(0, 0, hw, hh);
     sgp_push_transform();
     sgp_translate(0.0f, -hh / 4.0f);
     draw_rects();
@@ -119,7 +119,7 @@ void draw(int width, int height) {
     // bottom right
     sgp_viewport(hw, hh, hw, hh);
     sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
-    sgp_draw_rect(0, 0, hw, hh);
+    sgp_draw_filled_rect(0, 0, hw, hh);
     draw_lines();
 
     frame++;

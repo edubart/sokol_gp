@@ -24,7 +24,7 @@ void draw(int width, int height) {
                 sgp_set_color(0, 255, 0, 255);
             else
                 sgp_set_color(0, 0, 255, 255);
-            sgp_draw_rect(x*4, y*4, 2, 2);
+            sgp_draw_filled_rect(x*4, y*4, 2, 2);
             //sgp_draw_textured_rect(image, (sgp_rect){x*4, y*4, 2, 2}, NULL);
         }
     }
