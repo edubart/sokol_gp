@@ -193,7 +193,7 @@ SOKOL_API_DECL sgctx_error sgctx_get_error_code();
 #endif
 #ifndef SOKOL_DEBUG
 #ifndef NDEBUG
-#define SOKOL_DEBUG
+#define SOKOL_DEBUG (1)
 #endif
 #endif
 #ifndef SOKOL_LOG
@@ -389,7 +389,6 @@ bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
         },
         .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT
     };
-    int create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
     D3D_FEATURE_LEVEL feature_level;
     HRESULT result = D3D11CreateDeviceAndSwapChain(
         NULL,                               /* pAdapter (use default) */
@@ -488,7 +487,6 @@ bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx) {
     unsigned int flags = sgctx->swap_interval == 0 ? DXGI_PRESENT_DO_NOT_WAIT : 0;
     HRESULT result = IDXGISwapChain_Present(sgctx->swap_chain, sgctx->swap_interval, flags);
 
-    bool update_render_target = false;
     if(result == DXGI_ERROR_WAS_STILL_DRAWING) {
         // it's ok
     } else if(result == DXGI_ERROR_INVALID_CALL) {

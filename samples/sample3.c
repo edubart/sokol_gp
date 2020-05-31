@@ -14,7 +14,7 @@ void draw_triangles() {
     int count = 0;
     float step = (2.0f*M_PI)/6.0f;
     for(float theta = 0.0f; theta <= 2.0f*M_PI + step*0.5f; theta+=step) {
-        points_buffer[count++] = (sgp_vec2){hw + w*cosf(theta), hh - w*sinf(theta)};
+        points_buffer[count++] = (sgp_vec2){hw*1.33f + w*cosf(theta), hh*1.33f - w*sinf(theta)};
         if(count % 3 == 1)
             points_buffer[count++] = (sgp_vec2){hw, hh};
     }
@@ -24,6 +24,7 @@ void draw_triangles() {
 
 void draw_fbo() {
     sgp_begin(128, 128);
+    sgp_ortho(0, 128, 128, 0);
     draw_triangles();
 
     sg_pass_action pass_action = {

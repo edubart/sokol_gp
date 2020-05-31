@@ -10,25 +10,23 @@ sg_image image;
 float image_ratio;
 
 void draw(int width, int height) {
-    float ih = 512.0f;
-    float iw = ih * image_ratio;
-    sgp_translate((width - iw) / 2.0f, (height - ih) / 2.0f);
-    sgp_draw_textured_rect(image, 0, 0, iw, ih);
+    //float ih = 512.0f;
+    //float iw = ih * image_ratio;
+    //sgp_translate((width - iw) / 2.0f, (height - ih) / 2.0f);
+    //sgp_draw_textured_rect(image, 0, 0, iw, ih);
 
-/*
-    for(int y=0;y<64;++y) {
-        for(int x=0;x<64;++x) {
-            if(x % 3 == 0)
-                sgp_set_color(255, 0, 0, 255);
-            else if(x % 3 == 1)
-                sgp_set_color(0, 255, 0, 255);
-            else
-                sgp_set_color(0, 0, 255, 255);
+    for(int y=0;y<32;++y) {
+        for(int x=0;x<32;++x) {
+            //if(x % 3 == 0)
+            //    sgp_set_color(255, 0, 0, 255);
+            //else if(x % 3 == 1)
+            //    sgp_set_color(0, 255, 0, 255);
+            //else
+            //    sgp_set_color(0, 0, 255, 255);
             sgp_draw_filled_rect(x*4, y*4, 2, 2);
-            //sgp_draw_textured_rect(image, (sgp_rect){x*4, y*4, 2, 2}, NULL);
+            sgp_draw_textured_rect(image, x*4, y*4, 2, 2);
         }
     }
-*/
 }
 
 sg_image sg_load_image(const char *filename) {

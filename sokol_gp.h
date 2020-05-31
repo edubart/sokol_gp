@@ -188,7 +188,7 @@ SOKOL_API_DECL sgp_desc sgp_query_desc();
 #endif
 #ifndef SOKOL_DEBUG
 #ifndef NDEBUG
-#define SOKOL_DEBUG
+#define SOKOL_DEBUG (1)
 #endif
 #endif
 #ifndef SOKOL_LOG
@@ -549,6 +549,7 @@ bool sgp_setup(const sgp_desc* desc) {
 void sgp_shutdown() {
     if(_sgp.init_cookie == 0) return; // not initialized
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state == 0);
     SOKOL_FREE(_sgp.vertices);
     SOKOL_FREE(_sgp.texvertices);
     SOKOL_FREE(_sgp.uniforms);
@@ -597,7 +598,7 @@ void sgp_begin(int width, int height) {
         return;
     }
 
-    // first begin
+    // first begin, reset last error
     if(_sgp.cur_state == 0) {
         _sgp.last_error = "";
         _sgp.last_error_code = SGP_NO_ERROR;
@@ -622,6 +623,7 @@ void sgp_begin(int width, int height) {
 
 void sgp_flush() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
 
     if(_sgp.last_error_code != SGP_NO_ERROR || _sgp.cur_command <= 0)
         return;
@@ -633,10 +635,10 @@ void sgp_flush() {
     unsigned int cur_base_vertex = 0;
     unsigned int base_vertex = _sgp.state._base_vertex;
     unsigned int base_texvertex = _sgp.state._base_texvertex;
-    unsigned int num_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(sgp_vertex);
-    unsigned int num_texvertices = (_sgp.cur_texvertex - base_texvertex) * sizeof(sgp_texvertex);
-    sg_update_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], num_vertices);
-    sg_update_buffer(_sgp.texvertex_buf, &_sgp.texvertices[base_texvertex], num_texvertices);
+    unsigned int size_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(sgp_vertex);
+    unsigned int size_texvertices = (_sgp.cur_texvertex - base_texvertex) * sizeof(sgp_texvertex);
+    sg_update_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], size_vertices);
+    sg_update_buffer(_sgp.texvertex_buf, &_sgp.texvertices[base_texvertex], size_texvertices);
     for(unsigned int i = _sgp.state._base_command; i < _sgp.cur_command; ++i) {
         sgp_command* cmd = &_sgp.commands[i];
         switch(cmd->cmd) {
@@ -720,7 +722,7 @@ static inline sgp_mat3 _sgp_mat3_mul(const sgp_mat3* a, const sgp_mat3* b) {
     return p;
 }
 
-static inline sgp_mat3 _sgp_mul_proj_transform(sgp_mat3* proj, sgp_mat3* transform) {
+static sgp_mat3 _sgp_mul_proj_transform(sgp_mat3* proj, sgp_mat3* transform) {
     // this actually multiply matrix projection and transform matrix in an optimized way
     // the effect is the same as "return _sgp_mat3_mul(proj, transform);"
     float x = proj->v[0][0], y = proj->v[1][1];
@@ -735,6 +737,7 @@ static inline sgp_mat3 _sgp_mul_proj_transform(sgp_mat3* proj, sgp_mat3* transfo
 
 void sgp_ortho(float left, float right, float top, float bottom) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     float w = right - left;
     float h = top - bottom;
     _sgp.state.proj = (sgp_mat3){{
@@ -747,12 +750,14 @@ void sgp_ortho(float left, float right, float top, float bottom) {
 
 void sgp_reset_proj() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     _sgp.state.proj = _sgp_default_proj(_sgp.state.viewport.w, _sgp.state.viewport.h);
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_push_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
         _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
         return;
@@ -762,6 +767,7 @@ void sgp_push_transform() {
 
 void sgp_pop_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(_sgp.cur_transform <= 0)) {
         _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
         return;
@@ -772,12 +778,14 @@ void sgp_pop_transform() {
 
 void sgp_reset_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     _sgp.state.transform = _sgp_mat3_identity;
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_translate(float x, float y) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     // multiply by translate matrix:
     // 1.0f, 0.0f,    x,
     // 0.0f, 1.0f,    y,
@@ -790,6 +798,7 @@ void sgp_translate(float x, float y) {
 
 void sgp_rotate(float theta) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     float sint = sinf(theta), cost = cosf(theta);
     // multiply by rotation matrix:
     // sint,  cost, 0.0f,
@@ -805,6 +814,7 @@ void sgp_rotate(float theta) {
 
 void sgp_rotate_at(float theta, float x, float y) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_translate(x, y);
     sgp_rotate(theta);
     sgp_translate(-x, -y);
@@ -812,17 +822,23 @@ void sgp_rotate_at(float theta, float x, float y) {
 
 void sgp_scale(float sx, float sy) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     // multiply by scale matrix:
     //   sx, 0.0f, 0.0f,
     // 0.0f,   sy, 0.0f,
     // 0.0f, 0.0f, 1.0f,
     _sgp.state.transform.v[0][0] *= sx;
+    _sgp.state.transform.v[0][1] *= sx;
+    _sgp.state.transform.v[0][2] *= sx;
+    _sgp.state.transform.v[1][0] *= sy;
     _sgp.state.transform.v[1][1] *= sy;
+    _sgp.state.transform.v[1][2] *= sy;
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
 void sgp_scale_at(float sx, float sy, float x, float y) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_translate(x, y);
     sgp_scale(sx, sy);
     sgp_translate(-x, -y);
@@ -830,11 +846,13 @@ void sgp_scale_at(float sx, float sy, float x, float y) {
 
 void sgp_set_color(float r, float g, float b, float a) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     _sgp.state.uniform.color = (sgp_color){r,g,b,a};
 }
 
 void sgp_reset_color() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     _sgp.state.uniform.color = (sgp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
@@ -885,6 +903,7 @@ static sgp_command* _sgp_next_command() {
 
 void sgp_viewport(int x, int y, int w, int h) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
 
     // skip in case of the same viewport
     if(_sgp.state.viewport.x == x && _sgp.state.viewport.y == y &&
@@ -911,11 +930,13 @@ void sgp_viewport(int x, int y, int w, int h) {
 
 void sgp_reset_viewport() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_viewport(0, 0, _sgp.state.frame_size.w, _sgp.state.frame_size.h);
 }
 
 void sgp_scissor(int x, int y, int w, int h) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
 
     // skip in case of the same scissor
     if(_sgp.state.scissor.x == x && _sgp.state.scissor.y == y &&
@@ -941,19 +962,17 @@ void sgp_scissor(int x, int y, int w, int h) {
 
 void sgp_reset_scissor() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_scissor(0, 0, -1, -1);
 }
 
 void sgp_reset_state() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_reset_viewport();
     sgp_reset_scissor();
     sgp_reset_transform();
     sgp_reset_color();
-}
-
-static inline bool sgp_color_eq(sgp_color a, sgp_color b) {
-    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 
 static void _sgp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned int num_vertices, sg_image img) {
@@ -992,16 +1011,16 @@ static void _sgp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned
     }
 }
 
-static inline sgp_vec2 sgp_mat3_vec2_mul(const sgp_mat3* m, const sgp_vec2* v) {
+static inline sgp_vec2 _sgp_mat3_vec2_mul(const sgp_mat3* m, const sgp_vec2* v) {
     return (sgp_vec2){
         .x = m->v[0][0]*v->x + m->v[0][1]*v->y + m->v[0][2],
         .y = m->v[1][0]*v->x + m->v[1][1]*v->y + m->v[1][2]
     };
 }
 
-static inline void _sgp_transform_vertices(sgp_mat3* matrix, sgp_vertex* dest, const sgp_vec2 *src, unsigned int count) {
+static void _sgp_transform_vertices(sgp_mat3* matrix, sgp_vertex* dest, const sgp_vec2 *src, unsigned int count) {
     for(unsigned int i=0;i<count;++i)
-        dest[i] = sgp_mat3_vec2_mul(matrix, &src[i]);
+        dest[i] = _sgp_mat3_vec2_mul(matrix, &src[i]);
 }
 
 static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, unsigned int count) {
@@ -1016,6 +1035,7 @@ static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, unsig
 
 void sgp_clear() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
 
     // setup vertices
     unsigned int num_vertices = 6;
@@ -1045,54 +1065,63 @@ void sgp_clear() {
 
 void sgp_draw_points(const sgp_point* points, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     _sgp_draw_solid_pip(_sgp.points_pip, points, count);
 }
 
 void sgp_draw_point(float x, float y) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_point point = {x, y};
     sgp_draw_points(&point, 1);
 }
 
 void sgp_draw_lines(const sgp_line* lines, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     _sgp_draw_solid_pip(_sgp.lines_pip, (const sgp_point*)lines, count*2);
 }
 
 void sgp_draw_line(float ax, float ay, float bx, float by) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_line line = {{ax,ay},{bx, by}};
     sgp_draw_lines(&line, 1);
 }
 
 void sgp_draw_line_strip(const sgp_point* points, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     _sgp_draw_solid_pip(_sgp.line_strip_pip, points, count);
 }
 
 void sgp_draw_filled_triangles(const sgp_triangle* triangles, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     _sgp_draw_solid_pip(_sgp.triangles_pip, (const sgp_point*)triangles, count*3);
 }
 
 void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_triangle triangle = {{ax,ay},{bx, by},{cx, cy}};
     sgp_draw_filled_triangles(&triangle, 1);
 }
 
 void sgp_draw_filled_triangle_strip(const sgp_point* points, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     _sgp_draw_solid_pip(_sgp.triangle_strip_pip, points, count);
 }
 
 void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
 
     // setup vertices
@@ -1106,13 +1135,11 @@ void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
     const sgp_rect* rect = rects;
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     for(unsigned int i=0;i<count;v+=6, rect++, i++) {
-        float l = rect->x, t = rect->y;
-        float r = l + rect->w, b = t + rect->h;
         sgp_vec2 quad[4] = {
-            {l, b}, // bottom left
-            {r, b}, // bottom right
-            {r, t}, // top right
-            {l, t}, // top left
+            {rect->x,           rect->y + rect->h}, // bottom left
+            {rect->x + rect->w, rect->y + rect->h}, // bottom right
+            {rect->x + rect->w, rect->y}, // top right
+            {rect->x,  rect->y}, // top left
         };
         _sgp_transform_vertices(&mvp, quad, quad, 4);
 
@@ -1130,6 +1157,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
 
 void sgp_draw_filled_rect(float x, float y, float w, float h) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_rect rect = {x,y,w,h};
     sgp_draw_filled_rects(&rect, 1);
 }
@@ -1147,6 +1175,7 @@ static sgp_texvertex* _sgp_next_texvertices(unsigned int count) {
 
 void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
 
     // setup vertices
@@ -1156,34 +1185,43 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, unsigned int
     if(SOKOL_UNLIKELY(!texvertices)) return;
 
     // compute vertices
-    sgp_texvertex* v = texvertices;
-    const sgp_rect* rect = rects;
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-
-    for(unsigned int i=0;i<count;v+=6, rect++, i++) {
-        float l = rect->x, t = rect->y;
-        float r = l + rect->w, b = t + rect->h;
+    for(unsigned int i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
-            {l, b}, // bottom left
-            {r, b}, // bottom right
-            {r, t}, // top right
-            {l, t}, // top left
+            {rects[i].x,              rects[i].y + rects[i].h}, // bottom left
+            {rects[i].x + rects[i].w, rects[i].y + rects[i].h}, // bottom right
+            {rects[i].x + rects[i].w, rects[i].y}, // top right
+            {rects[i].x,  rects[i].y}, // top left
         };
         _sgp_transform_vertices(&mvp, quad, quad, 4);
 
         // make a quad composed of 2 triangles
+        sgp_texvertex* v = &texvertices[i*6];
+        v[0].position = quad[0];
+        v[1].position = quad[1];
+        v[2].position = quad[2];
+        v[3].position = quad[3];
+        v[4].position = quad[0];
+        v[5].position = quad[2];
+    }
+
+    // compute texture coords
+    for(unsigned int i=0;i<count;i++) {
         const sgp_vec2us vtexquad[4] = {
             {    0, 65535}, // bottom left
             {65535, 65535}, // bottom right
             {65535,     0}, // top right
             {    0,     0}, // top left
         };
-        v[0] = (sgp_texvertex){quad[0], vtexquad[0]};
-        v[1] = (sgp_texvertex){quad[1], vtexquad[1]};
-        v[2] = (sgp_texvertex){quad[2], vtexquad[2]};
-        v[3] = (sgp_texvertex){quad[3], vtexquad[3]};
-        v[4] = (sgp_texvertex){quad[0], vtexquad[0]};
-        v[5] = (sgp_texvertex){quad[2], vtexquad[2]};
+
+        // make a quad composed of 2 triangles
+        sgp_texvertex* v = &texvertices[i*6];
+        v[0].texcoord = vtexquad[0];
+        v[1].texcoord = vtexquad[1];
+        v[2].texcoord = vtexquad[2];
+        v[3].texcoord = vtexquad[3];
+        v[4].texcoord = vtexquad[0];
+        v[5].texcoord = vtexquad[2];
     }
 
     _sgp_queue_draw(_sgp.textriangles_pip, vertex_index, num_vertices, image);
@@ -1191,6 +1229,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, unsigned int
 
 void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_rect rect = {x, y, w, h};
     sgp_draw_textured_rects(image, &rect, 1);
 }
@@ -1213,6 +1252,7 @@ static inline sgp_isize _sgp_query_image_size(sg_image img) {
 
 void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, unsigned int count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
 
     // setup vertices
@@ -1227,20 +1267,16 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     float iw = 1.0f/image_size.w, ih = 1.0f/image_size.h;
 
     // compute vertices
-    sgp_texvertex* v = texvertices;
-    const sgp_textured_rect* rect = rects;
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    for(unsigned int i=0;i<count;v+=6, rect++, i++) {
-        // compute dest rect
-        float l = rect->dest.x, t = rect->dest.y;
-        float r = l + rect->dest.w, b = t + rect->dest.h;
+    for(unsigned int i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
-            {l, b}, // bottom left
-            {r, b}, // bottom right
-            {r, t}, // top right
-            {l, t}, // top left
+            {rects[i].dest.x,                   rects[i].dest.y + rects[i].dest.h}, // bottom left
+            {rects[i].dest.x + rects[i].dest.w, rects[i].dest.y + rects[i].dest.h}, // bottom right
+            {rects[i].dest.x + rects[i].dest.w, rects[i].dest.y}, // top right
+            {rects[i].dest.x,  rects[i].dest.y}, // top left
         };
         _sgp_transform_vertices(&mvp, quad, quad, 4);
+        sgp_texvertex* v = &texvertices[i*6];
         v[0].position = quad[0];
         v[1].position = quad[1];
         v[2].position = quad[2];
@@ -1250,11 +1286,9 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     }
 
     // compute texture coords
-    v = texvertices;
-    rect = rects;
-    for(unsigned int i=0;i<count;v+=6, rect++, i++) {
+    for(unsigned int i=0;i<count;i++) {
         // compute source rect
-        sgp_rect src_rect = rect->src;
+        sgp_rect src_rect = rects[i].src;
         unsigned short tl = _sgp_f2ushortn(src_rect.x*iw), tt = _sgp_f2ushortn(src_rect.y*ih);
         unsigned short tr = tl +_sgp_f2ushortn(src_rect.w*iw), tb = tt + _sgp_f2ushortn(src_rect.h*ih);
         sgp_vec2us vtexquad[4] = {
@@ -1265,6 +1299,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
         };
 
         // make a quad composed of 2 triangles
+        sgp_texvertex* v = &texvertices[i*6];
         v[0].texcoord = vtexquad[0];
         v[1].texcoord = vtexquad[1];
         v[2].texcoord = vtexquad[2];
@@ -1278,6 +1313,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
 
 void sgp_draw_textured_rect_ex(sg_image image, sgp_rect dest_rect, sgp_rect src_rect) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_textured_rect rect = {dest_rect, src_rect};
     sgp_draw_textured_rects_ex(image, &rect, 1);
 }
