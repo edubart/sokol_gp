@@ -1,15 +1,20 @@
 #define SDL_DISABLE_IMMINTRIN_H
 #include <SDL2/SDL.h>
-#define FLEXTGL_IMPL
-#include "thirdparty/flextgl.h"
-#define SOKOL_GCTX_IMPL
-#include "sokol_gctx.h"
-#define SOKOL_IMPL
+
 #define SOKOL_GLCORE33
 //#define SOKOL_D3D11
 //#define SOKOL_DUMMY_BACKEND
-#include "sokol_gfx.h"
+#define SOKOL_GCTX_IMPL
+#define SOKOL_IMPL
 #define SOKOL_GP_IMPL
+
+#ifdef SOKOL_GLCORE33
+#define FLEXTGL_IMPL
+#include "thirdparty/flextgl.h"
+#endif
+
+#include "sokol_gfx.h"
+#include "sokol_gctx.h"
 #include "sokol_gp.h"
 #include <stdio.h>
 #include <math.h>
@@ -32,18 +37,12 @@ int sample_app(sample_app_desc app) {
 
     // setup context attributes before window and context creation
     sgctx_desc ctx_desc = {
-#if defined(SOKOL_GLCORE33)
-        .backend = SGCTX_BACKEND_GLCORE33,
-#elif defined(SOKOL_D3D11)
-        .backend = SGCTX_BACKEND_D3D11,
-#elif defined(SOKOL_DUMMY_BACKEND)
-        .backend = SGCTX_BACKEND_DUMMY,
-#endif
         .sample_count = 0
     };
 
-    if(ctx_desc.backend == SGCTX_BACKEND_GLCORE33)
-        sgctx_gl_prepare_attributes(&ctx_desc);
+#if defined(SOKOL_GLCORE33)
+    sgctx_gl_prepare_attributes(&ctx_desc);
+#endif
 
     // create window
     SDL_Window *window = SDL_CreateWindow("NGP Sample",
@@ -56,8 +55,8 @@ int sample_app(sample_app_desc app) {
     }
 
     // create graphics context
-    sgctx_context sgctx;
-    if(!sgctx_create(&sgctx, window, &ctx_desc)) {
+    sgctx_context sgctx = sgctx_create(window, &ctx_desc);
+    if(!sgctx_is_valid(sgctx)) {
         fprintf(stderr, "Failed to create SGCTX context: %s\n", sgctx_get_error());
         return 1;
     }
@@ -155,7 +154,7 @@ int sample_app(sample_app_desc app) {
     app.terminate();
     sgp_shutdown();
     sg_shutdown();
-    sgctx_destroy(&sgctx);
+    sgctx_destroy(sgctx);
     SDL_DestroyWindow(window);
     SDL_Quit();
 

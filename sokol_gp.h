@@ -13,16 +13,6 @@ https://github.com/edubart/sokol_gp
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifndef SOKOL_API_DECL
-#if defined(_WIN32) && defined(SOKOL_DLL) && defined(SOKOL_IMPL)
-#define SOKOL_API_DECL __declspec(dllexport)
-#elif defined(_WIN32) && defined(SOKOL_DLL)
-#define SOKOL_API_DECL __declspec(dllimport)
-#else
-#define SOKOL_API_DECL extern
-#endif
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
