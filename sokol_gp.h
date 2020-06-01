@@ -101,9 +101,9 @@ typedef struct sgp_state {
     sgp_mat3 transform;
     sgp_mat3 mvp;
     sgp_uniform uniform;
-    unsigned int _base_vertex;
-    unsigned int _base_uniform;
-    unsigned int _base_command;
+    uint32_t _base_vertex;
+    uint32_t _base_uniform;
+    uint32_t _base_command;
 } sgp_state;
 
 // setup functions
@@ -143,19 +143,19 @@ SOKOL_API_DECL void sgp_reset_state();
 
 // drawing functions
 SOKOL_API_DECL void sgp_clear();
-SOKOL_API_DECL void sgp_draw_points(const sgp_point* points, unsigned int count);
+SOKOL_API_DECL void sgp_draw_points(const sgp_point* points, uint32_t count);
 SOKOL_API_DECL void sgp_draw_point(float x, float y);
-SOKOL_API_DECL void sgp_draw_lines(const sgp_line* lines, unsigned int count);
+SOKOL_API_DECL void sgp_draw_lines(const sgp_line* lines, uint32_t count);
 SOKOL_API_DECL void sgp_draw_line(float ax, float ay, float bx, float by);
-SOKOL_API_DECL void sgp_draw_line_strip(const sgp_point* points, unsigned int count);
-SOKOL_API_DECL void sgp_draw_filled_triangles(const sgp_triangle* triangles, unsigned int count);
+SOKOL_API_DECL void sgp_draw_line_strip(const sgp_point* points, uint32_t count);
+SOKOL_API_DECL void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count);
 SOKOL_API_DECL void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy);
-SOKOL_API_DECL void sgp_draw_filled_triangle_strip(const sgp_point* points, unsigned int count);
-SOKOL_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count);
+SOKOL_API_DECL void sgp_draw_filled_triangle_strip(const sgp_point* points, uint32_t count);
+SOKOL_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count);
 SOKOL_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);
-SOKOL_API_DECL void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, unsigned int count);
+SOKOL_API_DECL void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t count);
 SOKOL_API_DECL void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h);
-SOKOL_API_DECL void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, unsigned int count);
+SOKOL_API_DECL void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, uint32_t count);
 SOKOL_API_DECL void sgp_draw_textured_rect_ex(sg_image image, sgp_rect dest_rect, sgp_rect src_rect);
 
 // querying functions
@@ -225,9 +225,9 @@ typedef struct sgp_vertex {
 typedef struct sgp_draw_args {
     sg_pipeline pip;
     sg_image img;
-    unsigned int uniform_index;
-    unsigned int vertex_index;
-    unsigned int num_vertices;
+    uint32_t uniform_index;
+    uint32_t vertex_index;
+    uint32_t num_vertices;
 } sgp_draw_args;
 
 typedef union sgp_command_args {
@@ -260,12 +260,12 @@ typedef struct sgp_context {
     sg_pipeline line_strip_pip;
 
     // command queue
-    unsigned int cur_vertex;
-    unsigned int cur_uniform;
-    unsigned int cur_command;
-    unsigned int num_vertices;
-    unsigned int num_uniforms;
-    unsigned int num_commands;
+    uint32_t cur_vertex;
+    uint32_t cur_uniform;
+    uint32_t cur_command;
+    uint32_t num_vertices;
+    uint32_t num_uniforms;
+    uint32_t num_commands;
     sgp_vertex* vertices;
     sgp_uniform* uniforms;
     sgp_command* commands;
@@ -274,8 +274,8 @@ typedef struct sgp_context {
     sgp_state state;
 
     // matrix stack
-    unsigned int cur_transform;
-    unsigned int cur_state;
+    uint32_t cur_transform;
+    uint32_t cur_state;
     sgp_mat3 transform_stack[_SGP_MAX_STACK_DEPTH];
     sgp_state state_stack[_SGP_MAX_STACK_DEPTH];
 } sgp_context;
@@ -600,14 +600,14 @@ void sgp_flush() {
 
     // flush commands
     const uint32_t SG_IMPOSSIBLE_ID = 0xffffffffU;
-    uint32_t cur_pip_id = SG_INVALID_ID;
-    uint32_t cur_img_id = SG_INVALID_ID;
-    unsigned int cur_uniform_index = SG_IMPOSSIBLE_ID;
-    unsigned int cur_base_vertex = 0;
-    unsigned int base_vertex = _sgp.state._base_vertex;
-    unsigned int size_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(sgp_vertex);
+    uint32_t cur_pip_id = SG_IMPOSSIBLE_ID;
+    uint32_t cur_img_id = SG_IMPOSSIBLE_ID;
+    uint32_t cur_uniform_index = SG_IMPOSSIBLE_ID;
+    uint32_t cur_base_vertex = 0;
+    uint32_t base_vertex = _sgp.state._base_vertex;
+    uint32_t size_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(sgp_vertex);
     sg_update_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], size_vertices);
-    for(unsigned int i = _sgp.state._base_command; i < _sgp.cur_command; ++i) {
+    for(uint32_t i = _sgp.state._base_command; i < _sgp.cur_command; ++i) {
         sgp_command* cmd = &_sgp.commands[i];
         switch(cmd->cmd) {
             case SGP_COMMAND_VIEWPORT: {
@@ -817,7 +817,7 @@ void sgp_reset_color() {
     _sgp.state.uniform.color = (sgp_color){1.0f, 1.0f, 1.0f, 1.0f};
 }
 
-static sgp_vertex* _sgp_next_vertices(unsigned int count) {
+static sgp_vertex* _sgp_next_vertices(uint32_t count) {
     if(SOKOL_LIKELY(_sgp.cur_vertex + count <= _sgp.num_vertices)) {
         sgp_vertex *vertices = &_sgp.vertices[_sgp.cur_vertex];
         _sgp.cur_vertex += count;
@@ -936,7 +936,7 @@ void sgp_reset_state() {
     sgp_reset_color();
 }
 
-static void _sgp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned int num_vertices, sg_image img) {
+static void _sgp_queue_draw(sg_pipeline pip, uint32_t vertex_index, uint32_t num_vertices, sg_image img) {
     // setup uniform, try to reuse previous uniform when possible
     sgp_uniform *prev_uniform = _sgp_prev_uniform();
     bool reuse_uniform = prev_uniform && memcmp(prev_uniform, &_sgp.state.uniform, sizeof(sgp_uniform)) == 0;
@@ -946,7 +946,7 @@ static void _sgp_queue_draw(sg_pipeline pip, unsigned int vertex_index, unsigned
         if(SOKOL_UNLIKELY(!uniform)) return;
         *uniform = _sgp.state.uniform;
     }
-    unsigned int uniform_index = _sgp.cur_uniform - 1;
+    uint32_t uniform_index = _sgp.cur_uniform - 1;
 
     sgp_command* prev_cmd = _sgp_prev_command();
     bool merge_cmd = prev_cmd &&
@@ -979,18 +979,18 @@ static inline sgp_vec2 _sgp_mat3_vec2_mul(const sgp_mat3* m, const sgp_vec2* v) 
     };
 }
 
-static void _sgp_transform_vec2(sgp_mat3* matrix, sgp_vec2* dest, const sgp_vec2 *src, unsigned int count) {
-    for(unsigned int i=0;i<count;++i)
+static void _sgp_transform_vec2(sgp_mat3* matrix, sgp_vec2* dest, const sgp_vec2 *src, uint32_t count) {
+    for(uint32_t i=0;i<count;++i)
         dest[i] = _sgp_mat3_vec2_mul(matrix, &src[i]);
 }
 
-static void _sgp_transform_vertices(sgp_mat3* matrix, sgp_vertex* dest, const sgp_vec2 *src, unsigned int count) {
-    for(unsigned int i=0;i<count;++i)
+static void _sgp_transform_vertices(sgp_mat3* matrix, sgp_vertex* dest, const sgp_vec2 *src, uint32_t count) {
+    for(uint32_t i=0;i<count;++i)
         dest[i].position = _sgp_mat3_vec2_mul(matrix, &src[i]);
 }
 
-static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, unsigned int count) {
-    unsigned int vertex_index = _sgp.cur_vertex;
+static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t count) {
+    uint32_t vertex_index = _sgp.cur_vertex;
     sgp_vertex* transformed_vertices = _sgp_next_vertices(count);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1004,8 +1004,8 @@ void sgp_clear() {
     SOKOL_ASSERT(_sgp.cur_state > 0);
 
     // setup vertices
-    unsigned int num_vertices = 6;
-    unsigned int vertex_index = _sgp.cur_vertex;
+    uint32_t num_vertices = 6;
+    uint32_t vertex_index = _sgp.cur_vertex;
     sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1029,7 +1029,7 @@ void sgp_clear() {
     _sgp_queue_draw(_sgp.clear_pip, vertex_index, num_vertices, (sg_image){0});
 }
 
-void sgp_draw_points(const sgp_point* points, unsigned int count) {
+void sgp_draw_points(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
@@ -1043,7 +1043,7 @@ void sgp_draw_point(float x, float y) {
     sgp_draw_points(&point, 1);
 }
 
-void sgp_draw_lines(const sgp_line* lines, unsigned int count) {
+void sgp_draw_lines(const sgp_line* lines, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
@@ -1057,14 +1057,14 @@ void sgp_draw_line(float ax, float ay, float bx, float by) {
     sgp_draw_lines(&line, 1);
 }
 
-void sgp_draw_line_strip(const sgp_point* points, unsigned int count) {
+void sgp_draw_line_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     _sgp_draw_solid_pip(_sgp.line_strip_pip, points, count);
 }
 
-void sgp_draw_filled_triangles(const sgp_triangle* triangles, unsigned int count) {
+void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
@@ -1078,21 +1078,21 @@ void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, 
     sgp_draw_filled_triangles(&triangle, 1);
 }
 
-void sgp_draw_filled_triangle_strip(const sgp_point* points, unsigned int count) {
+void sgp_draw_filled_triangle_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     _sgp_draw_solid_pip(_sgp.triangle_strip_pip, points, count);
 }
 
-void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
+void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
 
     // setup vertices
-    unsigned int num_vertices = count * 6;
-    unsigned int vertex_index = _sgp.cur_vertex;
+    uint32_t num_vertices = count * 6;
+    uint32_t vertex_index = _sgp.cur_vertex;
     sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1100,7 +1100,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, unsigned int count) {
     sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    for(unsigned int i=0;i<count;v+=6, rect++, i++) {
+    for(uint32_t i=0;i<count;v+=6, rect++, i++) {
         sgp_vec2 quad[4] = {
             {rect->x,           rect->y + rect->h}, // bottom left
             {rect->x + rect->w, rect->y + rect->h}, // bottom right
@@ -1128,20 +1128,20 @@ void sgp_draw_filled_rect(float x, float y, float w, float h) {
     sgp_draw_filled_rects(&rect, 1);
 }
 
-void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, unsigned int count) {
+void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
 
     // setup vertices
-    unsigned int num_vertices = count * 6;
-    unsigned int vertex_index = _sgp.cur_vertex;
+    uint32_t num_vertices = count * 6;
+    uint32_t vertex_index = _sgp.cur_vertex;
     sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
     // compute vertices
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    for(unsigned int i=0;i<count;i++) {
+    for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
             {rects[i].x,              rects[i].y + rects[i].h}, // bottom left
             {rects[i].x + rects[i].w, rects[i].y + rects[i].h}, // bottom right
@@ -1161,7 +1161,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, unsigned int
     }
 
     // compute texture coords
-    for(unsigned int i=0;i<count;i++) {
+    for(uint32_t i=0;i<count;i++) {
         const sgp_vec2 vtexquad[4] = {
             {0.0f, 1.0f}, // bottom left
             {1.0f, 1.0f}, // bottom right
@@ -1201,14 +1201,14 @@ static inline sgp_isize _sgp_query_image_size(sg_image img) {
 }
 #endif
 
-void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, unsigned int count) {
+void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
 
     // setup vertices
-    unsigned int num_vertices = count * 6;
-    unsigned int vertex_index = _sgp.cur_vertex;
+    uint32_t num_vertices = count * 6;
+    uint32_t vertex_index = _sgp.cur_vertex;
     sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1219,7 +1219,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
 
     // compute vertices
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    for(unsigned int i=0;i<count;i++) {
+    for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
             {rects[i].dest.x,                   rects[i].dest.y + rects[i].dest.h}, // bottom left
             {rects[i].dest.x + rects[i].dest.w, rects[i].dest.y + rects[i].dest.h}, // bottom right
@@ -1237,7 +1237,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     }
 
     // compute texture coords
-    for(unsigned int i=0;i<count;i++) {
+    for(uint32_t i=0;i<count;i++) {
         // compute source rect
         float tl = rects[i].src.x*iw;
         float tt = rects[i].src.y*ih;
