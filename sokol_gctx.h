@@ -313,7 +313,12 @@ static sgctx_d3d11_context* _sgctx_d3d11_active = NULL;
 
 bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
     HRESULT result;
+    #ifdef __cplusplus
+    result = IDXGISwapChain_GetBuffer(sgctx->swap_chain, 0, IID_ID3D11Texture2D, (void**)&sgctx->render_target);
+    #else
     result = IDXGISwapChain_GetBuffer(sgctx->swap_chain, 0, &IID_ID3D11Texture2D, (void**)&sgctx->render_target);
+    #endif
+
     if(!SUCCEEDED(result))
         return false;
 
@@ -324,8 +329,8 @@ bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
     SOKOL_ASSERT(sgctx->render_target_view);
 
     D3D11_TEXTURE2D_DESC ds_desc = {
-        .Width = sgctx->width,
-        .Height = sgctx->height,
+        .Width = (UINT)sgctx->width,
+        .Height = (UINT)sgctx->height,
         .MipLevels = 1,
         .ArraySize = 1,
         .Format = DXGI_FORMAT_D24_UNORM_S8_UINT,
@@ -371,23 +376,23 @@ bool _sgctx_d3d11_update_default_render_target(sgctx_d3d11_context* sgctx) {
 bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
     sgctx->swap_chain_desc = (DXGI_SWAP_CHAIN_DESC) {
         .BufferDesc = {
-            .Width = sgctx->width,
-            .Height = sgctx->height,
-            .Format = DXGI_FORMAT_B8G8R8A8_UNORM,
+            .Width = (UINT)sgctx->width,
+            .Height = (UINT)sgctx->height,
             .RefreshRate = {
                 .Numerator = 60,
                 .Denominator = 1
-            }
+            },
+            .Format = DXGI_FORMAT_B8G8R8A8_UNORM
         },
+        .SampleDesc = {
+            .Count = sgctx->desc.sample_count > 0 ? (UINT)sgctx->desc.sample_count : 1,
+            .Quality = sgctx->desc.sample_count > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0
+        },
+        .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        .BufferCount = 1,
         .OutputWindow = hwnd,
         .Windowed = true,
         .SwapEffect = DXGI_SWAP_EFFECT_DISCARD,
-        .BufferCount = 1,
-        .SampleDesc = {
-            .Count = sgctx->desc.sample_count > 0 ? sgctx->desc.sample_count : 1,
-            .Quality = sgctx->desc.sample_count > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0
-        },
-        .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT
     };
     D3D_FEATURE_LEVEL feature_level;
     HRESULT result = D3D11CreateDeviceAndSwapChain(
@@ -423,7 +428,7 @@ sgctx_d3d11_context* sgctx_d3d11_create(SDL_Window* window, sgctx_desc* desc) {
 
     if(!SDL_GetWindowWMInfo(window, &wminfo)) {
         _sgctx_set_error(SGCTX_WMINFO_FAILED, SDL_GetError());
-        return false;
+        return NULL;
     }
 
     int width, height;
