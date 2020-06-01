@@ -1,7 +1,7 @@
 #include "sample_common.h"
 
-sg_image fbo_image;
-sg_pass fbo_pass;
+sg_image fb_image;
+sg_pass fb_pass;
 
 static sgp_vec2 points_buffer[4096];
 
@@ -32,7 +32,7 @@ void draw_fbo() {
         .depth = {.action = SG_ACTION_DONTCARE},
         .stencil = {.action = SG_ACTION_DONTCARE},
     };
-    sg_begin_pass(fbo_pass, &pass_action);
+    sg_begin_pass(fb_pass, &pass_action);
     sgp_flush();
     sg_end_pass();
     sgp_end();
@@ -45,14 +45,14 @@ void draw(int width, int height) {
         for(int x=0;x<width;x+=192) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
-            sgp_draw_textured_rect(fbo_image, x, y, 128, 128);
+            sgp_draw_textured_rect(fb_image, x, y, 128, 128);
             sgp_pop_transform();
         }
     }
 }
 
 bool init() {
-    sg_image_desc fbo_image_desc = {
+    sg_image_desc fb_image_desc = {
         .render_target = true,
         .width = 128,
         .height = 128,
@@ -61,21 +61,21 @@ bool init() {
         .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
         .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
     };
-    fbo_image = sg_make_image(&fbo_image_desc);
-    if(fbo_image.id == SG_INVALID_ID)
+    fb_image = sg_make_image(&fb_image_desc);
+    if(fb_image.id == SG_INVALID_ID)
         return false;
     sg_pass_desc pass_desc = {
-        .color_attachments = {{.image = fbo_image}},
+        .color_attachments = {{.image = fb_image}},
     };
-    fbo_pass = sg_make_pass(&pass_desc);
-    if(fbo_pass.id == SG_INVALID_ID)
+    fb_pass = sg_make_pass(&pass_desc);
+    if(fb_pass.id == SG_INVALID_ID)
         return false;
     return true;
 }
 
 void terminate() {
-    sg_destroy_image(fbo_image);
-    sg_destroy_pass(fbo_pass);
+    sg_destroy_image(fb_image);
+    sg_destroy_pass(fb_pass);
 }
 
 int main(int argc, char *argv[]) {

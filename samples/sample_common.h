@@ -61,7 +61,14 @@ int sample_app(sample_app_desc app) {
         fprintf(stderr, "Failed to create SGCTX context: %s\n", sgctx_get_error());
         return 1;
     }
-    sgctx_set_swap_interval(sgctx, 1);
+
+    // set swap interval
+    bool vsync = true;
+    for(int i=1;i<app.argc;++i) {
+        if(strcmp(app.argv[i], "-no-vsync") == 0)
+            vsync = false;
+    }
+    sgctx_set_swap_interval(sgctx, vsync ? 1 : 0);
 
 #if defined(SOKOL_GLCORE33)
     // load opengl api
