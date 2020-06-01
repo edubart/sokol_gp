@@ -36,6 +36,7 @@ void draw_fbo() {
     sgp_flush();
     sg_end_pass();
     sgp_end();
+    sg_commit();
 }
 
 void draw(int width, int height) {

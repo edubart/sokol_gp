@@ -217,17 +217,9 @@ enum {
     _SGP_MAX_STACK_DEPTH = 64,
 };
 
-typedef struct sgp_vec2s {
-    short x, y;
-} sgp_vec2s;
-
-typedef struct sgp_vec2us {
-    unsigned short x, y;
-} sgp_vec2us;
-
 typedef struct sgp_vertex {
     sgp_vec2 position;
-    sgp_vec2us texcoord;
+    sgp_vec2 texcoord;
 } sgp_vertex;
 
 typedef struct sgp_draw_args {
@@ -259,7 +251,6 @@ typedef struct sgp_context {
     sg_shader solid_shader;
     sg_shader tex_shader;
     sg_buffer vertex_buf;
-    sg_bindings vertex_bind;
     sg_pipeline clear_pip;
     sg_pipeline textriangles_pip;
     sg_pipeline triangles_pip;
@@ -306,9 +297,9 @@ static void _sgp_set_error(sgp_error error_code, const char *error) {
 #if defined(SOKOL_GLCORE33)
 static const char* solid_vs_source =
 "#version 330\n"
-"layout(location=0) in vec2 position;\n"
+"layout(location=0) in vec4 coord;\n"
 "void main() {\n"
-"    gl_Position = vec4(position, 0.0, 1.0);\n"
+"    gl_Position = vec4(coord.xy, 0.0, 1.0);\n"
 "}\n";
 static const char* solid_fs_source =
 "#version 330\n"
@@ -319,12 +310,11 @@ static const char* solid_fs_source =
 "}\n";
 static const char* tex_vs_source =
 "#version 330\n"
-"layout(location=0) in vec2 position;\n"
-"layout(location=1) in vec2 texcoord;\n"
+"layout(location=0) in vec4 coord;\n"
 "out vec2 uv;\n"
 "void main() {\n"
-"    gl_Position = vec4(position, 0.0, 1.0);\n"
-"    uv = texcoord;\n"
+"    gl_Position = vec4(coord.xy, 0.0, 1.0);\n"
+"    uv = coord.zw;\n"
 "}\n";
 static const char* tex_fs_source =
 "#version 330\n"
@@ -338,8 +328,8 @@ static const char* tex_fs_source =
 
 #elif defined(SOKOL_D3D11)
 static const char* solid_vs_source =
-"float4 main(float2 position: POSITION): SV_Position {\n"
-"    return float4(position, 0.0f, 1.0f);\n"
+"float4 main(float4 coord: POSITION): SV_Position {\n"
+"    return float4(coord.xy, 0.0f, 1.0f);\n"
 "}\n";
 static const char* solid_fs_source =
 "uniform float4 color;\n"
@@ -347,18 +337,14 @@ static const char* solid_fs_source =
 "    return color;\n"
 "}\n";
 static const char* tex_vs_source =
-"struct vs_in {\n"
-"    float2 position: POSITION;\n"
-"    float2 texcoord: TEXCOORD0;\n"
-"};\n"
 "struct vs_out {\n"
 "    float2 uv: TEXCOORD0;\n"
 "    float4 pos: SV_Position;\n"
 "};\n"
-"vs_out main(vs_in inp) {\n"
+"vs_out main(float4 coord: POSITION) {\n"
 "    vs_out outp;\n"
-"    outp.pos = float4(inp.position, 0.0f, 1.0f);\n"
-"    outp.uv = inp.texcoord;\n"
+"    outp.pos = float4(coord.xy, 0.0f, 1.0f);\n"
+"    outp.uv = coord.zw;\n"
 "    return outp;\n"
 "}\n";
 static const char* tex_fs_source =
@@ -389,7 +375,7 @@ static void _sgp_setup_pipelines() {
     // create shaders
     sg_shader_desc solid_shader_desc = {
         .attrs = {
-            {.name="position", .sem_name="POSITION", .sem_index=0},
+            {.name="coord", .sem_name="POSITION", .sem_index=0},
         },
         .vs = {.source = solid_vs_source},
         .fs = {
@@ -405,8 +391,7 @@ static void _sgp_setup_pipelines() {
 
     sg_shader_desc tex_shader_desc = {
         .attrs = {
-            {.name="position", .sem_name="POSITION", .sem_index=0},
-            {.name="texcoord", .sem_name="TEXCOORD", .sem_index=0},
+            {.name="coord", .sem_name="POSITION", .sem_index=0},
         },
         .vs = {.source = tex_vs_source},
         .fs = {
@@ -422,25 +407,18 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.tex_shader.id != SG_INVALID_ID);
 
     // layouts
-    sg_layout_desc filled_layout = (sg_layout_desc) {
+    sg_layout_desc vertex_layout = (sg_layout_desc) {
         .buffers = {
             {.stride=sizeof(sgp_vertex)},
         },
         .attrs = {
-            {.offset=0, .format=SG_VERTEXFORMAT_FLOAT2},
-        },
-    };
-    sg_layout_desc textured_layout = (sg_layout_desc) {
-        .buffers = {{.stride=sizeof(sgp_vertex)}},
-        .attrs = {
-            {.offset=0, .format=SG_VERTEXFORMAT_FLOAT2},
-            {.offset=offsetof(sgp_vertex, texcoord), .format=SG_VERTEXFORMAT_USHORT2N},
+            {.offset=0, .format=SG_VERTEXFORMAT_FLOAT4},
         },
     };
 
     // create pipelines
     sg_pipeline_desc clear_pip_desc = {
-        .layout = filled_layout,
+        .layout = vertex_layout,
         .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES
     };
@@ -448,7 +426,7 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.clear_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc textriangles_pip_desc = {
-        .layout = textured_layout,
+        .layout = vertex_layout,
         .shader = _sgp.tex_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .blend = default_blend,
@@ -457,7 +435,7 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.textriangles_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc triangles_pip_desc = {
-        .layout = filled_layout,
+        .layout = vertex_layout,
         .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .blend = default_blend,
@@ -466,7 +444,7 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.triangles_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc points_pip_desc = {
-        .layout = filled_layout,
+        .layout = vertex_layout,
         .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_POINTS,
         .blend = default_blend,
@@ -475,7 +453,7 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.points_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc lines_pip_desc = {
-        .layout = filled_layout,
+        .layout = vertex_layout,
         .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINES,
         .blend = default_blend,
@@ -484,7 +462,7 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.lines_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc triangle_strip_pip_desc = {
-        .layout = filled_layout,
+        .layout = vertex_layout,
         .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .blend = default_blend,
@@ -493,7 +471,7 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.triangle_strip_pip.id != SG_INVALID_ID);
 
     sg_pipeline_desc line_strip_pip_desc = {
-        .layout = filled_layout,
+        .layout = vertex_layout,
         .shader = _sgp.solid_shader,
         .primitive_type = SG_PRIMITIVETYPE_LINE_STRIP,
         .blend = default_blend,
@@ -531,11 +509,6 @@ bool sgp_setup(const sgp_desc* desc) {
     };
     _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
     SOKOL_ASSERT(_sgp.vertex_buf.id != SG_INVALID_ID);
-
-    // define the resource bindings
-    _sgp.vertex_bind = (sg_bindings){
-        .vertex_buffers = {_sgp.vertex_buf},
-    };
 
     _sgp_setup_pipelines();
     return true;
@@ -620,10 +593,16 @@ void sgp_flush() {
     if(_sgp.last_error_code != SGP_NO_ERROR || _sgp.cur_command <= 0)
         return;
 
+    // define the resource bindings
+    sg_bindings bind = (sg_bindings){
+        .vertex_buffers = {_sgp.vertex_buf},
+    };
+
     // flush commands
+    const uint32_t SG_IMPOSSIBLE_ID = 0xffffffffU;
     uint32_t cur_pip_id = SG_INVALID_ID;
     uint32_t cur_img_id = SG_INVALID_ID;
-    unsigned int cur_uniform_index = (unsigned int)(-1);
+    unsigned int cur_uniform_index = SG_IMPOSSIBLE_ID;
     unsigned int cur_base_vertex = 0;
     unsigned int base_vertex = _sgp.state._base_vertex;
     unsigned int size_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(sgp_vertex);
@@ -643,24 +622,23 @@ void sgp_flush() {
             }
             case SGP_COMMAND_DRAW: {
                 sgp_draw_args* args = &cmd->args.draw;
-                bool pip_changed = false;
                 if(args->pip.id != cur_pip_id) {
-                    sg_apply_pipeline(args->pip);
-                    cur_pip_id = args->pip.id;
                     // when pipeline changes, also need to re-apply uniforms and bindings
-                    cur_img_id = SG_INVALID_ID;
-                    cur_uniform_index = -1;
-                    pip_changed = true;
+                    cur_img_id = SG_IMPOSSIBLE_ID;
+                    cur_uniform_index = SG_IMPOSSIBLE_ID;
+                    cur_pip_id = args->pip.id;
+                    sg_apply_pipeline(args->pip);
                 }
-                if(pip_changed || cur_img_id != args->img.id) {
-                    _sgp.vertex_bind.fs_images[0] = args->img;
-                    sg_apply_bindings(&_sgp.vertex_bind);
+                if(cur_img_id != args->img.id) {
                     cur_base_vertex = base_vertex;
                     cur_img_id = args->img.id;
+                    bind.fs_images[0] = args->img;
+                    sg_apply_bindings(&bind);
                 }
                 if(cur_uniform_index != args->uniform_index) {
-                    sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &_sgp.uniforms[args->uniform_index], sizeof(sgp_uniform));
                     cur_uniform_index = args->uniform_index;
+                    sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
+                    sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, uniform, sizeof(sgp_uniform));
                 }
                 if(args->num_vertices > 0) {
                     sg_draw(args->vertex_index - cur_base_vertex, args->num_vertices, 1);
@@ -1184,11 +1162,11 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, unsigned int
 
     // compute texture coords
     for(unsigned int i=0;i<count;i++) {
-        const sgp_vec2us vtexquad[4] = {
-            {    0, 65535}, // bottom left
-            {65535, 65535}, // bottom right
-            {65535,     0}, // top right
-            {    0,     0}, // top left
+        const sgp_vec2 vtexquad[4] = {
+            {0.0f, 1.0f}, // bottom left
+            {1.0f, 1.0f}, // bottom right
+            {1.0f, 0.0f}, // top right
+            {0.0f, 0.0f}, // top left
         };
 
         // make a quad composed of 2 triangles
@@ -1209,10 +1187,6 @@ void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h) 
     SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_rect rect = {x, y, w, h};
     sgp_draw_textured_rects(image, &rect, 1);
-}
-
-static inline unsigned short _sgp_f2ushortn(float x) {
-    return x >= 1.0f ? 65535 : (x < 0.0f ? 0 : x*65535);
 }
 
 #ifdef SOKOL_GFX_IMPL_INCLUDED
@@ -1265,10 +1239,11 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     // compute texture coords
     for(unsigned int i=0;i<count;i++) {
         // compute source rect
-        sgp_rect src_rect = rects[i].src;
-        unsigned short tl = _sgp_f2ushortn(src_rect.x*iw), tt = _sgp_f2ushortn(src_rect.y*ih);
-        unsigned short tr = tl +_sgp_f2ushortn(src_rect.w*iw), tb = tt + _sgp_f2ushortn(src_rect.h*ih);
-        sgp_vec2us vtexquad[4] = {
+        float tl = rects[i].src.x*iw;
+        float tt = rects[i].src.y*ih;
+        float tr = (rects[i].src.x + rects[i].src.w)*iw;
+        float tb = (rects[i].src.y + rects[i].src.h)*ih;
+        sgp_vec2 vtexquad[4] = {
             {tl, tb}, // bottom left
             {tr, tb}, // bottom right
             {tr, tt}, // top right
