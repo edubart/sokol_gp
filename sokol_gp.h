@@ -30,7 +30,7 @@ typedef enum sgp_error {
 } sgp_error;
 
 typedef enum sgp_blend_mode {
-    SGP_BLENDMODE_NONE,     /* no blending
+    SGP_BLENDMODE_NONE = 0, /* no blending
                                dstRGBA = srcRGBA */
     SGP_BLENDMODE_BLEND,    /* alpha blending
                                dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))
@@ -214,6 +214,12 @@ enum {
     _SGP_MAX_STACK_DEPTH = 64,
 };
 
+typedef enum _sgp_vertex_layout {
+    _SGP_VERTEXLAYOUT_SOLID = 0,
+    _SGP_VERTEXLAYOUT_TEXTURED,
+    _SGP_VERTEXLAYOUT_NUM
+} _sgp_vertex_layout;
+
 typedef struct _sgp_vertex {
     sgp_vec2 position;
     sgp_vec2 texcoord;
@@ -353,8 +359,10 @@ static const char tex_vs_source[] = "";
 static const char tex_fs_source[] = "";
 #endif
 
-static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type prim_type, sgp_blend_mode blend_mode, bool textured) {
-    uint32_t pip_index = (prim_type * _SGP_BLENDMODE_NUM * 2) + (blend_mode * 2) + (textured ? 1 : 0);
+static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type prim_type, sgp_blend_mode blend_mode, _sgp_vertex_layout vertex_layout) {
+    uint32_t pip_index = (prim_type * _SGP_BLENDMODE_NUM * _SGP_VERTEXLAYOUT_NUM) +
+                         (blend_mode * _SGP_VERTEXLAYOUT_NUM) +
+                         vertex_layout;
     if(_sgp.pipelines[pip_index].id != SG_INVALID_ID)
         return _sgp.pipelines[pip_index];
 
@@ -412,6 +420,19 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type prim_type, sgp_blend_m
     }
     blend.depth_format = SG_PIXELFORMAT_NONE;
 
+    sg_shader shd;
+    switch(vertex_layout) {
+        case _SGP_VERTEXLAYOUT_SOLID:
+            shd = _sgp.solid_shader;
+            break;
+        case _SGP_VERTEXLAYOUT_TEXTURED:
+            shd = _sgp.tex_shader;
+            break;
+        default:
+            SOKOL_UNREACHABLE;
+            break;
+    }
+
     // create pipeline
     sg_pipeline_desc pip_desc = {
         .layout = {
@@ -422,7 +443,7 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type prim_type, sgp_blend_m
                 {.offset=0, .format=SG_VERTEXFORMAT_FLOAT4},
             },
         },
-        .shader = textured ? _sgp.tex_shader : _sgp.solid_shader,
+        .shader = shd,
         .primitive_type = prim_type,
         .blend = blend
     };
@@ -468,18 +489,18 @@ static void _sgp_setup_pipelines() {
     SOKOL_ASSERT(_sgp.tex_shader.id != SG_INVALID_ID);
 
     // create common pipelines
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_BLEND, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_NONE, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_BLEND, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_NONE, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_BLEND, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_NONE, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_BLEND, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_NONE, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_BLEND, false);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE, true);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_BLEND, true);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_BLEND, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_NONE, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_BLEND, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_NONE, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_BLEND, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_NONE, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_BLEND, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_NONE, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_BLEND, _SGP_VERTEXLAYOUT_SOLID);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE, _SGP_VERTEXLAYOUT_TEXTURED);
+    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_BLEND, _SGP_VERTEXLAYOUT_TEXTURED);
 }
 
 bool sgp_setup(const sgp_desc* desc) {
@@ -1039,7 +1060,7 @@ void sgp_clear() {
     v[4].position = quad[0];
     v[5].position = quad[2];
 
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE, false);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE, _SGP_VERTEXLAYOUT_SOLID);
     _sgp_queue_draw(pip, vertex_index, num_vertices, (sg_image){0});
 }
 
@@ -1047,7 +1068,7 @@ void sgp_draw_points(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, _sgp.state.blend_mode, false);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_SOLID);
     _sgp_draw_solid_pip(pip, points, count);
 }
 
@@ -1062,7 +1083,7 @@ void sgp_draw_lines(const sgp_line* lines, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, _sgp.state.blend_mode, false);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_SOLID);
     _sgp_draw_solid_pip(pip, (const sgp_point*)lines, count*2);
 }
 
@@ -1077,7 +1098,7 @@ void sgp_draw_line_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, _sgp.state.blend_mode, false);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_SOLID);
     _sgp_draw_solid_pip(pip, points, count);
 }
 
@@ -1085,7 +1106,7 @@ void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, false);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_SOLID);
     _sgp_draw_solid_pip(pip, (const sgp_point*)triangles, count*3);
 }
 
@@ -1100,7 +1121,7 @@ void sgp_draw_filled_triangle_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, _sgp.state.blend_mode, false);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_SOLID);
     _sgp_draw_solid_pip(pip, points, count);
 }
 
@@ -1137,7 +1158,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
         v[5].position = quad[2];
     }
 
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, false);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_SOLID);
     _sgp_queue_draw(pip, vertex_index, num_vertices, (sg_image){0});
 }
 
@@ -1199,7 +1220,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t cou
         v[5].texcoord = vtexquad[2];
     }
 
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, true);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_TEXTURED);
     _sgp_queue_draw(pip, vertex_index, num_vertices, image);
 }
 
@@ -1274,7 +1295,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
         v[5].texcoord = vtexquad[2];
     }
 
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, true);
+    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode, _SGP_VERTEXLAYOUT_TEXTURED);
     _sgp_queue_draw(pip, vertex_index, num_vertices, image);
 }
 
