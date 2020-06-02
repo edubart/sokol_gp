@@ -415,6 +415,7 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type prim_type, sgp_blend_m
             };
             break;
         default:
+            blend = (sg_blend_state) {.enabled = false};
             SOKOL_UNREACHABLE;
             break;
     }
@@ -429,6 +430,7 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type prim_type, sgp_blend_m
             shd = _sgp.tex_shader;
             break;
         default:
+            shd = (sg_shader) {0};
             SOKOL_UNREACHABLE;
             break;
     }

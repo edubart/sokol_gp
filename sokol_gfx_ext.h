@@ -156,16 +156,17 @@ void _sg_d3d11_query_pixels(int x, int y, int w, int h, bool origin_top_left, vo
     staging_desc.Usage = D3D11_USAGE_STAGING;
     ID3D11Texture2D *staging_tex = NULL;
     HRESULT hr = ID3D11Device_CreateTexture2D(_sg.d3d11.dev, &staging_desc, NULL, &staging_tex);
+    _SOKOL_UNUSED(hr);
     SOKOL_ASSERT(SUCCEEDED(hr));
 
     // copy the desired portion of the back buffer to the staging texture
     y = (origin_top_left ? y : (_sg.d3d11.cur_height - (y + h)));
     D3D11_BOX src_box = {
-        .left = x,
-        .top = y,
+        .left = (UINT)x,
+        .top = (UINT)y,
         .front = 0,
-        .right = x + w,
-        .bottom = y + w,
+        .right = (UINT)(x + w),
+        .bottom = (UINT)(y + w),
         .back = 1,
     };
     ID3D11DeviceContext_CopySubresourceRegion(_sg.d3d11.ctx,
@@ -204,6 +205,7 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
     SOKOL_ASSERT(img);
     SOKOL_ASSERT(size >= (img->cmn.width * img->cmn.height * 4));
+    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_image_pixels(img, pixels);
 #elif defined(SOKOL_D3D11)
@@ -214,6 +216,7 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
 void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size) {
     SOKOL_ASSERT(pixels);
     SOKOL_ASSERT(size >= w*h);
+    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_pixels(x, y, w, h, origin_top_left, pixels);
 #elif defined(SOKOL_D3D11)
