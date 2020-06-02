@@ -81,13 +81,11 @@ int sample_app(sample_app_desc app) {
     sg_desc desc = {
         .context = {.depth_format = SG_PIXELFORMAT_NONE}
     };
-#ifdef SOKOL_D3D11
-    if(ctx_desc.backend == SGCTX_BACKEND_D3D11) {
-        desc.context.d3d11.device = sgctx.d3d11->device;
-        desc.context.d3d11.device_context = sgctx.d3d11->device_context;
-        desc.context.d3d11.render_target_view_cb = sgctx_d3d11_render_target_view;
-        desc.context.d3d11.depth_stencil_view_cb = sgctx_d3d11_depth_stencil_view;
-    }
+#if defined(SOKOL_D3D11)
+    desc.context.d3d11.device = sgctx.d3d11->device;
+    desc.context.d3d11.device_context = sgctx.d3d11->device_context;
+    desc.context.d3d11.render_target_view_cb = sgctx_d3d11_render_target_view;
+    desc.context.d3d11.depth_stencil_view_cb = sgctx_d3d11_depth_stencil_view;
 #endif
     sg_setup(&desc);
     if(!sg_isvalid()) {

@@ -163,33 +163,8 @@ SOKOL_API_DECL sg_backend sgctx_query_backend();
 #ifndef SOKOL_GCTX_IMPL_INCLUDED
 #define SOKOL_GCTX_IMPL_INCLUDED
 
-#ifndef SOKOL_ASSERT
-#include <assert.h>
-#define SOKOL_ASSERT(c) assert(c)
-#endif
-#ifndef SOKOL_MALLOC
-#include <stdlib.h>
-#define SOKOL_MALLOC(s) malloc(s)
-#define SOKOL_FREE(p) free(p)
-#endif
-#ifndef SOKOL_DEBUG
-#ifndef NDEBUG
-#define SOKOL_DEBUG (1)
-#endif
-#endif
-#ifndef SOKOL_LOG
-#ifdef SOKOL_DEBUG
-#include <stdio.h>
-#define SOKOL_LOG(s) { SOKOL_ASSERT(s); puts(s); }
-#else
-#define SOKOL_LOG(s)
-#endif
-#endif
-#ifndef SOKOL_UNREACHABLE
-#define SOKOL_UNREACHABLE SOKOL_ASSERT(false)
-#endif
-#ifndef _SOKOL_UNUSED
-#define _SOKOL_UNUSED(x) (void)(x)
+#ifndef SOKOL_GFX_IMPL_INCLUDED
+#error "Please include sokol_gfx.h implementation before sokol_gctx.h implementation"
 #endif
 
 #include <string.h>
@@ -364,8 +339,8 @@ bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
             .Format = DXGI_FORMAT_B8G8R8A8_UNORM
         },
         .SampleDesc = {
-            .Count = sgctx->desc.sample_count > 0 ? (UINT)sgctx->desc.sample_count : 1,
-            .Quality = sgctx->desc.sample_count > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0
+            .Count = (UINT)(sgctx->desc.sample_count > 0 ? sgctx->desc.sample_count : 1),
+            .Quality = (UINT)(sgctx->desc.sample_count > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0)
         },
         .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
         .BufferCount = 1,

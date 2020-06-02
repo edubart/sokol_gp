@@ -2296,7 +2296,7 @@ inline void sg_init_pass(sg_pass pass_id, const sg_pass_desc& desc) { return sg_
 #endif
 
 #ifndef _SOKOL_PRIVATE
-    #if defined(__GNUC__)
+    #if defined(__GNUC__) || defined(__clang__)
         #define _SOKOL_PRIVATE __attribute__((unused)) static
     #else
         #define _SOKOL_PRIVATE static
