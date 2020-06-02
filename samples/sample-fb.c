@@ -34,13 +34,14 @@ void draw_fbo() {
     };
     sg_begin_pass(fb_pass, &pass_action);
     sgp_flush();
-    sg_end_pass();
     sgp_end();
+    sg_end_pass();
     sg_commit();
 }
 
 void draw(int width, int height) {
     float time = SDL_GetTicks() / 1000.0f;
+    sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
     for(int y=0;y<height;y+=192) {
         for(int x=0;x<width;x+=192) {

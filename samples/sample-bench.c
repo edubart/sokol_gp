@@ -97,6 +97,21 @@ void bench_mixed() {
     }
 }
 
+void bench_sync_mixed() {
+    sgp_reset_color();
+    for(int y=0;y<count;++y) {
+        for(int x=0;x<count;++x) {
+            if((x+y) % 2 == 0) {
+                sgp_set_color(255, 0, 0, 255);
+                sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+            } else {
+                sgp_set_color(0, 255, 0, 255);
+                sgp_draw_textured_rect(image, x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+            }
+        }
+    }
+}
+
 void draw_cat() {
     sgp_reset_color();
     sgp_draw_textured_rect(image, 0, 0, rect_count*count*2, rect_count*count*2);
@@ -133,6 +148,9 @@ void draw(int width, int height) {
 
     sgp_translate(off, 0);
     draw_rect();
+
+    sgp_translate(off, 0);
+    bench_sync_mixed();
 }
 
 sg_image sg_load_image(const char *filename) {
