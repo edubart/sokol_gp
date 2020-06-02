@@ -18,6 +18,7 @@ extern "C" {
 #endif
 
 SOKOL_API_DECL void sg_query_image_pixels(sg_image img_id, void* pixels, int size);
+SOKOL_API_DECL void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -36,6 +37,7 @@ SOKOL_API_DECL void sg_query_image_pixels(sg_image img_id, void* pixels, int siz
 #include <SDL2/SDL.h>
 
 #if defined(SOKOL_GLCORE33)
+
 void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
     SOKOL_ASSERT(img->gl.target == GL_TEXTURE_2D);
     SOKOL_ASSERT(0 != img->gl.tex[img->cmn.active_slot]);
@@ -45,7 +47,24 @@ void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
     _SG_GL_CHECK_ERROR();
 }
 
+void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
+    SOKOL_ASSERT(pixels);
+    GLuint gl_fb;
+    GLint dims[4] = {0};
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&gl_fb);
+    _SG_GL_CHECK_ERROR();
+    glGetIntegerv(GL_VIEWPORT, dims);
+    int cur_height = dims[3];
+    y = origin_top_left ? (cur_height - (y+h)) : y;
+    _SG_GL_CHECK_ERROR();
+    glReadBuffer(gl_fb == 0 ? GL_BACK : GL_COLOR_ATTACHMENT0);
+    _SG_GL_CHECK_ERROR();
+    glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    _SG_GL_CHECK_ERROR();
+}
+
 #elif defined(SOKOL_D3D11)
+
 static uint32_t _sg_d3d11_dxgi_format_to_sdl_pixel_format(DXGI_FORMAT dxgi_format) {
     switch(dxgi_format) {
         case DXGI_FORMAT_B8G8R8A8_UNORM:
@@ -90,20 +109,90 @@ void _sg_d3d11_query_image_pixels(_sg_image_t* img, void* pixels) {
         (ID3D11Resource*)img->d3d11.tex2d,
         0, NULL);
 
-    // copy pixels from staging texture
-    D3D11_MAPPED_SUBRESOURCE msr = {0};
+    // map the staging texture's data to CPU-accessible memory
+    D3D11_MAPPED_SUBRESOURCE msr = {.pData = NULL};
     hr = ID3D11DeviceContext_Map(_sg.d3d11.ctx, (ID3D11Resource*)staging_tex, 0, D3D11_MAP_READ, 0, &msr);
     SOKOL_ASSERT(SUCCEEDED(hr));
+
+    // copy the data into the desired buffer, converting pixels to the desired format at the same time
     int res = SDL_ConvertPixels(
         img->cmn.width, img->cmn.height,
         _sg_d3d11_dxgi_format_to_sdl_pixel_format(staging_desc.Format),
         msr.pData, msr.RowPitch,
-        SDL_PIXELFORMAT_RGBA8888,
+        SDL_PIXELFORMAT_RGBA32,
         pixels, img->cmn.width * 4);
     SOKOL_ASSERT(res == 0);
     _SOKOL_UNUSED(res);
+
+    // unmap the texture
     ID3D11DeviceContext_Unmap(_sg.d3d11.ctx, (ID3D11Resource*)staging_tex, 0);
 
+    if(staging_tex) ID3D11Texture2D_Release(staging_tex);
+}
+
+void _sg_d3d11_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
+    // get current render target
+    ID3D11RenderTargetView* render_target_view = NULL;
+    ID3D11DeviceContext_OMGetRenderTargets(_sg.d3d11.ctx, 1, &render_target_view, NULL);
+
+    // fallback to window render target
+    if(!render_target_view)
+        render_target_view = (ID3D11RenderTargetView*)_sg.d3d11.rtv_cb();
+    SOKOL_ASSERT(render_target_view);
+
+    // get the back buffer texture
+    ID3D11Texture2D *back_buffer = NULL;
+    ID3D11View_GetResource(render_target_view, (ID3D11Resource**)&back_buffer);
+    SOKOL_ASSERT(back_buffer);
+
+    // create a staging texture to copy the screen's data to
+    D3D11_TEXTURE2D_DESC staging_desc;
+    ID3D11Texture2D_GetDesc(back_buffer, &staging_desc);
+    staging_desc.Width = w;
+    staging_desc.Height = h;
+    staging_desc.BindFlags = 0;
+    staging_desc.MiscFlags = 0;
+    staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    staging_desc.Usage = D3D11_USAGE_STAGING;
+    ID3D11Texture2D *staging_tex = NULL;
+    HRESULT hr = ID3D11Device_CreateTexture2D(_sg.d3d11.dev, &staging_desc, NULL, &staging_tex);
+    SOKOL_ASSERT(SUCCEEDED(hr));
+
+    // copy the desired portion of the back buffer to the staging texture
+    y = (origin_top_left ? y : (_sg.d3d11.cur_height - (y + h)));
+    D3D11_BOX src_box = {
+        .left = x,
+        .top = y,
+        .front = 0,
+        .right = x + w,
+        .bottom = y + w,
+        .back = 1,
+    };
+    ID3D11DeviceContext_CopySubresourceRegion(_sg.d3d11.ctx,
+        (ID3D11Resource*)staging_tex,
+        0, 0, 0, 0,
+        (ID3D11Resource*)back_buffer,
+        0, &src_box);
+
+    // map the staging texture's data to CPU-accessible memory
+    D3D11_MAPPED_SUBRESOURCE msr = {.pData = NULL};
+    hr = ID3D11DeviceContext_Map(_sg.d3d11.ctx, (ID3D11Resource*)staging_tex, 0, D3D11_MAP_READ, 0, &msr);
+    SOKOL_ASSERT(SUCCEEDED(hr));
+
+    // copy the data into the desired buffer, converting pixels to the desired format at the same time
+    int res = SDL_ConvertPixels(
+        w, h,
+        _sg_d3d11_dxgi_format_to_sdl_pixel_format(staging_desc.Format),
+        msr.pData, msr.RowPitch,
+        SDL_PIXELFORMAT_RGBA32,
+        pixels, w * 4);
+    SOKOL_ASSERT(res == 0);
+    _SOKOL_UNUSED(res);
+
+    // unmap the texture
+    ID3D11DeviceContext_Unmap(_sg.d3d11.ctx, (ID3D11Resource*)staging_tex, 0);
+
+    if(back_buffer) ID3D11Texture2D_Release(back_buffer);
     if(staging_tex) ID3D11Texture2D_Release(staging_tex);
 }
 
@@ -119,6 +208,16 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
     _sg_gl_query_image_pixels(img, pixels);
 #elif defined(SOKOL_D3D11)
     _sg_d3d11_query_image_pixels(img, pixels);
+#endif
+}
+
+void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size) {
+    SOKOL_ASSERT(pixels);
+    SOKOL_ASSERT(size >= w*h);
+#if defined(_SOKOL_ANY_GL)
+    _sg_gl_query_pixels(x, y, w, h, origin_top_left, pixels);
+#elif defined(SOKOL_D3D11)
+    _sg_d3d11_query_pixels(x, y, w, h, origin_top_left, pixels);
 #endif
 }
 

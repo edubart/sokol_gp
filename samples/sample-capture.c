@@ -2,18 +2,16 @@
 
 sg_image fb_image;
 sg_pass fb_pass;
-sg_image image;
+sg_image fb_captured_image;
+sg_image fb_captured_image2;
 sg_features features;
 
-sg_image capture_image() {
-    if(image.id != SG_INVALID_ID)
-        sg_destroy_image(image);
+sg_image capture_fb_image() {
     sg_image_info info = sg_query_image_info(fb_image);
     int num_pixels = info.width * info.height * 4;
     void *pixels = SOKOL_MALLOC(num_pixels);
     assert(pixels);
     sg_query_image_pixels(fb_image, pixels, num_pixels);
-    assert(pixels);
     sg_image_desc image_desc = {
         .width = info.width,
         .height = info.height,
@@ -24,6 +22,25 @@ sg_image capture_image() {
     assert(fb_image.id != SG_INVALID_ID);
     SOKOL_FREE(pixels);
     return image;
+}
+
+sg_image capture_screen_image(int x, int y, int w , int h) {
+    sg_image_info info = sg_query_image_info(fb_image);
+    int num_pixels = w * h * 4;
+    void *pixels = SOKOL_MALLOC(num_pixels);
+    assert(pixels);
+    sg_query_pixels(x, y, w, h, true, pixels, num_pixels);
+    sg_image_desc image_desc = {
+        .width = info.width,
+        .height = info.height,
+        .pixel_format = SG_PIXELFORMAT_RGBA8,
+        .content = {.subimage = {{{.ptr = pixels, .size = num_pixels}}}}
+    };
+    sg_image image = sg_make_image(&image_desc);
+    assert(fb_image.id != SG_INVALID_ID);
+    SOKOL_FREE(pixels);
+    return image;
+
 }
 
 void draw_fbo() {
@@ -39,18 +56,26 @@ void draw_fbo() {
     };
     sg_begin_pass(fb_pass, &pass_action);
     sgp_flush();
+
+    if(fb_captured_image2.id != SG_INVALID_ID)
+        sg_destroy_image(fb_captured_image2);
+    fb_captured_image2 = capture_screen_image(0, 0, 128, 128);
+
     sgp_end();
     sg_end_pass();
     sg_commit();
 
-    image = capture_image();
+    if(fb_captured_image.id != SG_INVALID_ID)
+        sg_destroy_image(fb_captured_image);
+    fb_captured_image = capture_fb_image();
 }
 
 void draw(int width, int height) {
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
     sgp_translate(width/2, height/2);
-    sgp_draw_textured_rect(image, -64, -64, 128, 128);
+    sgp_draw_textured_rect(fb_captured_image, -256, -64, 128, 128);
+    sgp_draw_textured_rect(fb_captured_image2,  128, -64, 128, 128);
 }
 
 bool init() {
