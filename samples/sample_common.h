@@ -1,11 +1,18 @@
 #define SDL_DISABLE_IMMINTRIN_H
 #include <SDL2/SDL.h>
 
-#define SOKOL_GLCORE33
-//#define SOKOL_D3D11
 //#define SOKOL_DUMMY_BACKEND
+#ifndef SOKOL_DUMMY_BACKEND
+#ifdef __WIN32__
+#define SOKOL_D3D11
+#else
+#define SOKOL_GLCORE33
+#endif
+#endif
+
 #define SOKOL_GCTX_IMPL
 #define SOKOL_IMPL
+#define SOKOL_GFX_EXT_IMPL
 #define SOKOL_GP_IMPL
 
 #ifdef SOKOL_GLCORE33
@@ -14,6 +21,7 @@
 #endif
 
 #include "sokol_gfx.h"
+#include "sokol_gfx_ext.h"
 #include "sokol_gctx.h"
 #include "sokol_gp.h"
 #include <stdio.h>
