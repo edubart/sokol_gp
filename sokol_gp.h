@@ -525,6 +525,9 @@ bool sgp_setup(const sgp_desc* desc) {
     _sgp.uniforms = (sgp_uniform*) SOKOL_MALLOC(_sgp.num_uniforms * sizeof(sgp_uniform));
     _sgp.commands = (_sgp_command*) SOKOL_MALLOC(_sgp.num_commands * sizeof(_sgp_command));
     SOKOL_ASSERT(_sgp.commands && _sgp.uniforms && _sgp.uniforms);
+    memset(_sgp.vertices, 0, _sgp.num_vertices * sizeof(_sgp_vertex));
+    memset(_sgp.uniforms, 0, _sgp.num_uniforms * sizeof(sgp_uniform));
+    memset(_sgp.commands, 0, _sgp.num_commands * sizeof(_sgp_command));
 
     // create vertex buffer
     sg_buffer_desc vertex_buf_desc = {
