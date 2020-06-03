@@ -10,6 +10,10 @@ https://github.com/edubart/sokol_gp
 #error "Please include sokol_gfx.h before sokol_gp.h"
 #endif
 
+#ifndef SGP_BATCH_OPTIMIZER_DEPTH
+#define SGP_BATCH_OPTIMIZER_DEPTH 8
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -219,9 +223,14 @@ typedef struct _sgp_vertex {
     sgp_vec2 texcoord;
 } _sgp_vertex;
 
+typedef struct _sgp_region {
+    float x1, y1, x2, y2;
+} _sgp_region;
+
 typedef struct _sgp_draw_args {
     sg_pipeline pip;
     sg_image img;
+    _sgp_region region;
     uint32_t uniform_index;
     uint32_t vertex_index;
     uint32_t num_vertices;
@@ -837,9 +846,9 @@ static sgp_uniform* _sgp_next_uniform() {
     }
 }
 
-static _sgp_command* _sgp_prev_command() {
-    if(SOKOL_LIKELY(_sgp.cur_command > 0)) {
-        return &_sgp.commands[_sgp.cur_command-1];
+static _sgp_command* _sgp_prev_command(uint32_t count) {
+    if(SOKOL_LIKELY((_sgp.cur_command - _sgp.state._base_command) >= count)) {
+        return &_sgp.commands[_sgp.cur_command-count];
     } else {
         return NULL;
     }
@@ -930,10 +939,86 @@ void sgp_reset_state() {
     sgp_reset_color();
 }
 
-static void _sgp_queue_draw(sg_pipeline pip, uint32_t vertex_index, uint32_t num_vertices, sg_image img) {
+static inline bool _sgp_uniform_equals(sgp_uniform* a, sgp_uniform* b) {
+    return memcmp(a, b, sizeof(sgp_uniform)) == 0;
+}
+
+static inline bool _sgp_region_overlaps(_sgp_region a, _sgp_region b) {
+    return !(a.x2 < b.x1 || b.x2 < a.x1  || a.y2 < b.y1 || b.y2 < a.y1);
+}
+
+static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform uniform, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
+    _sgp_command* inter_cmds[SGP_BATCH_OPTIMIZER_DEPTH];
+    _sgp_command* batch_cmd = NULL;
+    uint32_t inter_cmd_count = 0;
+
+    // find a command that is a good candidate to batch
+    for(uint32_t depth=0;depth<SGP_BATCH_OPTIMIZER_DEPTH;++depth) {
+        _sgp_command* prev_cmd = _sgp_prev_command(depth+1);
+
+        // stop on scissor/viewport or nonexistent command
+        if(!prev_cmd || prev_cmd->cmd != SGP_COMMAND_DRAW)
+            break;
+
+        // can only batch commands with the same bindings and uniforms
+        if(prev_cmd->args.draw.pip.id == pip.id &&
+           prev_cmd->args.draw.img.id == img.id &&
+           _sgp_uniform_equals(&uniform, &_sgp.uniforms[prev_cmd->args.draw.uniform_index])) {
+            batch_cmd = prev_cmd;
+            break;
+        } else {
+            inter_cmds[inter_cmd_count] = prev_cmd;
+            inter_cmd_count++;
+        }
+    }
+
+    if(!batch_cmd)
+        return false;
+
+    // allow batching only if the region over the incoming draw is not touched by intermediate commands
+    for(uint32_t i=0;i<inter_cmd_count;++i) {
+        _sgp_region inter_region = inter_cmds[i]->args.draw.region;
+        if(_sgp_region_overlaps(region, inter_region))
+            return false;
+    }
+
+    if(inter_cmd_count > 0) {
+        // not enough vertices space, can't do this batch
+        if(SOKOL_UNLIKELY(_sgp.cur_vertex + num_vertices > _sgp.num_vertices))
+            return false;
+
+        // rearrange vertices memory for the batch
+        uint32_t batch_end_index = batch_cmd->args.draw.vertex_index + batch_cmd->args.draw.num_vertices;
+        uint32_t move_count = _sgp.cur_vertex - batch_end_index;
+        SOKOL_ASSERT(move_count > 0);
+        memmove(&_sgp.vertices[batch_end_index + num_vertices], &_sgp.vertices[batch_end_index], move_count * sizeof(_sgp_vertex));
+        memcpy(&_sgp.vertices[batch_end_index], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
+
+        // add offset vertices of intermediate draw commands
+        for(uint32_t i=0;i<inter_cmd_count;++i)
+            inter_cmds[i]->args.draw.vertex_index += num_vertices;
+    }
+
+    // update draw region and vertices
+    _sgp_region batch_region = batch_cmd->args.draw.region;
+    batch_region.x1 = _sg_min(batch_region.x1, region.x1);
+    batch_region.y1 = _sg_min(batch_region.y1, region.y1);
+    batch_region.x2 = _sg_max(batch_region.x2, region.x2);
+    batch_region.y2 = _sg_max(batch_region.y2, region.y2);
+    batch_cmd->args.draw.num_vertices += num_vertices;
+    batch_cmd->args.draw.region = batch_region;
+
+    return true;
+}
+
+static void _sgp_queue_draw(sg_pipeline pip, sg_image img, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
+    // try to merge on previous command to draw in a batch
+    if(_sgp_merge_batch_command(pip, img, _sgp.state.uniform, region, vertex_index, num_vertices))
+        return;
+
     // setup uniform, try to reuse previous uniform when possible
     sgp_uniform *prev_uniform = _sgp_prev_uniform();
-    bool reuse_uniform = prev_uniform && memcmp(prev_uniform, &_sgp.state.uniform, sizeof(sgp_uniform)) == 0;
+    bool reuse_uniform = prev_uniform && _sgp_uniform_equals(prev_uniform, &_sgp.state.uniform);
     if(!reuse_uniform) {
         // append new uniform
         sgp_uniform *uniform = _sgp_next_uniform();
@@ -942,28 +1027,18 @@ static void _sgp_queue_draw(sg_pipeline pip, uint32_t vertex_index, uint32_t num
     }
     uint32_t uniform_index = _sgp.cur_uniform - 1;
 
-    _sgp_command* prev_cmd = _sgp_prev_command();
-    bool merge_cmd = prev_cmd &&
-                     prev_cmd->cmd == SGP_COMMAND_DRAW &&
-                     prev_cmd->args.draw.pip.id == pip.id &&
-                     prev_cmd->args.draw.img.id == img.id &&
-                     prev_cmd->args.draw.uniform_index == uniform_index;
-    if(merge_cmd) {
-        // merge command for batched rendering
-        prev_cmd->args.draw.num_vertices += num_vertices;
-    } else {
-        // append new draw command
-        _sgp_command* cmd = _sgp_next_command();
-        if(SOKOL_UNLIKELY(!cmd)) return;
-        cmd->cmd = SGP_COMMAND_DRAW,
-        cmd->args.draw = (_sgp_draw_args){
-            .pip = pip,
-            .img = img,
-            .uniform_index = uniform_index,
-            .vertex_index = vertex_index,
-            .num_vertices = num_vertices,
-        };
-    }
+    // append new draw command
+    _sgp_command* cmd = _sgp_next_command();
+    if(SOKOL_UNLIKELY(!cmd)) return;
+    cmd->cmd = SGP_COMMAND_DRAW,
+    cmd->args.draw = (_sgp_draw_args){
+        .pip = pip,
+        .img = img,
+        .region = region,
+        .uniform_index = uniform_index,
+        .vertex_index = vertex_index,
+        .num_vertices = num_vertices,
+    };
 }
 
 static inline sgp_vec2 _sgp_mat3_vec2_mul(const sgp_mat3* m, const sgp_vec2* v) {
@@ -978,23 +1053,25 @@ static void _sgp_transform_vec2(sgp_mat3* matrix, sgp_vec2* dst, const sgp_vec2 
         dst[i] = _sgp_mat3_vec2_mul(matrix, &src[i]);
 }
 
-static void _sgp_transform_vertices(sgp_mat3* matrix, _sgp_vertex* dst, const sgp_vec2 *src, uint32_t count) {
-    for(uint32_t i=0;i<count;++i) {
-        dst[i] = (_sgp_vertex) {
-            .position = _sgp_mat3_vec2_mul(matrix, &src[i]),
-            .texcoord = {0.0f, 0.0f}
-        };
-    }
-}
-
-static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t count) {
+static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t num_vertices) {
     uint32_t vertex_index = _sgp.cur_vertex;
-    _sgp_vertex* transformed_vertices = _sgp_next_vertices(count);
+    _sgp_vertex* transformed_vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    _sgp_transform_vertices(&mvp, transformed_vertices, vertices, count);
-    _sgp_queue_draw(pip, vertex_index, count, _sgp.white_img);
+    _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
+    for(uint32_t i=0;i<num_vertices;++i) {
+        sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
+        region.x1 = _sg_min(region.x1, p.x);
+        region.y1 = _sg_min(region.y1, p.y);
+        region.x2 = _sg_max(region.x2, p.x);
+        region.y2 = _sg_max(region.y2, p.y);
+        transformed_vertices[i] = (_sgp_vertex) {
+            .position = p,
+            .texcoord = {0.0f, 0.0f}
+        };
+    }
+    _sgp_queue_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
 }
 
 void sgp_clear() {
@@ -1025,8 +1102,10 @@ void sgp_clear() {
     v[4].position = quad[0]; v[4].texcoord = texcoord;
     v[5].position = quad[2]; v[5].texcoord = texcoord;
 
+    _sgp_region region = {.x1=-1.0f, .y1=-1.0f, .x2=1.0f, .y2=1.0f};
+
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE);
-    _sgp_queue_draw(pip, vertex_index, num_vertices, _sgp.white_img);
+    _sgp_queue_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_points(const sgp_point* points, uint32_t count) {
@@ -1105,6 +1184,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     _sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<count;v+=6, rect++, i++) {
         sgp_vec2 quad[4] = {
             {rect->x,           rect->y + rect->h}, // bottom left
@@ -1113,6 +1193,14 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
             {rect->x,  rect->y}, // top left
         };
         _sgp_transform_vec2(&mvp, quad, quad, 4);
+
+        for(uint32_t i=0;i<4;++i) {
+            region.x1 = _sg_min(region.x1, quad[i].x);
+            region.y1 = _sg_min(region.y1, quad[i].y);
+            region.x2 = _sg_max(region.x2, quad[i].x);
+            region.y2 = _sg_max(region.y2, quad[i].y);
+        }
+
         const sgp_vec2 texcoord = {0.0f, 0.0f};
 
         // make a quad composed of 2 triangles
@@ -1125,7 +1213,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     }
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, vertex_index, num_vertices, _sgp.white_img);
+    _sgp_queue_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_filled_rect(float x, float y, float w, float h) {
@@ -1148,6 +1236,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t cou
 
     // compute vertices
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
             {rects[i].x,              rects[i].y + rects[i].h}, // bottom left
@@ -1156,6 +1245,13 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t cou
             {rects[i].x,  rects[i].y}, // top left
         };
         _sgp_transform_vec2(&mvp, quad, quad, 4);
+
+        for(uint32_t i=0;i<4;++i) {
+            region.x1 = _sg_min(region.x1, quad[i].x);
+            region.y1 = _sg_min(region.y1, quad[i].y);
+            region.x2 = _sg_max(region.x2, quad[i].x);
+            region.y2 = _sg_max(region.y2, quad[i].y);
+        }
 
         const sgp_vec2 vtexquad[4] = {
             {0.0f, 1.0f}, // bottom left
@@ -1175,7 +1271,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t cou
     }
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, vertex_index, num_vertices, image);
+    _sgp_queue_draw(pip, image, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h) {
@@ -1208,6 +1304,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
 
     // compute vertices
     sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
             {rects[i].dst.x,                   rects[i].dst.y + rects[i].dst.h}, // bottom left
@@ -1216,6 +1313,14 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
             {rects[i].dst.x,  rects[i].dst.y}, // top left
         };
         _sgp_transform_vec2(&mvp, quad, quad, 4);
+
+        for(uint32_t i=0;i<4;++i) {
+            region.x1 = _sg_min(region.x1, quad[i].x);
+            region.y1 = _sg_min(region.y1, quad[i].y);
+            region.x2 = _sg_max(region.x2, quad[i].x);
+            region.y2 = _sg_max(region.y2, quad[i].y);
+        }
+
         _sgp_vertex* v = &vertices[i*6];
         v[0].position = quad[0];
         v[1].position = quad[1];
@@ -1250,7 +1355,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     }
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, vertex_index, num_vertices, image);
+    _sgp_queue_draw(pip, image, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_textured_rect_ex(sg_image image, sgp_rect dest_rect, sgp_rect src_rect) {
