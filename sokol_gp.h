@@ -993,13 +993,18 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform 
     // allow batching only if the region of the current or previous draw
     // is not touched by intermediate commands
     bool overlaps_next = false;
+    bool overlaps_prev = false;
     _sgp_region prev_region = prev_cmd->args.draw.region;
     for(uint32_t i=0;i<inter_cmd_count;++i) {
         _sgp_region inter_region = inter_cmds[i]->args.draw.region;
-        if(_sgp_region_overlaps(region, inter_region))
+        if(_sgp_region_overlaps(region, inter_region)) {
             overlaps_next = true;
-        if(overlaps_next && _sgp_region_overlaps(prev_region, inter_region))
-            return false;
+            if(overlaps_prev) return false;
+        }
+        if(_sgp_region_overlaps(prev_region, inter_region)) {
+            overlaps_prev = true;
+            if(overlaps_next) return false;
+        }
     }
 
     if(!overlaps_next) { // batch in the previous draw command
