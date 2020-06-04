@@ -5,18 +5,24 @@ using modern graphics API through sokol_gfx.
 
 **Warning:** Under development.
 
-## Planned features
+## Features
 
-* Be minimal
-* Use pure C
+* Minimal
 * Single header
+* Pure C11
 * Cross platform
 * Optimized for 2D rendering, no 3D support
-* Take advantage of modern unfixed pipeline graphics APIs
-* Build on top DX11/OpenGL 3.3/Metal/WebGPU APIs through sokol_gfx
-* Support fragment shaders on 2D surfaces
+* Use modern unfixed pipeline graphics APIs for more efficiency
+* Build on top D3D11/OpenGL 3.3/Metal/WebGPU APIs through sokol_gfx
+* Support for fragment shaders on 2D surfaces
 * Deferred rendering into a draw command queue
-* Automatic batching through command buffer optimization
-* Seamless dirty rectangles optimization to avoid redrawing
-* Have utilities for context creation on SDL window
-* Optional asynchronous rendering
+* Automatic batching (merge recent draw calls into batches automatically)
+* Batch optimizer (rearranges draw calls order to batch more)
+* Extensions to use with SDL2 (context creation)
+
+## Future features planned
+
+These are features I would like to implement someday in the future.
+
+* Asynchronous rendering (dispatch draw commands to dedicated render thread on the fly)
+* Automatic texture atlas packer (to allow more batching)

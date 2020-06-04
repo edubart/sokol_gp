@@ -51,12 +51,6 @@ typedef enum sgp_blend_mode {
     _SGP_BLENDMODE_NUM
 } sgp_blend_mode;
 
-typedef enum sgp_command_type {
-    SGP_COMMAND_DRAW,
-    SGP_COMMAND_VIEWPORT,
-    SGP_COMMAND_SCISSOR
-} sgp_command_type;
-
 typedef struct sgp_isize {
     int w, h;
 } sgp_isize;
@@ -242,8 +236,15 @@ typedef union _sgp_command_args {
     sgp_irect scissor;
 } _sgp_command_args;
 
+typedef enum _sgp_command_type {
+    SGP_COMMAND_NONE = 0,
+    SGP_COMMAND_DRAW,
+    SGP_COMMAND_VIEWPORT,
+    SGP_COMMAND_SCISSOR
+} _sgp_command_type;
+
 typedef struct _sgp_command {
-    sgp_command_type cmd;
+    _sgp_command_type cmd;
     _sgp_command_args args;
 } _sgp_command;
 
@@ -613,6 +614,8 @@ void sgp_flush() {
             }
             case SGP_COMMAND_DRAW: {
                 _sgp_draw_args* args = &cmd->args.draw;
+                if(args->num_vertices == 0)
+                    break;
                 if(args->pip.id != cur_pip_id) {
                     // when pipeline changes, also need to re-apply uniforms and bindings
                     cur_img_id = SG_IMPOSSIBLE_ID;
@@ -631,9 +634,11 @@ void sgp_flush() {
                     sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
                     sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, uniform, sizeof(sgp_uniform));
                 }
-                if(args->num_vertices > 0) {
-                    sg_draw(args->vertex_index - cur_base_vertex, args->num_vertices, 1);
-                }
+                sg_draw(args->vertex_index - cur_base_vertex, args->num_vertices, 1);
+                break;
+            }
+            case SGP_COMMAND_NONE: {
+                // this command was optimized away
                 break;
             }
             default: {
@@ -944,70 +949,122 @@ static inline bool _sgp_uniform_equals(sgp_uniform* a, sgp_uniform* b) {
 }
 
 static inline bool _sgp_region_overlaps(_sgp_region a, _sgp_region b) {
-    return !(a.x2 < b.x1 || b.x2 < a.x1  || a.y2 < b.y1 || b.y2 < a.y1);
+    return !(a.x2 <= b.x1 || b.x2 <= a.x1  || a.y2 <= b.y1 || b.y2 <= a.y1);
 }
 
 static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform uniform, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
     _sgp_command* inter_cmds[SGP_BATCH_OPTIMIZER_DEPTH];
-    _sgp_command* batch_cmd = NULL;
+    _sgp_command* prev_cmd = NULL;
     uint32_t inter_cmd_count = 0;
 
     // find a command that is a good candidate to batch
-    for(uint32_t depth=0;depth<SGP_BATCH_OPTIMIZER_DEPTH;++depth) {
-        _sgp_command* prev_cmd = _sgp_prev_command(depth+1);
+    uint32_t lookup_depth = SGP_BATCH_OPTIMIZER_DEPTH;
+    for(uint32_t depth=0;depth<lookup_depth;++depth) {
+        _sgp_command* cmd = _sgp_prev_command(depth+1);
+        // stop on nonexistent command
+        if(!cmd)
+            break;
 
-        // stop on scissor/viewport or nonexistent command
-        if(!prev_cmd || prev_cmd->cmd != SGP_COMMAND_DRAW)
+        // command was optimized away, search deeper
+        if(cmd->cmd == SGP_COMMAND_NONE) {
+            lookup_depth++;
+            continue;
+        }
+
+        // stop on scissor/viewport
+        if(cmd->cmd != SGP_COMMAND_DRAW)
             break;
 
         // can only batch commands with the same bindings and uniforms
-        if(prev_cmd->args.draw.pip.id == pip.id &&
-           prev_cmd->args.draw.img.id == img.id &&
-           _sgp_uniform_equals(&uniform, &_sgp.uniforms[prev_cmd->args.draw.uniform_index])) {
-            batch_cmd = prev_cmd;
+        if(cmd->args.draw.pip.id == pip.id &&
+           cmd->args.draw.img.id == img.id &&
+           _sgp_uniform_equals(&uniform, &_sgp.uniforms[cmd->args.draw.uniform_index])) {
+            prev_cmd = cmd;
             break;
         } else {
-            inter_cmds[inter_cmd_count] = prev_cmd;
+            inter_cmds[inter_cmd_count] = cmd;
             inter_cmd_count++;
         }
     }
 
-    if(!batch_cmd)
+    if(!prev_cmd)
         return false;
 
-    // allow batching only if the region over the incoming draw is not touched by intermediate commands
+    // allow batching only if the region of the current or previous draw
+    // is not touched by intermediate commands
+    bool overlaps_next = false;
+    _sgp_region prev_region = prev_cmd->args.draw.region;
     for(uint32_t i=0;i<inter_cmd_count;++i) {
         _sgp_region inter_region = inter_cmds[i]->args.draw.region;
         if(_sgp_region_overlaps(region, inter_region))
+            overlaps_next = true;
+        if(overlaps_next && _sgp_region_overlaps(prev_region, inter_region))
             return false;
     }
 
-    if(inter_cmd_count > 0) {
+    if(!overlaps_next) { // batch in the previous draw command
+        if(inter_cmd_count > 0) {
+            // not enough vertices space, can't do this batch
+            if(SOKOL_UNLIKELY(_sgp.cur_vertex + num_vertices > _sgp.num_vertices))
+                return false;
+
+            // rearrange vertices memory for the batch
+            uint32_t prev_end_vertex = prev_cmd->args.draw.vertex_index + prev_cmd->args.draw.num_vertices;
+            uint32_t move_count = _sgp.cur_vertex - prev_end_vertex;
+            memmove(&_sgp.vertices[prev_end_vertex + num_vertices], &_sgp.vertices[prev_end_vertex], move_count * sizeof(_sgp_vertex));
+            memcpy(&_sgp.vertices[prev_end_vertex], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
+
+            // offset vertices of intermediate draw commands
+            for(uint32_t i=0;i<inter_cmd_count;++i)
+                inter_cmds[i]->args.draw.vertex_index += num_vertices;
+        }
+
+        // update draw region and vertices
+        prev_region.x1 = _sg_min(prev_region.x1, region.x1);
+        prev_region.y1 = _sg_min(prev_region.y1, region.y1);
+        prev_region.x2 = _sg_max(prev_region.x2, region.x2);
+        prev_region.y2 = _sg_max(prev_region.y2, region.y2);
+        prev_cmd->args.draw.num_vertices += num_vertices;
+        prev_cmd->args.draw.region = prev_region;
+    } else { // batch in the next draw command
+        SOKOL_ASSERT(inter_cmd_count > 0);
+
+        // append new draw command
+        _sgp_command* cmd = _sgp_next_command();
+        if(SOKOL_UNLIKELY(!cmd))
+            return false;
+
+        uint32_t prev_num_vertices = prev_cmd->args.draw.num_vertices;
         // not enough vertices space, can't do this batch
-        if(SOKOL_UNLIKELY(_sgp.cur_vertex + num_vertices > _sgp.num_vertices))
+        if(SOKOL_UNLIKELY(_sgp.cur_vertex + prev_num_vertices > _sgp.num_vertices))
             return false;
 
         // rearrange vertices memory for the batch
-        uint32_t batch_end_index = batch_cmd->args.draw.vertex_index + batch_cmd->args.draw.num_vertices;
-        uint32_t move_count = _sgp.cur_vertex - batch_end_index;
-        SOKOL_ASSERT(move_count > 0);
-        memmove(&_sgp.vertices[batch_end_index + num_vertices], &_sgp.vertices[batch_end_index], move_count * sizeof(_sgp_vertex));
-        memcpy(&_sgp.vertices[batch_end_index], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
+        memmove(&_sgp.vertices[vertex_index + prev_num_vertices], &_sgp.vertices[vertex_index], num_vertices * sizeof(_sgp_vertex));
+        memcpy(&_sgp.vertices[vertex_index], &_sgp.vertices[prev_cmd->args.draw.vertex_index], prev_num_vertices * sizeof(_sgp_vertex));
 
-        // add offset vertices of intermediate draw commands
-        for(uint32_t i=0;i<inter_cmd_count;++i)
-            inter_cmds[i]->args.draw.vertex_index += num_vertices;
+        // update draw region and vertices
+        prev_region.x1 = _sg_min(prev_region.x1, region.x1);
+        prev_region.y1 = _sg_min(prev_region.y1, region.y1);
+        prev_region.x2 = _sg_max(prev_region.x2, region.x2);
+        prev_region.y2 = _sg_max(prev_region.y2, region.y2);
+        _sgp.cur_vertex += prev_num_vertices;
+        num_vertices += prev_num_vertices;
+
+        // configure the draw command
+        cmd->cmd = SGP_COMMAND_DRAW,
+        cmd->args.draw = (_sgp_draw_args){
+            .pip = pip,
+            .img = img,
+            .region = prev_region,
+            .uniform_index = prev_cmd->args.draw.uniform_index,
+            .vertex_index = vertex_index,
+            .num_vertices = num_vertices,
+        };
+
+        // force skipping the previous draw command
+        prev_cmd->cmd = SGP_COMMAND_NONE;
     }
-
-    // update draw region and vertices
-    _sgp_region batch_region = batch_cmd->args.draw.region;
-    batch_region.x1 = _sg_min(batch_region.x1, region.x1);
-    batch_region.y1 = _sg_min(batch_region.y1, region.y1);
-    batch_region.x2 = _sg_max(batch_region.x2, region.x2);
-    batch_region.y2 = _sg_max(batch_region.y2, region.y2);
-    batch_cmd->args.draw.num_vertices += num_vertices;
-    batch_cmd->args.draw.region = batch_region;
-
     return true;
 }
 

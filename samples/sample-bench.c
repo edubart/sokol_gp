@@ -80,16 +80,16 @@ void bench_colored_filled() {
 }
 
 void bench_mixed() {
-    sgp_reset_color();
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
+    for(int diagonal = 0; diagonal < 2*count - 1; ++diagonal) {
+        int advance = _sg_max(diagonal - count + 1, 0);
+        for(int y = diagonal - advance, x = advance; y >= 0 && x < count; --y, ++x) {
             if(x % 3 == 0)
                 sgp_set_color(255, 0, 0, 255);
             else if(x % 3 == 1)
                 sgp_set_color(0, 255, 0, 255);
             else
                 sgp_set_color(0, 0, 255, 255);
-            if(x % 2 == 0)
+            if((x+y) % 2 == 0)
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
             else
                 sgp_draw_textured_rect(image, x*rect_count*2, y*rect_count*2, rect_count, rect_count);
