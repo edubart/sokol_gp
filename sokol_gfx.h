@@ -2923,6 +2923,7 @@ typedef struct {
         GLuint prog;
         _sg_gl_shader_attr_t attrs[SG_MAX_VERTEX_ATTRIBUTES];
         _sg_gl_shader_stage_t stage[SG_NUM_SHADER_STAGES];
+        int texture_slots[SG_MAX_SHADERSTAGE_IMAGES];
     } gl;
 } _sg_gl_shader_t;
 typedef _sg_gl_shader_t _sg_shader_t;
@@ -3002,6 +3003,7 @@ typedef struct {
     int cur_ib_offset;
     GLenum cur_primitive_type;
     GLenum cur_index_type;
+    GLenum cur_active_texture;
     _sg_pipeline_t* cur_pipeline;
     sg_pipeline cur_pipeline_id;
 } _sg_gl_state_cache_t;
@@ -5277,10 +5279,18 @@ _SOKOL_PRIVATE void _sg_gl_restore_buffer_binding(GLenum target) {
     }
 }
 
+_SOKOL_PRIVATE void _sg_gl_active_texture(GLenum texture) {
+    if (_sg.gl.cache.cur_active_texture != texture) {
+        _sg.gl.cache.cur_active_texture = texture;
+        glActiveTexture(texture);
+    }
+}
+
 _SOKOL_PRIVATE void _sg_gl_clear_texture_bindings(bool force) {
     for (int i = 0; (i < SG_MAX_SHADERSTAGE_IMAGES) && (i < _sg.gl.max_combined_texture_image_units); i++) {
         if (force || (_sg.gl.cache.textures[i].texture != 0)) {
-            glActiveTexture(GL_TEXTURE0 + i);
+            GLenum gl_texture_slot = GL_TEXTURE0 + i;
+            glActiveTexture(gl_texture_slot);
             glBindTexture(GL_TEXTURE_2D, 0);
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
             #if !defined(SOKOL_GLES2)
@@ -5291,6 +5301,7 @@ _SOKOL_PRIVATE void _sg_gl_clear_texture_bindings(bool force) {
             #endif
             _sg.gl.cache.textures[i].target = 0;
             _sg.gl.cache.textures[i].texture = 0;
+            _sg.gl.cache.cur_active_texture = gl_texture_slot;
         }
     }
 }
@@ -5306,7 +5317,7 @@ _SOKOL_PRIVATE void _sg_gl_bind_texture(int slot_index, GLenum target, GLuint te
     }
     _sg_gl_texture_bind_slot* slot = &_sg.gl.cache.textures[slot_index];
     if ((slot->target != target) || (slot->texture != texture)) {
-        glActiveTexture(GL_TEXTURE0 + slot_index);
+        _sg_gl_active_texture(GL_TEXTURE0 + slot_index);
         /* if the target has changed, clear the previous binding on that target */
         if ((target != slot->target) && (slot->target != 0)) {
             glBindTexture(slot->target, 0);
@@ -6435,6 +6446,13 @@ _SOKOL_PRIVATE void _sg_gl_apply_pipeline(_sg_pipeline_t* pip) {
     }
 }
 
+_SOKOL_PRIVATE void _sg_gl_shader_texture_slot(_sg_shader_t* shd, GLint loc, int slot) {
+    if(shd->gl.texture_slots[loc] != slot) {
+        shd->gl.texture_slots[loc] = slot;
+        glUniform1i(loc, slot);
+    }
+}
+
 _SOKOL_PRIVATE void _sg_gl_apply_bindings(
     _sg_pipeline_t* pip,
     _sg_buffer_t** vbs, const int* vb_offsets, int num_vbs,
@@ -6462,7 +6480,7 @@ _SOKOL_PRIVATE void _sg_gl_apply_bindings(
                 const GLuint gl_tex = img->gl.tex[img->cmn.active_slot];
                 SOKOL_ASSERT(img && img->gl.target);
                 SOKOL_ASSERT((gl_shd_img->gl_tex_slot != -1) && gl_tex);
-                glUniform1i(gl_shd_img->gl_loc, gl_shd_img->gl_tex_slot);
+                _sg_gl_shader_texture_slot(pip->shader, gl_shd_img->gl_loc, gl_shd_img->gl_tex_slot);
                 _sg_gl_bind_texture(gl_shd_img->gl_tex_slot, img->gl.target, gl_tex);
             }
         }
