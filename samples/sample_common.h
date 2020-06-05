@@ -14,6 +14,9 @@
 #define SOKOL_IMPL
 #define SOKOL_GFX_EXT_IMPL
 #define SOKOL_GP_IMPL
+#define TINYCTHREAD_IMPL
+#include "thirdparty/tinycthread.h"
+//#include <threads.h>
 
 #ifdef SOKOL_GLCORE33
 #define FLEXTGL_IMPL
@@ -35,9 +38,29 @@ typedef struct sample_app_desc {
     bool (*init)();
     void (*terminate)();
     void (*draw)(int, int);
+    void (*swap)(int, int);
     int argc;
     char **argv;
 } sample_app_desc;
+
+
+sgctx_context sgctx;
+
+void sample_app_swap() {
+    if(!sgctx_swap(sgctx)) {
+        fprintf(stderr, "Failed to swap window buffers: %s\n", sgctx_get_error());
+        SDL_Event event = {.type = SDL_QUIT };
+        SDL_PushEvent(&event);
+    }
+}
+
+void sample_app_activate(bool active) {
+    if(!sgctx_activate(sgctx, active)) {
+        fprintf(stderr, "Failed to activate graphics context: %s\n", sgctx_get_error());
+        SDL_Event event = {.type = SDL_QUIT };
+        SDL_PushEvent(&event);
+    }
+}
 
 int sample_app(sample_app_desc app) {
     // initialize SDL
@@ -53,7 +76,7 @@ int sample_app(sample_app_desc app) {
 #endif
 
     // create window
-    SDL_Window *window = SDL_CreateWindow("NGP Sample",
+    SDL_Window *window = SDL_CreateWindow("Sokol GP Sample",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         512, 512,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
@@ -63,7 +86,7 @@ int sample_app(sample_app_desc app) {
     }
 
     // create graphics context
-    sgctx_context sgctx = sgctx_create(window, &ctx_desc);
+    sgctx = sgctx_create(window, &ctx_desc);
     if(!sgctx_is_valid(sgctx)) {
         fprintf(stderr, "Failed to create SGCTX context: %s\n", sgctx_get_error());
         return 1;
@@ -71,9 +94,12 @@ int sample_app(sample_app_desc app) {
 
     // set swap interval
     bool vsync = true;
+    bool mt = true;
     for(int i=1;i<app.argc;++i) {
         if(strcmp(app.argv[i], "-no-vsync") == 0)
             vsync = false;
+        if(strcmp(app.argv[i], "-no-mt") == 0)
+            mt = false;
     }
     sgctx_set_swap_interval(sgctx, vsync ? 1 : 0);
 
@@ -103,8 +129,13 @@ int sample_app(sample_app_desc app) {
 
     // setup sokol gp
     sgp_desc sample_sgp_desc = {
-        .max_vertices=262144,
-        .max_commands=32768,
+        .max_vertices = 262144,
+        .max_commands = 32768,
+        .swap_cb = sample_app_swap,
+#if defined(SOKOL_GLCORE33)
+        .activate_cb = sample_app_activate,
+#endif
+        .pump_events = SDL_PumpEvents
     };
     if(!sgp_setup(&sample_sgp_desc)) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error());
@@ -117,6 +148,8 @@ int sample_app(sample_app_desc app) {
         return 1;
     }
 
+    sgp_set_multithread(mt);
+
     // run loop
     while(!SDL_QuitRequested()) {
         sgctx_isize size = sgctx_get_drawable_size(sgctx);
@@ -125,24 +158,24 @@ int sample_app(sample_app_desc app) {
         SDL_Event event;
         while(SDL_PollEvent(&event)) { }
 
-        sgp_begin(size.w,  size.h);
-        app.draw(size.w, size.h);
-
         sg_pass_action default_pass_action = {
             .colors = {{.action = SG_ACTION_CLEAR, .val = {0.05f, 0.05f, 0.05f, 1.0f}}},
             .depth = {.action = SG_ACTION_DONTCARE},
             .stencil = {.action = SG_ACTION_DONTCARE},
         };
-        sg_begin_default_pass(&default_pass_action, size.w, size.h);
-        sgp_flush();
-        sg_end_pass();
-        sgp_end();
-        sg_commit();
+        sgp_begin_default_pass(&default_pass_action, size.w,  size.h);
+        app.draw(size.w, size.h);
+        sgp_end_pass();
 
-        if(!sgctx_swap(sgctx)) {
-            fprintf(stderr, "Failed to swap window buffers: %s\n", sgctx_get_error());
-            return 1;
+#if defined(SOKOL_D3D11)
+        if(sgctx_d3d11_must_update(sgctx.d3d11)) {
+            sgp_synchronize();
+            if(!sgctx_d3d11_update(sgctx.d3d11)) {
+                fprintf(stderr, "Failed to update window context: %s\n", sgctx_get_error());
+                return 1;
+            }
         }
+#endif
 
         // print FPS
         static uint32_t fps = 0;
@@ -155,6 +188,8 @@ int sample_app(sample_app_desc app) {
             fps = 0;
         }
     }
+
+    sgp_set_multithread(false);
 
     // destroy
     app.terminate();

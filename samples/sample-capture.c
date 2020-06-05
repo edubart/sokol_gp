@@ -3,10 +3,11 @@
 sg_image fb_image;
 sg_pass fb_pass;
 sg_image fb_captured_image;
-sg_image fb_captured_image2;
+sg_image screen_captured_image;
 sg_features features;
 
 sg_image capture_fb_image() {
+    sgp_lock();
     sg_image_info info = sg_query_image_info(fb_image);
     int num_pixels = info.width * info.height * 4;
     void *pixels = SOKOL_MALLOC(num_pixels);
@@ -21,10 +22,12 @@ sg_image capture_fb_image() {
     sg_image image = sg_make_image(&image_desc);
     assert(fb_image.id != SG_INVALID_ID);
     SOKOL_FREE(pixels);
+    sgp_unlock();
     return image;
 }
 
 sg_image capture_screen_image(int x, int y, int w , int h) {
+    sgp_lock();
     sg_image_info info = sg_query_image_info(fb_image);
     int num_pixels = w * h * 4;
     void *pixels = SOKOL_MALLOC(num_pixels);
@@ -39,43 +42,51 @@ sg_image capture_screen_image(int x, int y, int w , int h) {
     sg_image image = sg_make_image(&image_desc);
     assert(fb_image.id != SG_INVALID_ID);
     SOKOL_FREE(pixels);
+    sgp_unlock();
     return image;
-
 }
 
 void draw_fbo() {
-    sgp_begin(128, 128);
-    if(!features.origin_top_left)
-        sgp_ortho(0, 128, 128, 0);
-    sgp_set_color(1.0f, 0.0f, 0.0f, 1.0f);
-    sgp_draw_filled_triangle(0, 0, 128, 0, 64, 128);
     sg_pass_action pass_action = {
         .colors = {{.action = SG_ACTION_CLEAR, .val = {0.0f, 0.0f, 0.0f, 0.0f}}},
         .depth = {.action = SG_ACTION_DONTCARE},
         .stencil = {.action = SG_ACTION_DONTCARE},
     };
-    sg_begin_pass(fb_pass, &pass_action);
-    sgp_flush();
+    sgp_begin_pass(fb_pass, &pass_action);
+    if(!features.origin_top_left)
+        sgp_ortho(0, 128, 128, 0);
+    sgp_set_color(1.0f, 0.0f, 0.0f, 1.0f);
+    sgp_draw_filled_triangle(0, 0, 128, 0, 64, 128);
+    sgp_end_pass();
 
-    if(fb_captured_image2.id != SG_INVALID_ID)
-        sg_destroy_image(fb_captured_image2);
-    fb_captured_image2 = capture_screen_image(0, 0, 128, 128);
-
-    sgp_end();
-    sg_end_pass();
-    sg_commit();
-
-    if(fb_captured_image.id != SG_INVALID_ID)
+    if(fb_captured_image.id != SG_INVALID_ID) {
+        sgp_lock();
         sg_destroy_image(fb_captured_image);
+        sgp_unlock();
+    }
     fb_captured_image = capture_fb_image();
+}
+
+void swap(int width, int height) {
+    if(screen_captured_image.id != SG_INVALID_ID) {
+        sgp_lock();
+        sg_destroy_image(screen_captured_image);
+        sgp_unlock();
+    }
+    screen_captured_image = capture_screen_image(width/2-256, height/2-64, 128, 128);
 }
 
 void draw(int width, int height) {
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
-    sgp_translate(width/2, height/2);
-    sgp_draw_textured_rect(fb_captured_image, -256, -64, 128, 128);
-    sgp_draw_textured_rect(fb_captured_image2,  128, -64, 128, 128);
+
+    sgp_draw_textured_rect(fb_captured_image, width/2-256, height/2-64, 128, 128);
+
+    if(screen_captured_image.id != SG_INVALID_ID) {
+        if(!features.origin_top_left)
+            sgp_ortho(0, width, height, 0);
+        sgp_draw_textured_rect(screen_captured_image,  width/2+128, height/2-64, 128, 128);
+    }
 }
 
 bool init() {
@@ -107,6 +118,7 @@ int main(int argc, char *argv[]) {
         .init = init,
         .terminate = terminate,
         .draw = draw,
+        .swap = swap,
         .argc = argc,
         .argv = argv
     });

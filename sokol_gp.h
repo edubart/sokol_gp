@@ -27,6 +27,7 @@ typedef enum sgp_error {
     SGP_ERROR_VERTICES_FULL,
     SGP_ERROR_UNIFORMS_FULL,
     SGP_ERROR_COMMANDS_FULL,
+    SGP_ERROR_COMMAND_BUFFERS_FULL,
     SGP_ERROR_TRANSFORM_STACK_OVERFLOW,
     SGP_ERROR_TRANSFORM_STACK_UNDERFLOW,
     SGP_ERROR_STATE_STACK_OVERFLOW,
@@ -91,8 +92,11 @@ typedef struct sgp_color {
 } sgp_color;
 
 typedef struct sgp_desc {
-    int max_vertices;
-    int max_commands;
+    uint32_t max_vertices;
+    uint32_t max_commands;
+    void (*swap_cb)();
+    void (*activate_cb)(bool);
+    void (*pump_events)();
 } sgp_desc;
 
 typedef struct sgp_uniform {
@@ -103,6 +107,8 @@ typedef struct sgp_pipeline {
     uint32_t id;
 } sgp_pipeline;
 
+typedef struct _sgp_command_buffer _sgp_command_buffer;
+
 typedef struct sgp_state {
     sgp_isize frame_size;
     sgp_irect viewport;
@@ -112,9 +118,7 @@ typedef struct sgp_state {
     sgp_mat3 mvp;
     sgp_uniform uniform;
     sgp_blend_mode blend_mode;
-    uint32_t _base_vertex;
-    uint32_t _base_uniform;
-    uint32_t _base_command;
+    _sgp_command_buffer *cbuf;
 } sgp_state;
 
 // setup functions
@@ -125,9 +129,9 @@ SOKOL_API_DECL sgp_error sgp_get_error_code();
 SOKOL_API_DECL const char* sgp_get_error();
 
 // rendering functions
-SOKOL_API_DECL void sgp_begin(int width, int height);
-SOKOL_API_DECL void sgp_flush();
-SOKOL_API_DECL void sgp_end();
+SOKOL_API_DECL void sgp_begin_default_pass(const sg_pass_action* pass_action, int width, int height);
+SOKOL_API_DECL void sgp_begin_pass(sg_pass pass_id, const sg_pass_action* pass_action);
+SOKOL_API_DECL void sgp_end_pass();
 
 // state projection functions
 SOKOL_API_DECL void sgp_ortho(float left, float right, float top, float bottom);
@@ -177,6 +181,13 @@ SOKOL_API_DECL void sgp_draw_textured_rect_ex(sg_image image, sgp_rect dest_rect
 SOKOL_API_DECL sgp_state* sgp_query_state();
 SOKOL_API_DECL sgp_desc sgp_query_desc();
 
+// multi thread
+SOKOL_API_DECL bool sgp_set_multithread(bool enable);
+SOKOL_API_DECL bool sgp_is_multithread();
+SOKOL_API_DECL void sgp_synchronize();
+SOKOL_API_DECL void sgp_lock();
+SOKOL_API_DECL void sgp_unlock();
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
@@ -209,7 +220,9 @@ enum {
     _SGP_INIT_COOKIE = 0xCAFED0D,
     _SGP_DEFAULT_MAX_VERTICES = 65536,
     _SGP_DEFAULT_MAX_COMMANDS = 16384,
-    _SGP_MAX_STACK_DEPTH = 64,
+    _SGP_MAX_COMMAND_BUFFERS = 8,
+    _SGP_TRANSFORM_STACK_SIZE = 64,
+    _SGP_MULTITHREAD_QUEUE_SIZE = 3
 };
 
 typedef struct _sgp_vertex {
@@ -248,6 +261,19 @@ typedef struct _sgp_command {
     _sgp_command_args args;
 } _sgp_command;
 
+typedef struct _sgp_command_buffer {
+    uint32_t cur_vertex;
+    uint32_t cur_uniform;
+    uint32_t cur_command;
+    bool in_use;
+    sgp_isize pass_size;
+    sg_pass pass;
+    sg_pass_action pass_action;
+    _sgp_vertex* vertices;
+    sgp_uniform* uniforms;
+    _sgp_command* commands;
+} _sgp_command_buffer;
+
 typedef struct _sgp_context {
     uint32_t init_cookie;
     const char *last_error;
@@ -259,17 +285,20 @@ typedef struct _sgp_context {
     sg_buffer vertex_buf;
     sg_image white_img;
     sg_pipeline pipelines[_SG_PRIMITIVETYPE_NUM*_SGP_BLENDMODE_NUM];
+    _sgp_command_buffer cbufs[_SGP_MAX_COMMAND_BUFFERS];
 
-    // command queue
-    uint32_t cur_vertex;
-    uint32_t cur_uniform;
-    uint32_t cur_command;
-    uint32_t num_vertices;
-    uint32_t num_uniforms;
-    uint32_t num_commands;
-    _sgp_vertex* vertices;
-    sgp_uniform* uniforms;
-    _sgp_command* commands;
+    // multi thread
+    bool multithread;
+    bool working;
+    bool worker_context_active;
+    bool worker_idle;
+    bool worker_running;
+    bool locked;
+    thrd_t worker;
+    _sgp_command_buffer* cqueue[_SGP_MULTITHREAD_QUEUE_SIZE];
+    mtx_t worker_mtx;
+    cnd_t wake_worker_cnd;
+    cnd_t wake_main_cnd;
 
     // state tracking
     sgp_state state;
@@ -277,8 +306,8 @@ typedef struct _sgp_context {
     // matrix stack
     uint32_t cur_transform;
     uint32_t cur_state;
-    sgp_mat3 transform_stack[_SGP_MAX_STACK_DEPTH];
-    sgp_state state_stack[_SGP_MAX_STACK_DEPTH];
+    sgp_mat3 transform_stack[_SGP_TRANSFORM_STACK_SIZE];
+    sgp_state state_stack[_SGP_MAX_COMMAND_BUFFERS];
 } _sgp_context;
 
 static _sgp_context _sgp;
@@ -454,6 +483,106 @@ static void _sgp_setup_pipelines() {
     _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_BLEND);
 }
 
+static _sgp_command_buffer* _sgp_acquire_command_buffer() {
+    // lock because `in_use` field can be read/write in different threads
+    if(_sgp.multithread) {
+        int res = mtx_lock(&_sgp.worker_mtx);
+        SOKOL_ASSERT(res == thrd_success); _SOKOL_UNUSED(res);
+    }
+
+    for(uint32_t i=0;i<_SGP_MAX_COMMAND_BUFFERS;++i) {
+        _sgp_command_buffer *cbuf = &_sgp.cbufs[i];
+        if(!cbuf->in_use) {
+            cbuf->in_use = true;
+
+            // found a available command buffer, return
+            if(_sgp.multithread) {
+                int res = mtx_unlock(&_sgp.worker_mtx);
+                SOKOL_ASSERT(res == thrd_success); _SOKOL_UNUSED(res);
+            }
+            return cbuf;
+        }
+    }
+
+    // this should never happens, we always expects an available command buffer
+    SOKOL_UNREACHABLE;
+    return NULL;
+}
+
+static void _sgp_release_command_buffer(_sgp_command_buffer* cbuf) {
+    SOKOL_ASSERT(cbuf);
+    // this function expects that `worker_mtx` is already locked
+
+    // reset command buffer to be in_use again
+    cbuf->in_use = false;
+    cbuf->cur_vertex = 0;
+    cbuf->cur_uniform = 0;
+    cbuf->cur_command = 0;
+}
+
+static void _sgp_cnd_wait_pumped(cnd_t* cnd, mtx_t* mtx) {
+    int res;
+    _SOKOL_UNUSED(res);
+
+    // wait until there is a free queue slot
+    if(_sgp.desc.pump_events) {
+        // wait indefinitely for worker a little and pump events on timeout
+        struct timespec until = {0, 0};
+
+        res = timespec_get(&until, TIME_UTC);
+        SOKOL_ASSERT(res == TIME_UTC);
+
+        // mark to wait until 4 milliseconds in the future
+        until.tv_nsec += 4 * 1000000; // 4 ms
+        until.tv_sec += until.tv_nsec / 1000000000;
+        until.tv_nsec = until.tv_nsec % 1000000000;
+
+        // wait for signal for a few milliseconds
+        res = cnd_timedwait(cnd, mtx, &until);
+        SOKOL_ASSERT(res != thrd_error);
+
+        // pump events on timeouts
+        if(res == thrd_timedout)
+            _sgp.desc.pump_events();
+    } else {
+        // wait indefinitely for worker
+        res = cnd_wait(cnd, mtx);
+        SOKOL_ASSERT(res == thrd_success);
+    }
+}
+
+static void _sgp_enqueue_command_buffer(_sgp_command_buffer* cbuf) {
+    int res;
+    _SOKOL_UNUSED(res);
+
+    // lock
+    res = mtx_lock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+
+    while(true) {
+        for(int i=0;i<_SGP_MULTITHREAD_QUEUE_SIZE;++i) {
+            if(_sgp.cqueue[i] == NULL) {
+                // found an available queue slot, use it
+                _sgp.cqueue[i] = cbuf;
+
+                // notify the worker that we have a new queued job
+                res = cnd_signal(&_sgp.wake_worker_cnd);
+                SOKOL_ASSERT(res == thrd_success);
+
+                // can unlock now
+                res = mtx_unlock(&_sgp.worker_mtx);
+                SOKOL_ASSERT(res == thrd_success);
+                return;
+            }
+        }
+
+        _sgp_cnd_wait_pumped(&_sgp.wake_main_cnd, &_sgp.worker_mtx);
+    }
+
+    // this should never happen
+    SOKOL_UNREACHABLE;
+}
+
 bool sgp_setup(const sgp_desc* desc) {
     SOKOL_ASSERT(_sgp.init_cookie == 0);
 
@@ -463,24 +592,24 @@ bool sgp_setup(const sgp_desc* desc) {
 
     // set desc default values
     _sgp.desc = *desc;
-    _sgp.desc.max_vertices = _sg_def(desc->max_vertices, _SGP_DEFAULT_MAX_VERTICES);
-    _sgp.desc.max_commands = _sg_def(desc->max_commands, _SGP_DEFAULT_MAX_COMMANDS);
+    _sgp.desc.max_vertices = _sg_def(desc->max_vertices, (uint32_t)_SGP_DEFAULT_MAX_VERTICES);
+    _sgp.desc.max_commands = _sg_def(desc->max_commands, (uint32_t)_SGP_DEFAULT_MAX_COMMANDS);
 
     // allocate buffers
-    _sgp.num_vertices = _sgp.desc.max_vertices;
-    _sgp.num_commands = _sgp.desc.max_commands;
-    _sgp.num_uniforms = _sgp.desc.max_commands;
-    _sgp.vertices = (_sgp_vertex*) SOKOL_MALLOC(_sgp.num_vertices * sizeof(_sgp_vertex));
-    _sgp.uniforms = (sgp_uniform*) SOKOL_MALLOC(_sgp.num_uniforms * sizeof(sgp_uniform));
-    _sgp.commands = (_sgp_command*) SOKOL_MALLOC(_sgp.num_commands * sizeof(_sgp_command));
-    SOKOL_ASSERT(_sgp.commands && _sgp.uniforms && _sgp.uniforms);
-    memset(_sgp.vertices, 0, _sgp.num_vertices * sizeof(_sgp_vertex));
-    memset(_sgp.uniforms, 0, _sgp.num_uniforms * sizeof(sgp_uniform));
-    memset(_sgp.commands, 0, _sgp.num_commands * sizeof(_sgp_command));
+    for(uint32_t i=0;i<_SGP_MAX_COMMAND_BUFFERS;++i) {
+        _sgp_command_buffer *cbuf = &_sgp.cbufs[i];
+        cbuf->vertices = (_sgp_vertex*) SOKOL_MALLOC(_sgp.desc.max_vertices * sizeof(_sgp_vertex));
+        cbuf->uniforms = (sgp_uniform*) SOKOL_MALLOC(_sgp.desc.max_commands * sizeof(sgp_uniform));
+        cbuf->commands = (_sgp_command*) SOKOL_MALLOC(_sgp.desc.max_commands * sizeof(_sgp_command));
+        SOKOL_ASSERT(cbuf->commands && cbuf->uniforms && cbuf->uniforms);
+        memset(cbuf->vertices, 0, _sgp.desc.max_vertices * sizeof(_sgp_vertex));
+        memset(cbuf->uniforms, 0, _sgp.desc.max_commands * sizeof(sgp_uniform));
+        memset(cbuf->commands, 0, _sgp.desc.max_commands * sizeof(_sgp_command));
+    }
 
     // create vertex buffer
     sg_buffer_desc vertex_buf_desc = {
-        .size = (int)(_sgp.num_vertices * sizeof(_sgp_vertex)),
+        .size = (int)(_sgp.desc.max_vertices * sizeof(_sgp_vertex)),
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
     };
@@ -508,11 +637,22 @@ bool sgp_setup(const sgp_desc* desc) {
 
 void sgp_shutdown() {
     if(_sgp.init_cookie == 0) return; // not initialized
+
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state == 0);
-    SOKOL_FREE(_sgp.vertices);
-    SOKOL_FREE(_sgp.uniforms);
-    SOKOL_FREE(_sgp.commands);
+
+    // wait worker thread to finish it jobs first
+    sgp_set_multithread(false);
+
+    // free all command bufers
+    for(uint32_t i=0;i<_SGP_MAX_COMMAND_BUFFERS;++i) {
+        _sgp_command_buffer *cbuf = &_sgp.cbufs[i];
+        SOKOL_FREE(cbuf->vertices);
+        SOKOL_FREE(cbuf->uniforms);
+        SOKOL_FREE(cbuf->commands);
+    }
+
+    // destroy all allocate sokol stuff
     for(uint32_t i=0;i<_SG_PRIMITIVETYPE_NUM*_SGP_BLENDMODE_NUM;++i) {
         sg_pipeline pip = _sgp.pipelines[i];
         if(pip.id != SG_INVALID_ID)
@@ -521,6 +661,8 @@ void sgp_shutdown() {
     sg_destroy_shader(_sgp.shader);
     sg_destroy_buffer(_sgp.vertex_buf);
     sg_destroy_image(_sgp.white_img);
+
+
     _sgp = (_sgp_context){.init_cookie=0};
 }
 
@@ -540,7 +682,7 @@ const char* sgp_get_error() {
 
 static inline sgp_mat3 _sgp_default_proj(int width, int height) {
     // matrix to convert screen coordinate system
-    // to the usual the coordinate system used on the backends
+    // to the usual the coordinate system in_use on the backends
     return (sgp_mat3){{
         {2.0f/width,           0.0f, -1.0f},
         {      0.0f,   -2.0f/height,  1.0f},
@@ -548,10 +690,27 @@ static inline sgp_mat3 _sgp_default_proj(int width, int height) {
     }};
 }
 
-void sgp_begin(int width, int height) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(_sgp.cur_state >= _SGP_MAX_STACK_DEPTH)) {
-        _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW, "NGP state stack overflow");
+sg_pass_action _sgp_resolve_default_pass_action(const sg_pass_action* from) {
+    sg_pass_action to = *from;
+    for(int i=0;i<SG_MAX_COLOR_ATTACHMENTS;++i) {
+        if(to.colors[i].action  == _SG_ACTION_DEFAULT) {
+            to.colors[i].action = SG_ACTION_CLEAR;
+            to.colors[i].val[0] = 0.0f;
+            to.colors[i].val[1] = 0.0f;
+            to.colors[i].val[2] = 0.0f;
+            to.colors[i].val[3] = 0.0f;
+        }
+    }
+    if(to.depth.action == _SG_ACTION_DEFAULT)
+        to.depth.action = SG_ACTION_DONTCARE;
+    if(to.stencil.action == _SG_ACTION_DEFAULT)
+        to.depth.action = SG_ACTION_DONTCARE;
+    return to;
+}
+
+static void _sgp_push_state(sg_pass pass, const sg_pass_action* pass_action, int width, int height) {
+    if(SOKOL_UNLIKELY(_sgp.cur_state >= _SGP_MAX_COMMAND_BUFFERS)) {
+        _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW, "SGP state stack overflow");
         return;
     }
 
@@ -573,16 +732,37 @@ void sgp_begin(int width, int height) {
     _sgp.state.mvp = _sgp.state.proj;
     _sgp.state.uniform.color = (sgp_color){1.0f, 1.0f, 1.0f, 1.0f};
     _sgp.state.blend_mode = SGP_BLENDMODE_NONE;
-    _sgp.state._base_vertex = _sgp.cur_vertex;
-    _sgp.state._base_uniform = _sgp.cur_uniform;
-    _sgp.state._base_command = _sgp.cur_command;
+    _sgp.state.cbuf = _sgp_acquire_command_buffer();
+    _sgp.state.cbuf->pass = pass;
+    _sgp.state.cbuf->pass_action = _sgp_resolve_default_pass_action(pass_action);
+    _sgp.state.cbuf->pass_size = _sgp.state.frame_size;
 }
 
-void sgp_flush() {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
+static void _sgp_pop_state() {
+    if(SOKOL_UNLIKELY(_sgp.cur_state <= 0)) {
+        _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW, "SGP state stack underflow");
+        return;
+    }
 
-    if(_sgp.last_error_code != SGP_NO_ERROR || _sgp.cur_command <= 0)
+    // restore old state
+    _sgp.state = _sgp.state_stack[--_sgp.cur_state];
+}
+
+void sgp_begin_default_pass(const sg_pass_action* pass_action, int width, int height) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    _sgp_push_state((sg_pass){0}, pass_action, width, height);
+}
+
+void sgp_begin_pass(sg_pass pass, const sg_pass_action* pass_action) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    _sg_pass_t* _pass = _sg_lookup_pass(&_sg.pools, pass.id);
+    _sg_image_t* _img = _sg_pass_color_image(_pass, 0);
+    SOKOL_ASSERT(_img);
+    _sgp_push_state(pass, pass_action, _img->cmn.width, _img->cmn.height);
+}
+
+static void _sgp_flush(_sgp_command_buffer* cbuf) {
+    if(cbuf->cur_command <= 0)
         return;
 
     // define the resource bindings
@@ -595,12 +775,9 @@ void sgp_flush() {
     uint32_t cur_pip_id = SG_IMPOSSIBLE_ID;
     uint32_t cur_img_id = SG_IMPOSSIBLE_ID;
     uint32_t cur_uniform_index = SG_IMPOSSIBLE_ID;
-    uint32_t cur_base_vertex = 0;
-    uint32_t base_vertex = _sgp.state._base_vertex;
-    uint32_t size_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(_sgp_vertex);
-    sg_update_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], size_vertices);
-    for(uint32_t i = _sgp.state._base_command; i < _sgp.cur_command; ++i) {
-        _sgp_command* cmd = &_sgp.commands[i];
+    sg_update_buffer(_sgp.vertex_buf, cbuf->vertices, cbuf->cur_vertex * sizeof(_sgp_vertex));
+    for(uint32_t i = 0; i < cbuf->cur_command; ++i) {
+        _sgp_command* cmd = &cbuf->commands[i];
         switch(cmd->cmd) {
             case SGP_COMMAND_VIEWPORT: {
                 sgp_irect* args = &cmd->args.viewport;
@@ -624,17 +801,16 @@ void sgp_flush() {
                     sg_apply_pipeline(args->pip);
                 }
                 if(cur_img_id != args->img.id) {
-                    cur_base_vertex = base_vertex;
                     cur_img_id = args->img.id;
                     bind.fs_images[0] = args->img;
                     sg_apply_bindings(&bind);
                 }
                 if(cur_uniform_index != args->uniform_index) {
                     cur_uniform_index = args->uniform_index;
-                    sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
+                    sgp_uniform* uniform = &cbuf->uniforms[cur_uniform_index];
                     sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, uniform, sizeof(sgp_uniform));
                 }
-                sg_draw(args->vertex_index - cur_base_vertex, args->num_vertices, 1);
+                sg_draw(args->vertex_index, args->num_vertices, 1);
                 break;
             }
             case SGP_COMMAND_NONE: {
@@ -647,22 +823,54 @@ void sgp_flush() {
             }
         }
     }
-
-    // rewind indexes
-    _sgp.cur_vertex = _sgp.state._base_vertex;
-    _sgp.cur_uniform = _sgp.state._base_uniform;
-    _sgp.cur_command = _sgp.state._base_command;
 }
 
-void sgp_end() {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(_sgp.cur_state <= 0)) {
-        _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW, "NGP state stack underflow");
-        return;
+static void _sgp_run_command_buffer(_sgp_command_buffer* cbuf) {
+    if(cbuf->pass.id == SG_INVALID_ID) {
+        // begin default pass (usually the back buffer)
+        sg_begin_default_pass(&cbuf->pass_action, cbuf->pass_size.w, cbuf->pass_size.h);
+    } else {
+        // being a custom pass (usually frame buffers)
+        sg_begin_pass(cbuf->pass, &cbuf->pass_action);
     }
 
-    // restore old state
-    _sgp.state = _sgp.state_stack[--_sgp.cur_state];
+    // flush all drawing commands
+    _sgp_flush(cbuf);
+
+    // end pass
+    sg_end_pass();
+
+    // commit all drawing commands
+    sg_commit();
+}
+
+void sgp_end_pass() {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    _sgp_command_buffer *cbuf = _sgp.state.cbuf;
+    SOKOL_ASSERT(cbuf);
+
+    // only execute the drawing commands if no errors were found
+    if(_sgp.last_error_code == SGP_NO_ERROR) {
+        if(_sgp.multithread) {
+            // drawing commands will be executed in the worker thread
+            _sgp_enqueue_command_buffer(cbuf);
+        } else {
+            // execute drawing commands in this thread
+            _sgp_run_command_buffer(cbuf);
+        }
+    }
+
+    if(!_sgp.multithread) {
+        // swap buffers in case of default pass and swap_cb is set
+        if(cbuf->pass.id == 0 && _sgp.desc.swap_cb)
+            _sgp.desc.swap_cb();
+
+        // this command buffer can now be reused
+        _sgp_release_command_buffer(cbuf);
+    }
+
+    // restore old state so we can continue increasing old command buffer
+    _sgp_pop_state();
 }
 
 static inline sgp_mat3 _sgp_mat3_mul(const sgp_mat3* a, const sgp_mat3* b) {
@@ -715,8 +923,8 @@ void sgp_reset_proj() {
 void sgp_push_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
-        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
+    if(SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_TRANSFORM_STACK_SIZE)) {
+        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW, "SGP transform stack overflow");
         return;
     }
     _sgp.transform_stack[_sgp.cur_transform++] = _sgp.state.transform;
@@ -726,7 +934,7 @@ void sgp_pop_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(_sgp.cur_transform <= 0)) {
-        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
+        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "SGP transform stack underflow");
         return;
     }
     _sgp.state.transform = _sgp.transform_stack[--_sgp.cur_transform];
@@ -824,46 +1032,46 @@ void sgp_reset_color() {
 }
 
 static _sgp_vertex* _sgp_next_vertices(uint32_t count) {
-    if(SOKOL_LIKELY(_sgp.cur_vertex + count <= _sgp.num_vertices)) {
-        _sgp_vertex *vertices = &_sgp.vertices[_sgp.cur_vertex];
-        _sgp.cur_vertex += count;
+    if(SOKOL_LIKELY(_sgp.state.cbuf->cur_vertex + count <= _sgp.desc.max_vertices)) {
+        _sgp_vertex *vertices = &_sgp.state.cbuf->vertices[_sgp.state.cbuf->cur_vertex];
+        _sgp.state.cbuf->cur_vertex += count;
         return vertices;
     } else {
-        _sgp_set_error(SGP_ERROR_VERTICES_FULL, "NGP vertices buffer is full");
+        _sgp_set_error(SGP_ERROR_VERTICES_FULL, "SGP vertices buffer is full");
         return NULL;
     }
 }
 
 static sgp_uniform* _sgp_prev_uniform() {
-    if(SOKOL_LIKELY(_sgp.cur_uniform > 0)) {
-        return &_sgp.uniforms[_sgp.cur_uniform-1];
+    if(SOKOL_LIKELY(_sgp.state.cbuf->cur_uniform > 0)) {
+        return &_sgp.state.cbuf->uniforms[_sgp.state.cbuf->cur_uniform-1];
     } else {
         return NULL;
     }
 }
 
 static sgp_uniform* _sgp_next_uniform() {
-    if(SOKOL_LIKELY(_sgp.cur_uniform < _sgp.num_uniforms)) {
-        return &_sgp.uniforms[_sgp.cur_uniform++];
+    if(SOKOL_LIKELY(_sgp.state.cbuf->cur_uniform < _sgp.desc.max_commands)) {
+        return &_sgp.state.cbuf->uniforms[_sgp.state.cbuf->cur_uniform++];
     } else {
-        _sgp_set_error(SGP_ERROR_UNIFORMS_FULL, "NGP uniform buffer is full");
+        _sgp_set_error(SGP_ERROR_UNIFORMS_FULL, "SGP uniform buffer is full");
         return NULL;
     }
 }
 
 static _sgp_command* _sgp_prev_command(uint32_t count) {
-    if(SOKOL_LIKELY((_sgp.cur_command - _sgp.state._base_command) >= count)) {
-        return &_sgp.commands[_sgp.cur_command-count];
+    if(SOKOL_LIKELY(_sgp.state.cbuf->cur_command >= count)) {
+        return &_sgp.state.cbuf->commands[_sgp.state.cbuf->cur_command-count];
     } else {
         return NULL;
     }
 }
 
 static _sgp_command* _sgp_next_command() {
-    if(SOKOL_LIKELY(_sgp.cur_command < _sgp.num_commands)) {
-        return &_sgp.commands[_sgp.cur_command++];
+    if(SOKOL_LIKELY(_sgp.state.cbuf->cur_command < _sgp.desc.max_commands)) {
+        return &_sgp.state.cbuf->commands[_sgp.state.cbuf->cur_command++];
     } else {
-        _sgp_set_error(SGP_ERROR_COMMANDS_FULL, "NGP command buffer is full");
+        _sgp_set_error(SGP_ERROR_COMMANDS_FULL, "SGP command list is full");
         return NULL;
     }
 }
@@ -978,7 +1186,7 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform 
         // can only batch commands with the same bindings and uniforms
         if(cmd->args.draw.pip.id == pip.id &&
            cmd->args.draw.img.id == img.id &&
-           _sgp_uniform_equals(&uniform, &_sgp.uniforms[cmd->args.draw.uniform_index])) {
+           _sgp_uniform_equals(&uniform, &_sgp.state.cbuf->uniforms[cmd->args.draw.uniform_index])) {
             prev_cmd = cmd;
             break;
         } else {
@@ -1010,14 +1218,14 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform 
     if(!overlaps_next) { // batch in the previous draw command
         if(inter_cmd_count > 0) {
             // not enough vertices space, can't do this batch
-            if(SOKOL_UNLIKELY(_sgp.cur_vertex + num_vertices > _sgp.num_vertices))
+            if(SOKOL_UNLIKELY(_sgp.state.cbuf->cur_vertex + num_vertices > _sgp.desc.max_vertices))
                 return false;
 
             // rearrange vertices memory for the batch
             uint32_t prev_end_vertex = prev_cmd->args.draw.vertex_index + prev_cmd->args.draw.num_vertices;
-            uint32_t move_count = _sgp.cur_vertex - prev_end_vertex;
-            memmove(&_sgp.vertices[prev_end_vertex + num_vertices], &_sgp.vertices[prev_end_vertex], move_count * sizeof(_sgp_vertex));
-            memcpy(&_sgp.vertices[prev_end_vertex], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
+            uint32_t move_count = _sgp.state.cbuf->cur_vertex - prev_end_vertex;
+            memmove(&_sgp.state.cbuf->vertices[prev_end_vertex + num_vertices], &_sgp.state.cbuf->vertices[prev_end_vertex], move_count * sizeof(_sgp_vertex));
+            memcpy(&_sgp.state.cbuf->vertices[prev_end_vertex], &_sgp.state.cbuf->vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
 
             // offset vertices of intermediate draw commands
             for(uint32_t i=0;i<inter_cmd_count;++i)
@@ -1041,19 +1249,19 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform 
 
         uint32_t prev_num_vertices = prev_cmd->args.draw.num_vertices;
         // not enough vertices space, can't do this batch
-        if(SOKOL_UNLIKELY(_sgp.cur_vertex + prev_num_vertices > _sgp.num_vertices))
+        if(SOKOL_UNLIKELY(_sgp.state.cbuf->cur_vertex + prev_num_vertices > _sgp.desc.max_vertices))
             return false;
 
         // rearrange vertices memory for the batch
-        memmove(&_sgp.vertices[vertex_index + prev_num_vertices], &_sgp.vertices[vertex_index], num_vertices * sizeof(_sgp_vertex));
-        memcpy(&_sgp.vertices[vertex_index], &_sgp.vertices[prev_cmd->args.draw.vertex_index], prev_num_vertices * sizeof(_sgp_vertex));
+        memmove(&_sgp.state.cbuf->vertices[vertex_index + prev_num_vertices], &_sgp.state.cbuf->vertices[vertex_index], num_vertices * sizeof(_sgp_vertex));
+        memcpy(&_sgp.state.cbuf->vertices[vertex_index], &_sgp.state.cbuf->vertices[prev_cmd->args.draw.vertex_index], prev_num_vertices * sizeof(_sgp_vertex));
 
         // update draw region and vertices
         prev_region.x1 = _sg_min(prev_region.x1, region.x1);
         prev_region.y1 = _sg_min(prev_region.y1, region.y1);
         prev_region.x2 = _sg_max(prev_region.x2, region.x2);
         prev_region.y2 = _sg_max(prev_region.y2, region.y2);
-        _sgp.cur_vertex += prev_num_vertices;
+        _sgp.state.cbuf->cur_vertex += prev_num_vertices;
         num_vertices += prev_num_vertices;
 
         // configure the draw command
@@ -1073,7 +1281,7 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform 
     return true;
 }
 
-static void _sgp_queue_draw(sg_pipeline pip, sg_image img, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
+static void _sgp_draw(sg_pipeline pip, sg_image img, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
     // try to merge on previous command to draw in a batch
     if(_sgp_merge_batch_command(pip, img, _sgp.state.uniform, region, vertex_index, num_vertices))
         return;
@@ -1087,7 +1295,7 @@ static void _sgp_queue_draw(sg_pipeline pip, sg_image img, _sgp_region region, u
         if(SOKOL_UNLIKELY(!uniform)) return;
         *uniform = _sgp.state.uniform;
     }
-    uint32_t uniform_index = _sgp.cur_uniform - 1;
+    uint32_t uniform_index = _sgp.state.cbuf->cur_uniform - 1;
 
     // append new draw command
     _sgp_command* cmd = _sgp_next_command();
@@ -1116,7 +1324,7 @@ static void _sgp_transform_vec2(sgp_mat3* matrix, sgp_vec2* dst, const sgp_vec2 
 }
 
 static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t num_vertices) {
-    uint32_t vertex_index = _sgp.cur_vertex;
+    uint32_t vertex_index = _sgp.state.cbuf->cur_vertex;
     _sgp_vertex* transformed_vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1133,7 +1341,7 @@ static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint3
             .texcoord = {0.0f, 0.0f}
         };
     }
-    _sgp_queue_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
+    _sgp_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
 }
 
 void sgp_clear() {
@@ -1142,7 +1350,7 @@ void sgp_clear() {
 
     // setup vertices
     uint32_t num_vertices = 6;
-    uint32_t vertex_index = _sgp.cur_vertex;
+    uint32_t vertex_index = _sgp.state.cbuf->cur_vertex;
     _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1167,7 +1375,7 @@ void sgp_clear() {
     _sgp_region region = {.x1=-1.0f, .y1=-1.0f, .x2=1.0f, .y2=1.0f};
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE);
-    _sgp_queue_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
+    _sgp_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_points(const sgp_point* points, uint32_t count) {
@@ -1238,7 +1446,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
 
     // setup vertices
     uint32_t num_vertices = count * 6;
-    uint32_t vertex_index = _sgp.cur_vertex;
+    uint32_t vertex_index = _sgp.state.cbuf->cur_vertex;
     _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1275,7 +1483,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     }
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
+    _sgp_draw(pip, _sgp.white_img, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_filled_rect(float x, float y, float w, float h) {
@@ -1292,7 +1500,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t cou
 
     // setup vertices
     uint32_t num_vertices = count * 6;
-    uint32_t vertex_index = _sgp.cur_vertex;
+    uint32_t vertex_index = _sgp.state.cbuf->cur_vertex;
     _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1333,7 +1541,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t cou
     }
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, image, region, vertex_index, num_vertices);
+    _sgp_draw(pip, image, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h) {
@@ -1343,9 +1551,9 @@ void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h) 
     sgp_draw_textured_rects(image, &rect, 1);
 }
 
-static sgp_isize _sgp_query_image_size(sg_image img_id) {
-    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
-    return (sgp_isize){img->cmn.width, img->cmn.height};
+static sgp_isize _sgp_query_image_size(sg_image img) {
+    const _sg_image_t* _img = _sg_lookup_image(&_sg.pools, img.id);
+    return (sgp_isize){_img->cmn.width, _img->cmn.height};
 }
 
 void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, uint32_t count) {
@@ -1355,7 +1563,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
 
     // setup vertices
     uint32_t num_vertices = count * 6;
-    uint32_t vertex_index = _sgp.cur_vertex;
+    uint32_t vertex_index = _sgp.state.cbuf->cur_vertex;
     _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
@@ -1417,7 +1625,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     }
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, image, region, vertex_index, num_vertices);
+    _sgp_draw(pip, image, region, vertex_index, num_vertices);
 }
 
 void sgp_draw_textured_rect_ex(sg_image image, sgp_rect dest_rect, sgp_rect src_rect) {
@@ -1434,6 +1642,294 @@ sgp_desc sgp_query_desc() {
 sgp_state* sgp_query_state() {
     return &_sgp.state;
 }
+
+static int _sgp_worker_thread(void* param) {
+    _SOKOL_UNUSED(param);
+    int res;
+    _SOKOL_UNUSED(res);
+
+    // start locked
+    res = mtx_lock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+
+    // activate graphics context on this thread
+    _sgp.worker_context_active = true;
+    if(_sgp.desc.activate_cb)
+        _sgp.desc.activate_cb(true);
+
+    // notify that worker has started
+    _sgp.worker_running = true;
+    res = cnd_signal(&_sgp.wake_main_cnd);
+    SOKOL_ASSERT(res == thrd_success);
+
+    while(true) {
+        // sgp_lock/sgp_unlock requested, switch graphics context from this thread
+        if(_sgp.locked == _sgp.worker_context_active) {
+            if(_sgp.desc.activate_cb)
+                _sgp.desc.activate_cb(!_sgp.locked);
+            _sgp.worker_context_active = !_sgp.locked;
+
+            // signal that the context switch is done
+            res = cnd_signal(&_sgp.wake_main_cnd);
+            SOKOL_ASSERT(res == thrd_success);
+        }
+        // command buffer job is ready
+        else if (_sgp.cqueue[0] != NULL) {
+            SOKOL_ASSERT(_sgp.worker_context_active);
+
+            // pop next command buffer from the queue
+            _sgp_command_buffer* cbuf = _sgp.cqueue[0];
+            SOKOL_ASSERT(cbuf);
+            memmove(&_sgp.cqueue[0], &_sgp.cqueue[1], (_SGP_MULTITHREAD_QUEUE_SIZE - 1) * sizeof(_sgp_command_buffer*));
+            _sgp.cqueue[_SGP_MULTITHREAD_QUEUE_SIZE - 1] = NULL;
+
+            // notify that a queue slot was freed and a new command buffer can be queued
+            res = cnd_signal(&_sgp.wake_main_cnd);
+            SOKOL_ASSERT(res == thrd_success);
+
+            // unlock
+            res = mtx_unlock(&_sgp.worker_mtx);
+            SOKOL_ASSERT(res == thrd_success);
+
+            // execute the command buffer
+            _sgp_run_command_buffer(cbuf);
+
+            // do swap in case of default pass
+            if(cbuf->pass.id == 0 && _sgp.desc.swap_cb)
+                _sgp.desc.swap_cb();
+
+            // lock again
+            res = mtx_lock(&_sgp.worker_mtx);
+            SOKOL_ASSERT(res == thrd_success);
+
+            // this buffer can now be reused
+            _sgp_release_command_buffer(cbuf);
+        }
+        // no job to do and worker was requested to stop
+        else if(!_sgp.working) {
+            break;
+        }
+        // no job to do, wait
+        else {
+            // notify that we are idle in case of synchronize request
+            _sgp.worker_idle = true;
+            res = cnd_signal(&_sgp.wake_main_cnd);
+            SOKOL_ASSERT(res == thrd_success);
+
+            // wait for jobs
+            res = cnd_wait(&_sgp.wake_worker_cnd, &_sgp.worker_mtx);
+            SOKOL_ASSERT(res == thrd_success);
+            _sgp.worker_idle = false;
+        }
+    }
+
+    // deactivate graphics context from this thread
+    if(_sgp.desc.activate_cb)
+        _sgp.desc.activate_cb(false);
+
+    // notify that worker has stopped
+    _sgp.worker_running = false;
+    res = cnd_signal(&_sgp.wake_main_cnd);
+    SOKOL_ASSERT(res == thrd_success);
+
+    // unlock
+    res = mtx_unlock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+
+    return 0;
+}
+
+bool sgp_set_multithread(bool enable) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+
+    if(_sgp.multithread == enable)
+        return true;
+
+    if(enable) {
+        // initialize multi thread resources
+        if(mtx_init(&_sgp.worker_mtx, mtx_plain) != thrd_success)
+            return false;
+
+        if(cnd_init(&_sgp.wake_main_cnd) != thrd_success) {
+            mtx_destroy(&_sgp.worker_mtx);
+            return false;
+        }
+
+        if(cnd_init(&_sgp.wake_worker_cnd) != thrd_success) {
+            cnd_destroy(&_sgp.wake_main_cnd);
+            mtx_destroy(&_sgp.worker_mtx);
+            return false;
+        }
+
+        _sgp.multithread = true;
+        _sgp.working = true;
+
+        // deactivate the graphics context from this thread
+        if(_sgp.desc.activate_cb)
+            _sgp.desc.activate_cb(false);
+
+        // start the worker thread
+        if(thrd_create(&_sgp.worker, _sgp_worker_thread, NULL) != thrd_success) {
+            _sgp.multithread = false;
+            cnd_destroy(&_sgp.wake_worker_cnd);
+            cnd_destroy(&_sgp.wake_main_cnd);
+            mtx_destroy(&_sgp.worker_mtx);
+
+            // failed, activate the graphics context on this thread again
+            if(_sgp.desc.activate_cb)
+                _sgp.desc.activate_cb(true);
+
+            return false;
+        }
+
+        // lock
+        int res = mtx_lock(&_sgp.worker_mtx);
+        SOKOL_ASSERT(res == thrd_success); _SOKOL_UNUSED(res);
+
+        // wait worker to start while pumping events
+        while(!_sgp.worker_running)
+            _sgp_cnd_wait_pumped(&_sgp.wake_main_cnd, &_sgp.worker_mtx);
+
+        // unlock
+        res = mtx_unlock(&_sgp.worker_mtx);
+        SOKOL_ASSERT(res == thrd_success);
+    } else {
+        // lock
+        int res = mtx_lock(&_sgp.worker_mtx);
+        SOKOL_ASSERT(res == thrd_success); _SOKOL_UNUSED(res);
+
+        SOKOL_ASSERT(!_sgp.locked);
+        _sgp.working = false;
+
+        res = cnd_signal(&_sgp.wake_worker_cnd);
+        SOKOL_ASSERT(res == thrd_success); _SOKOL_UNUSED(res);
+
+        // wait worker to finish jobs while pumping events
+        while(_sgp.worker_running)
+            _sgp_cnd_wait_pumped(&_sgp.wake_main_cnd, &_sgp.worker_mtx);
+
+        // unlock
+        res = mtx_unlock(&_sgp.worker_mtx);
+        SOKOL_ASSERT(res == thrd_success);
+
+        // wait the worker thread to finish all jobs
+        res = thrd_join(_sgp.worker, NULL);
+        SOKOL_ASSERT(res == thrd_success);
+
+        _sgp.multithread = false;
+
+        // free muilti thread resources
+        cnd_destroy(&_sgp.wake_worker_cnd);
+        cnd_destroy(&_sgp.wake_main_cnd);
+        mtx_destroy(&_sgp.worker_mtx);
+        memset(&_sgp.wake_worker_cnd, 0, sizeof(cnd_t));
+        memset(&_sgp.wake_main_cnd, 0, sizeof(cnd_t));
+        memset(&_sgp.worker_mtx, 0, sizeof(mtx_t));
+        memset(&_sgp.worker, 0, sizeof(thrd_t));
+
+        // activate graphics context to the current thread
+        if(_sgp.desc.activate_cb)
+            _sgp.desc.activate_cb(true);
+    }
+
+    return true;
+}
+
+bool sgp_is_multithread() {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    return _sgp.multithread;
+}
+
+void sgp_synchronize() {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+
+    if(!_sgp.multithread)
+        return;
+
+    int res;
+    _SOKOL_UNUSED(res);
+
+    // lock
+    res = mtx_lock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+
+    // wait until worker finished and jobs and is idle
+    while(_sgp.cqueue[0] != NULL || !_sgp.worker_idle) {
+        _sgp_cnd_wait_pumped(&_sgp.wake_main_cnd, &_sgp.worker_mtx);
+    }
+
+    // unlock
+    res = mtx_unlock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+}
+
+void sgp_lock() {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+
+    if(!_sgp.multithread)
+        return;
+
+    int res;
+    _SOKOL_UNUSED(res);
+
+    // lock
+    res = mtx_lock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+
+    // wait until worker finished and jobs and is idle
+    while(_sgp.cqueue[0] != NULL || !_sgp.worker_idle) {
+        _sgp_cnd_wait_pumped(&_sgp.wake_main_cnd, &_sgp.worker_mtx);
+    }
+
+    SOKOL_ASSERT(!_sgp.locked);
+    _sgp.locked = true;
+
+    // some backends must explicitly do a graphics context switch when changing threads
+    if(_sgp.desc.activate_cb) {
+        // signal the worker to deactivate the graphics context
+        cnd_signal(&_sgp.wake_worker_cnd);
+
+        // wait for it
+        while(_sgp.worker_context_active)
+            _sgp_cnd_wait_pumped(&_sgp.wake_main_cnd, &_sgp.worker_mtx);
+
+        // activate graphics context on this thread
+        _sgp.desc.activate_cb(true);
+    }
+
+    // unlock
+    res = mtx_unlock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+}
+
+void sgp_unlock() {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+
+    if(!_sgp.multithread)
+        return;
+
+    int res;
+    _SOKOL_UNUSED(res);
+
+    res = mtx_lock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+
+    SOKOL_ASSERT(_sgp.locked);
+    _sgp.locked = false;
+
+    // some backends must explicitly do a graphics context switch when changing threads
+    if(_sgp.desc.activate_cb) {
+        // deactivate graphics context from this thread
+        _sgp.desc.activate_cb(false);
+
+        // signal the worker to activate the graphics context on his thread
+        cnd_signal(&_sgp.wake_worker_cnd);
+    }
+
+    res = mtx_unlock(&_sgp.worker_mtx);
+    SOKOL_ASSERT(res == thrd_success);
+}
+
 
 #endif // SOKOL_GP_IMPL_INCLUDED
 #endif // SOKOL_GP_IMPL

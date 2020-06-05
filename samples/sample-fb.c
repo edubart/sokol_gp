@@ -23,20 +23,16 @@ void draw_triangles() {
 }
 
 void draw_fbo() {
-    sgp_begin(128, 128);
-    sgp_ortho(0, 128, 128, 0);
-    draw_triangles();
-
     sg_pass_action pass_action = {
         .colors = {{.action = SG_ACTION_CLEAR, .val = {1.0f, 1.0f, 1.0f, 0.2f}}},
         .depth = {.action = SG_ACTION_DONTCARE},
         .stencil = {.action = SG_ACTION_DONTCARE},
     };
-    sg_begin_pass(fb_pass, &pass_action);
-    sgp_flush();
-    sgp_end();
-    sg_end_pass();
-    sg_commit();
+
+    sgp_begin_pass(fb_pass, &pass_action);
+    sgp_ortho(0, 128, 128, 0);
+    draw_triangles();
+    sgp_end_pass();
 }
 
 void draw(int width, int height) {
