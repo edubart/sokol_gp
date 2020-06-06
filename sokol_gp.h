@@ -551,7 +551,7 @@ static inline sgp_mat3 _sgp_default_proj(int width, int height) {
 void sgp_begin(int width, int height) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(SOKOL_UNLIKELY(_sgp.cur_state >= _SGP_MAX_STACK_DEPTH)) {
-        _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW, "NGP state stack overflow");
+        _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW, "SGP state stack overflow");
         return;
     }
 
@@ -657,7 +657,7 @@ void sgp_flush() {
 void sgp_end() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(SOKOL_UNLIKELY(_sgp.cur_state <= 0)) {
-        _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW, "NGP state stack underflow");
+        _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW, "SGP state stack underflow");
         return;
     }
 
@@ -716,7 +716,7 @@ void sgp_push_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
-        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW, "NGP transform stack overflow");
+        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW, "SGP transform stack overflow");
         return;
     }
     _sgp.transform_stack[_sgp.cur_transform++] = _sgp.state.transform;
@@ -726,7 +726,7 @@ void sgp_pop_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(_sgp.cur_transform <= 0)) {
-        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "NGP transform stack underflow");
+        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "SGP transform stack underflow");
         return;
     }
     _sgp.state.transform = _sgp.transform_stack[--_sgp.cur_transform];
@@ -829,7 +829,7 @@ static _sgp_vertex* _sgp_next_vertices(uint32_t count) {
         _sgp.cur_vertex += count;
         return vertices;
     } else {
-        _sgp_set_error(SGP_ERROR_VERTICES_FULL, "NGP vertices buffer is full");
+        _sgp_set_error(SGP_ERROR_VERTICES_FULL, "SGP vertices buffer is full");
         return NULL;
     }
 }
@@ -846,7 +846,7 @@ static sgp_uniform* _sgp_next_uniform() {
     if(SOKOL_LIKELY(_sgp.cur_uniform < _sgp.num_uniforms)) {
         return &_sgp.uniforms[_sgp.cur_uniform++];
     } else {
-        _sgp_set_error(SGP_ERROR_UNIFORMS_FULL, "NGP uniform buffer is full");
+        _sgp_set_error(SGP_ERROR_UNIFORMS_FULL, "SGP uniform buffer is full");
         return NULL;
     }
 }
@@ -863,7 +863,7 @@ static _sgp_command* _sgp_next_command() {
     if(SOKOL_LIKELY(_sgp.cur_command < _sgp.num_commands)) {
         return &_sgp.commands[_sgp.cur_command++];
     } else {
-        _sgp_set_error(SGP_ERROR_COMMANDS_FULL, "NGP command buffer is full");
+        _sgp_set_error(SGP_ERROR_COMMANDS_FULL, "SGP command buffer is full");
         return NULL;
     }
 }

@@ -53,7 +53,7 @@ int sample_app(sample_app_desc app) {
 #endif
 
     // create window
-    SDL_Window *window = SDL_CreateWindow("NGP Sample",
+    SDL_Window *window = SDL_CreateWindow("Sokol GP Sample",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         512, 512,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
