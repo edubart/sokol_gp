@@ -2465,7 +2465,9 @@ inline void sg_init_pass(sg_pass pass_id, const sg_pass_desc& desc) { return sg_
     #ifndef WIN32_LEAN_AND_MEAN
     #define WIN32_LEAN_AND_MEAN
     #endif
-    #include <windows.h>
+    #ifndef NOMINMAX
+    #define NOMINMAX
+    #endif
     #include <d3d11.h>
     #include <d3dcompiler.h>
     #ifdef _MSC_VER
@@ -2903,7 +2905,6 @@ typedef struct {
 } _sg_gl_uniform_block_t;
 
 typedef struct {
-    GLint gl_loc;
     int gl_tex_slot;
 } _sg_gl_shader_image_t;
 
@@ -2923,7 +2924,6 @@ typedef struct {
         GLuint prog;
         _sg_gl_shader_attr_t attrs[SG_MAX_VERTEX_ATTRIBUTES];
         _sg_gl_shader_stage_t stage[SG_NUM_SHADER_STAGES];
-        int texture_slots[SG_MAX_SHADERSTAGE_IMAGES];
     } gl;
 } _sg_gl_shader_t;
 typedef _sg_gl_shader_t _sg_shader_t;
@@ -5821,6 +5821,9 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_shader(_sg_shader_t* shd, const s
 
     /* resolve image locations */
     _SG_GL_CHECK_ERROR();
+    GLuint cur_prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, (GLint*)&cur_prog);
+    glUseProgram(gl_prog);
     int gl_tex_slot = 0;
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {
         const sg_shader_stage_desc* stage_desc = (stage_index == SG_SHADERSTAGE_VS)? &desc->vs : &desc->fs;
@@ -5829,18 +5832,21 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_shader(_sg_shader_t* shd, const s
             const sg_shader_image_desc* img_desc = &stage_desc->images[img_index];
             SOKOL_ASSERT(img_desc->type != _SG_IMAGETYPE_DEFAULT);
             _sg_gl_shader_image_t* gl_img = &gl_stage->images[img_index];
-            gl_img->gl_loc = img_index;
+            GLint gl_loc = img_index;
             if (img_desc->name) {
-                gl_img->gl_loc = glGetUniformLocation(gl_prog, img_desc->name);
+                gl_loc = glGetUniformLocation(gl_prog, img_desc->name);
             }
-            if (gl_img->gl_loc != -1) {
+            if (gl_loc != -1) {
                 gl_img->gl_tex_slot = gl_tex_slot++;
+                glUniform1i(gl_loc, gl_img->gl_tex_slot);
             }
             else {
                 gl_img->gl_tex_slot = -1;
             }
         }
     }
+    /* it's legal to call glUseProgram with 0 */
+    glUseProgram(cur_prog);
     _SG_GL_CHECK_ERROR();
     return SG_RESOURCESTATE_VALID;
 }
@@ -6102,6 +6108,11 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
     }
     _sg.gl.cur_pass_width = w;
     _sg.gl.cur_pass_height = h;
+
+    /* number of color attachments */
+    const int num_color_atts = pass ? pass->cmn.num_color_atts : 1;
+
+    /* bind the render pass framebuffer */
     if (pass) {
         /* offscreen pass */
         SOKOL_ASSERT(pass->gl.fb);
@@ -6114,16 +6125,7 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
                 GL_COLOR_ATTACHMENT2,
                 GL_COLOR_ATTACHMENT3
             };
-            int num_attrs = 0;
-            for (int i = 0; i < SG_MAX_COLOR_ATTACHMENTS; i++) {
-                if (pass->gl.color_atts[num_attrs].image) {
-                    num_attrs++;
-                }
-                else {
-                    break;
-                }
-            }
-            glDrawBuffers(num_attrs, att);
+            glDrawBuffers(num_color_atts, att);
         }
         #endif
     }
@@ -6134,26 +6136,44 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
     }
     glViewport(0, 0, w, h);
     glScissor(0, 0, w, h);
+
+    /* clear color and depth-stencil attachments if needed */
+    bool clear_color = false;
+    for (int i = 0; i < num_color_atts; i++) {
+        if (SG_ACTION_CLEAR == action->colors[i].action) {
+            clear_color = true;
+            break;
+        }
+    }
+    const bool clear_depth = (action->depth.action == SG_ACTION_CLEAR);
+    const bool clear_stencil = (action->stencil.action == SG_ACTION_CLEAR);
+
     bool need_pip_cache_flush = false;
-    if (_sg.gl.cache.blend.color_write_mask != SG_COLORMASK_RGBA) {
-        need_pip_cache_flush = true;
-        _sg.gl.cache.blend.color_write_mask = SG_COLORMASK_RGBA;
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    if (clear_color) {
+        if (_sg.gl.cache.blend.color_write_mask != SG_COLORMASK_RGBA) {
+            need_pip_cache_flush = true;
+            _sg.gl.cache.blend.color_write_mask = SG_COLORMASK_RGBA;
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        }
     }
-    if (!_sg.gl.cache.ds.depth_write_enabled && action->depth.action != SG_ACTION_DONTCARE) {
-        need_pip_cache_flush = true;
-        _sg.gl.cache.ds.depth_write_enabled = true;
-        glDepthMask(GL_TRUE);
+    if (clear_depth) {
+        if (!_sg.gl.cache.ds.depth_write_enabled) {
+            need_pip_cache_flush = true;
+            _sg.gl.cache.ds.depth_write_enabled = true;
+            glDepthMask(GL_TRUE);
+        }
+        if (_sg.gl.cache.ds.depth_compare_func != SG_COMPAREFUNC_ALWAYS) {
+            need_pip_cache_flush = true;
+            _sg.gl.cache.ds.depth_compare_func = SG_COMPAREFUNC_ALWAYS;
+            glDepthFunc(GL_ALWAYS);
+        }
     }
-    if (_sg.gl.cache.ds.depth_compare_func != SG_COMPAREFUNC_ALWAYS) {
-        need_pip_cache_flush = true;
-        _sg.gl.cache.ds.depth_compare_func = SG_COMPAREFUNC_ALWAYS;
-        glDepthFunc(GL_ALWAYS);
-    }
-    if (_sg.gl.cache.ds.stencil_write_mask != 0xFF && action->stencil.action != SG_ACTION_DONTCARE) {
-        need_pip_cache_flush = true;
-        _sg.gl.cache.ds.stencil_write_mask = 0xFF;
-        glStencilMask(0xFF);
+    if (clear_stencil) {
+        if (_sg.gl.cache.ds.stencil_write_mask != 0xFF) {
+            need_pip_cache_flush = true;
+            _sg.gl.cache.ds.stencil_write_mask = 0xFF;
+            glStencilMask(0xFF);
+        }
     }
     if (need_pip_cache_flush) {
         /* we messed with the state cache directly, need to clear cached
@@ -6171,12 +6191,12 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
     #endif
     if (!use_mrt_clear) {
         GLbitfield clear_mask = 0;
-        if (action->colors[0].action == SG_ACTION_CLEAR) {
+        if (clear_color) {
             clear_mask |= GL_COLOR_BUFFER_BIT;
             const float* c = action->colors[0].val;
             glClearColor(c[0], c[1], c[2], c[3]);
         }
-        if (action->depth.action == SG_ACTION_CLEAR) {
+        if (clear_depth) {
             clear_mask |= GL_DEPTH_BUFFER_BIT;
             #ifdef SOKOL_GLCORE33
             glClearDepth(action->depth.val);
@@ -6184,7 +6204,7 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
             glClearDepthf(action->depth.val);
             #endif
         }
-        if (action->stencil.action == SG_ACTION_CLEAR) {
+        if (clear_stencil) {
             clear_mask |= GL_STENCIL_BUFFER_BIT;
             glClearStencil(action->stencil.val);
         }
@@ -6195,24 +6215,19 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
     #if !defined SOKOL_GLES2
     else {
         SOKOL_ASSERT(pass);
-        for (int i = 0; i < SG_MAX_COLOR_ATTACHMENTS; i++) {
-            if (pass->gl.color_atts[i].image) {
-                if (action->colors[i].action == SG_ACTION_CLEAR) {
-                    glClearBufferfv(GL_COLOR, i, action->colors[i].val);
-                }
-            }
-            else {
-                break;
+        for (int i = 0; i < num_color_atts; i++) {
+            if (action->colors[i].action == SG_ACTION_CLEAR) {
+                glClearBufferfv(GL_COLOR, i, action->colors[i].val);
             }
         }
         if (pass->gl.ds_att.image) {
-            if ((action->depth.action == SG_ACTION_CLEAR) && (action->stencil.action == SG_ACTION_CLEAR)) {
+            if (clear_depth && clear_stencil) {
                 glClearBufferfi(GL_DEPTH_STENCIL, 0, action->depth.val, action->stencil.val);
             }
-            else if (action->depth.action == SG_ACTION_CLEAR) {
+            else if (clear_depth) {
                 glClearBufferfv(GL_DEPTH, 0, &action->depth.val);
             }
-            else if (action->stencil.action == SG_ACTION_CLEAR) {
+            else if (clear_stencil) {
                 GLuint val = action->stencil.val;
                 glClearBufferuiv(GL_STENCIL, 0, &val);
             }
@@ -6446,13 +6461,6 @@ _SOKOL_PRIVATE void _sg_gl_apply_pipeline(_sg_pipeline_t* pip) {
     }
 }
 
-_SOKOL_PRIVATE void _sg_gl_shader_texture_slot(_sg_shader_t* shd, GLint loc, int slot) {
-    if(shd->gl.texture_slots[loc] != slot) {
-        shd->gl.texture_slots[loc] = slot;
-        glUniform1i(loc, slot);
-    }
-}
-
 _SOKOL_PRIVATE void _sg_gl_apply_bindings(
     _sg_pipeline_t* pip,
     _sg_buffer_t** vbs, const int* vb_offsets, int num_vbs,
@@ -6475,12 +6483,11 @@ _SOKOL_PRIVATE void _sg_gl_apply_bindings(
         SOKOL_ASSERT(((stage_index == SG_SHADERSTAGE_VS)? num_vs_imgs : num_fs_imgs) == stage->num_images);
         for (int img_index = 0; img_index < stage->num_images; img_index++) {
             const _sg_gl_shader_image_t* gl_shd_img = &gl_stage->images[img_index];
-            if (gl_shd_img->gl_loc != -1) {
+            if (gl_shd_img->gl_tex_slot != -1) {
                 _sg_image_t* img = imgs[img_index];
                 const GLuint gl_tex = img->gl.tex[img->cmn.active_slot];
                 SOKOL_ASSERT(img && img->gl.target);
                 SOKOL_ASSERT((gl_shd_img->gl_tex_slot != -1) && gl_tex);
-                _sg_gl_shader_texture_slot(pip->shader, gl_shd_img->gl_loc, gl_shd_img->gl_tex_slot);
                 _sg_gl_bind_texture(gl_shd_img->gl_tex_slot, img->gl.target, gl_tex);
             }
         }

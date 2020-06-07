@@ -877,8 +877,12 @@ void sgp_viewport(int x, int y, int w, int h) {
        _sgp.state.viewport.w == w && _sgp.state.viewport.h == h)
         return;
 
-    _sgp_command* cmd = _sgp_next_command();
+    // try to reuse last command otherwise use the next one
+    _sgp_command* cmd = _sgp_prev_command(1);
+    if(!cmd || cmd->cmd != SGP_COMMAND_VIEWPORT)
+        cmd = _sgp_next_command();
     if(SOKOL_UNLIKELY(!cmd)) return;
+
     *cmd = (_sgp_command) {
         .cmd = SGP_COMMAND_VIEWPORT,
         .args = {.viewport = {x, y, w, h}},
@@ -910,7 +914,10 @@ void sgp_scissor(int x, int y, int w, int h) {
        _sgp.state.scissor.w == w && _sgp.state.scissor.h == h)
         return;
 
-    _sgp_command* cmd = _sgp_next_command();
+    // try to reuse last command otherwise use the next one
+    _sgp_command* cmd = _sgp_prev_command(1);
+    if(!cmd || cmd->cmd != SGP_COMMAND_SCISSOR)
+        cmd = _sgp_next_command();
     if(SOKOL_UNLIKELY(!cmd)) return;
 
     // coordinate scissor in viewport subspace
