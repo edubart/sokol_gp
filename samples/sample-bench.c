@@ -158,7 +158,7 @@ sg_image sg_load_image(const char *filename) {
     unsigned char* data = stbi_load(filename, &width, &height, NULL, 4);
     if(!data) {
         fprintf(stderr, "failed to load image '%s': stbi_load failed\n", filename);
-        return (sg_image){0};
+        return (sg_image){.id=0};
     }
     sg_image_desc image_desc = {
         .width = width,
@@ -171,7 +171,7 @@ sg_image sg_load_image(const char *filename) {
     stbi_image_free(data);
     if(image.id == SG_INVALID_ID) {
         fprintf(stderr, "failed to load image '%s': sg_make_image failed\n", filename);
-        return (sg_image){0};
+        return (sg_image){.id=0};
     }
     return image;
 }

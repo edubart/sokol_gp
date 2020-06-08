@@ -234,7 +234,7 @@ void sgctx_gl_destroy(sgctx_gl_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
     if(sgctx->context)
         SDL_GL_DeleteContext(sgctx->context);
-    *sgctx = (sgctx_gl_context){0};
+    *sgctx = (sgctx_gl_context){.init_cookie=0};
     SOKOL_FREE(sgctx);
 }
 
@@ -429,7 +429,7 @@ void sgctx_d3d11_destroy(sgctx_d3d11_context* sgctx) {
     _sgctx_d3d11_destroy_device(sgctx);
     if(_sgctx_d3d11_active == sgctx)
         _sgctx_d3d11_active = NULL;
-    *sgctx = (sgctx_d3d11_context){0};
+    *sgctx = (sgctx_d3d11_context){.init_cookie=0};
     SOKOL_FREE(sgctx);
 }
 
@@ -513,7 +513,7 @@ sgctx_dummy_context* sgctx_dummy_create(SDL_Window* window, sgctx_desc* desc) {
 
 void sgctx_dummy_destroy(sgctx_dummy_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
-    *sgctx = (sgctx_dummy_context){0};
+    *sgctx = (sgctx_dummy_context){.init_cookie=0};
     SOKOL_FREE(sgctx);
 }
 

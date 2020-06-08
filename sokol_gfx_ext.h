@@ -52,7 +52,7 @@ void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
 void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
     SOKOL_ASSERT(pixels);
     GLuint gl_fb;
-    GLint dims[4] = {0};
+    GLint dims[4];
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&gl_fb);
     _SG_GL_CHECK_ERROR();
     glGetIntegerv(GL_VIEWPORT, dims);
