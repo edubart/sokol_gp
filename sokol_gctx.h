@@ -45,7 +45,7 @@ typedef struct sgctx_error_desc {
     const char* message;
 } sgctx_error_desc;
 
-#if defined(SOKOL_GLCORE33)
+#if defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
 
 typedef void* SDL_GLContext;
 typedef struct sgctx_gl_context {
@@ -54,7 +54,8 @@ typedef struct sgctx_gl_context {
     SDL_GLContext context;
 } sgctx_gl_context;
 
-SOKOL_API_DECL void sgctx_gl_prepare_attributes(sgctx_desc* desc);
+
+SOKOL_API_DECL void sgctx_gl_prepare_attributes(sgctx_desc* desc, sg_backend backend);
 SOKOL_API_DECL sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc);
 SOKOL_API_DECL void sgctx_gl_destroy(sgctx_gl_context* sgctx);
 SOKOL_API_DECL bool sgctx_gl_activate(sgctx_gl_context* sgctx);
@@ -126,7 +127,7 @@ SOKOL_API_DECL bool sgctx_dummy_swap(sgctx_dummy_context* sgctx);
 typedef struct sgctx_context {
     union {
         void *p;
-#if defined(SOKOL_GLCORE33)
+#if defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
         sgctx_gl_context* gl;
 #elif defined(SOKOL_D3D11)
         sgctx_d3d11_context* d3d11;
@@ -190,12 +191,22 @@ sgctx_error sgctx_get_error_code() {
     return sgctx_last_error.code;
 }
 
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
 
-void sgctx_gl_prepare_attributes(sgctx_desc* desc) {
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+void sgctx_gl_prepare_attributes(sgctx_desc* desc, sg_backend backend) {
+    if(backend == SG_BACKEND_GLES2) {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    } else if(backend == SG_BACKEND_GLES3) {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    } else {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    }
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, desc->depth_size);
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, desc->sample_count > 0 ? 1 : 0);
@@ -547,7 +558,7 @@ bool sgctx_dummy_swap(sgctx_dummy_context* sgctx) {
 
 sgctx_context sgctx_create(SDL_Window* window, sgctx_desc* desc) {
     sgctx_context sgctx;
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     sgctx.gl = sgctx_gl_create(window, desc);
 #elif defined(SOKOL_D3D11)
     sgctx.d3d11 = sgctx_d3d11_create(window, desc);
@@ -558,7 +569,7 @@ sgctx_context sgctx_create(SDL_Window* window, sgctx_desc* desc) {
 }
 
 void sgctx_destroy(sgctx_context sgctx) {
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     sgctx_gl_destroy(sgctx.gl);
 #elif defined(SOKOL_D3D11)
     sgctx_d3d11_destroy(sgctx.d3d11);
@@ -569,7 +580,7 @@ void sgctx_destroy(sgctx_context sgctx) {
 
 bool sgctx_activate(sgctx_context sgctx) {
     SOKOL_ASSERT(sgctx.p);
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     return sgctx_gl_activate(sgctx.gl);
 #elif defined(SOKOL_D3D11)
     return sgctx_d3d11_activate(sgctx.d3d11);
@@ -581,7 +592,7 @@ bool sgctx_activate(sgctx_context sgctx) {
 bool sgctx_is_valid(sgctx_context sgctx) {
     if(sgctx.p == NULL)
         return false;
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     return sgctx.gl->init_cookie == _SGCTX_INIT_COOKIE;
 #elif defined(SOKOL_D3D11)
     return sgctx.d3d11->init_cookie == _SGCTX_INIT_COOKIE;
@@ -592,7 +603,7 @@ bool sgctx_is_valid(sgctx_context sgctx) {
 
 sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx) {
     SOKOL_ASSERT(sgctx.p);
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     return sgctx_gl_get_drawable_size(sgctx.gl);
 #elif defined(SOKOL_D3D11)
     return sgctx_d3d11_get_drawable_size(sgctx.d3d11);
@@ -603,7 +614,7 @@ sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx) {
 
 bool sgctx_set_swap_interval(sgctx_context sgctx, int interval) {
     SOKOL_ASSERT(sgctx.p);
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     return sgctx_gl_set_swap_interval(sgctx.gl, interval);
 #elif defined(SOKOL_D3D11)
     return sgctx_d3d11_set_swap_interval(sgctx.d3d11, interval);
@@ -614,7 +625,7 @@ bool sgctx_set_swap_interval(sgctx_context sgctx, int interval) {
 
 bool sgctx_swap(sgctx_context sgctx) {
     SOKOL_ASSERT(sgctx.p);
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     return sgctx_gl_swap(sgctx.gl);
 #elif defined(SOKOL_D3D11)
     return sgctx_d3d11_swap(sgctx.d3d11);
@@ -624,7 +635,7 @@ bool sgctx_swap(sgctx_context sgctx) {
 }
 
 sg_backend sgctx_query_backend() {
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
     return SG_BACKEND_GLCORE33;
 #elif defined(SOKOL_D3D11)
     return SG_BACKEND_D3D11;

@@ -6,6 +6,8 @@
 #ifdef __WIN32__
 #define SOKOL_D3D11
 #else
+//#define SOKOL_GLES2
+//#define SOKOL_GLES3
 #define SOKOL_GLCORE33
 #endif
 #endif
@@ -15,9 +17,17 @@
 #define SOKOL_GFX_EXT_IMPL
 #define SOKOL_GP_IMPL
 
-#ifdef SOKOL_GLCORE33
+#if defined(SOKOL_GLCORE33)
 #define FLEXTGL_IMPL
 #include "thirdparty/flextgl.h"
+#elif defined(SOKOL_GLES2)
+#define GL_GLEXT_PROTOTYPES
+#include <SDL2/SDL_opengles2.h>
+#elif defined(SOKOL_GLES3)
+#define GL_GLEXT_PROTOTYPES
+#include <GLES3/gl3platform.h>
+#include <GLES3/gl3.h>
+#include <GLES3/gl3ext.h>
 #endif
 
 #include "sokol_gfx.h"
@@ -49,7 +59,11 @@ int sample_app(sample_app_desc app) {
     };
 
 #if defined(SOKOL_GLCORE33)
-    sgctx_gl_prepare_attributes(&ctx_desc);
+    sgctx_gl_prepare_attributes(&ctx_desc, SG_BACKEND_GLCORE33);
+#elif defined(SOKOL_GLES2)
+    sgctx_gl_prepare_attributes(&ctx_desc, SG_BACKEND_GLES2);
+#elif defined(SOKOL_GLES3)
+    sgctx_gl_prepare_attributes(&ctx_desc, SG_BACKEND_GLES3);
 #endif
 
     // create window

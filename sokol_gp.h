@@ -312,7 +312,22 @@ static const char* _sgp_fs_source =
 "void main() {\n"
 "    frag_color = texture(tex, uv) * color;\n"
 "}\n";
-
+#elif defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
+static const char* _sgp_vs_source =
+"attribute vec4 coord;\n"
+"varying vec2 uv;\n"
+"void main() {\n"
+"    gl_Position = vec4(coord.xy, 0.0, 1.0);\n"
+"    uv = coord.zw;\n"
+"}\n";
+static const char* _sgp_fs_source =
+"precision mediump float;\n"
+"uniform sampler2D tex;\n"
+"uniform vec4 color;\n"
+"varying vec2 uv;\n"
+"void main() {\n"
+"    gl_FragColor = texture2D(tex, uv) * color;\n"
+"}\n";
 #elif defined(SOKOL_D3D11)
 static const char* _sgp_vs_source =
 "struct vs_out {\n"

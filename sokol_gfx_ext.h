@@ -37,9 +37,10 @@ SOKOL_API_DECL void sg_update_texture_filter(sg_image img_id, sg_filter min_filt
 
 #include <SDL2/SDL.h>
 
-#if defined(SOKOL_GLCORE33)
+#if defined(_SOKOL_ANY_GL)
 
 void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
+#if defined(SOKOL_GLCORE33)
     SOKOL_ASSERT(img->gl.target == GL_TEXTURE_2D);
     SOKOL_ASSERT(0 != img->gl.tex[img->cmn.active_slot]);
     _sg_gl_store_texture_binding(0);
@@ -47,9 +48,16 @@ void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
     glGetTexImage(img->gl.target, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     _SG_GL_CHECK_ERROR();
     _sg_gl_restore_texture_binding(0);
+#else
+    // unsupported in GLES
+    _SOKOL_UNUSED(img);
+    _SOKOL_UNUSED(pixels);
+    SOKOL_UNREACHABLE;
+#endif
 }
 
 void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
+#if defined(SOKOL_GLCORE33) || defined(SOKOL_GLES3)
     SOKOL_ASSERT(pixels);
     GLuint gl_fb;
     GLint dims[4];
@@ -63,6 +71,16 @@ void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void 
     _SG_GL_CHECK_ERROR();
     glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     _SG_GL_CHECK_ERROR();
+#else
+    _SOKOL_UNUSED(x);
+    _SOKOL_UNUSED(y);
+    _SOKOL_UNUSED(w);
+    _SOKOL_UNUSED(h);
+    _SOKOL_UNUSED(origin_top_left);
+    _SOKOL_UNUSED(pixels);
+    // unsupported in GLES2
+    SOKOL_UNREACHABLE;
+#endif
 }
 
 void _sg_gl_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
