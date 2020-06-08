@@ -25,10 +25,10 @@ typedef struct sgctx_isize {
 
 typedef enum sgctx_error {
     SGCTX_NO_ERROR = 0,
+    SGCTX_ALLOC_FAILED,
     SGCTX_CREATE_CONTEXT_FAILED,
     SGCTX_CREATE_RENDER_TARGET_FAILED,
     SGCTX_ACTIVATE_CONTEXT_FAILED,
-    SGCTX_GRAPHICS_API_UNSUPPORTED,
     SGCTX_SWAP_FAILED,
     SGCTX_DEVICE_LOST,
     SGCTX_WMINFO_FAILED,
@@ -206,28 +206,35 @@ sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc) {
     SOKOL_ASSERT(window);
     _SOKOL_UNUSED(desc);
 
-    SDL_GLContext context = SDL_GL_CreateContext(window);
-    if(!context) {
+    sgctx_gl_context* sgctx = (sgctx_gl_context*)SOKOL_MALLOC(sizeof(sgctx_gl_context));
+    if(!sgctx) {
+        _sgctx_set_error(SGCTX_ALLOC_FAILED, "SGCTX alloc failed");
+        return NULL;
+    }
+    memset(sgctx, 0, sizeof(sgctx_gl_context));
+    sgctx->init_cookie = _SGCTX_INIT_COOKIE;
+    sgctx->window = window;
+
+    sgctx->context = SDL_GL_CreateContext(window);
+    if(!sgctx->context) {
+        sgctx_gl_destroy(sgctx);
         _sgctx_set_error(SGCTX_CREATE_CONTEXT_FAILED, SDL_GetError());
         return NULL;
     }
-    if(SDL_GL_MakeCurrent(window, context) != 0) {
+    if(SDL_GL_MakeCurrent(window, sgctx->context) != 0) {
+        sgctx_gl_destroy(sgctx);
         _sgctx_set_error(SGCTX_ACTIVATE_CONTEXT_FAILED, SDL_GetError());
-        SDL_GL_DeleteContext(context);
         return NULL;
     }
 
-    sgctx_gl_context* sgctx = (sgctx_gl_context*)SOKOL_MALLOC(sizeof(sgctx_gl_context));
-    memset(sgctx, 0, sizeof(sgctx_gl_context));
-    sgctx->init_cookie = _SGCTX_INIT_COOKIE;
-    sgctx->context = context;
-    sgctx->window = window;
     return sgctx;
 }
 
 void sgctx_gl_destroy(sgctx_gl_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
-    SDL_GL_DeleteContext(sgctx->context);
+    if(sgctx->context)
+        SDL_GL_DeleteContext(sgctx->context);
+    *sgctx = (sgctx_gl_context){0};
     SOKOL_FREE(sgctx);
 }
 
@@ -278,9 +285,8 @@ bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
 
     SOKOL_ASSERT(sgctx->render_target);
     result = ID3D11Device_CreateRenderTargetView(sgctx->device, (ID3D11Resource*)sgctx->render_target, NULL, &sgctx->render_target_view);
-    if(!SUCCEEDED(result))
+    if(!SUCCEEDED(result) || !sgctx->render_target_view)
         return false;
-    SOKOL_ASSERT(sgctx->render_target_view);
 
     D3D11_TEXTURE2D_DESC ds_desc = {
         .Width = (UINT)sgctx->width,
@@ -293,18 +299,16 @@ bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
         .BindFlags = D3D11_BIND_DEPTH_STENCIL,
     };
     result = ID3D11Device_CreateTexture2D(sgctx->device, &ds_desc, NULL, &sgctx->depth_stencil_buffer);
-    if(!SUCCEEDED(result))
+    if(!SUCCEEDED(result) || !sgctx->depth_stencil_buffer)
         return false;
-    SOKOL_ASSERT(sgctx->depth_stencil_buffer);
 
     D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc = {
         .Format = ds_desc.Format,
         .ViewDimension = sgctx->desc.sample_count > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D
     };
     result = ID3D11Device_CreateDepthStencilView(sgctx->device, (ID3D11Resource*)sgctx->depth_stencil_buffer, &dsv_desc, &sgctx->depth_stencil_view);
-    if(!SUCCEEDED(result))
+    if(!SUCCEEDED(result) || !sgctx->depth_stencil_view)
         return false;
-    SOKOL_ASSERT(sgctx->depth_stencil_view);
     return true;
 }
 
@@ -364,7 +368,8 @@ bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
         &sgctx->device_context);            /* ppImmediateContext */
     if(!SUCCEEDED(result))
         return false;
-    SOKOL_ASSERT(sgctx->swap_chain && sgctx->device && sgctx->device_context);
+    if(!sgctx->swap_chain || !sgctx->device || !sgctx->device_context)
+        return false;
     return true;
 }
 
@@ -389,6 +394,10 @@ sgctx_d3d11_context* sgctx_d3d11_create(SDL_Window* window, sgctx_desc* desc) {
     SDL_GetWindowSize(window, &width, &height);
 
     sgctx_d3d11_context* sgctx = (sgctx_d3d11_context*)SOKOL_MALLOC(sizeof(sgctx_d3d11_context));
+    if(!sgctx) {
+        _sgctx_set_error(SGCTX_ALLOC_FAILED, "SGCTX alloc failed");
+        return NULL;
+    }
     memset(sgctx, 0, sizeof(sgctx_d3d11_context));
     sgctx->init_cookie = _SGCTX_INIT_COOKIE;
     sgctx->desc = *desc;
@@ -398,16 +407,15 @@ sgctx_d3d11_context* sgctx_d3d11_create(SDL_Window* window, sgctx_desc* desc) {
 
     // create device and swap chain
     if(!_sgctx_d3d11_create_device(sgctx, wminfo.info.win.window)) {
-        _sgctx_set_error(SGCTX_CREATE_CONTEXT_FAILED, "DirectX 11 failed to create device");
+        sgctx_d3d11_destroy(sgctx);
+        _sgctx_set_error(SGCTX_CREATE_CONTEXT_FAILED, "D3D11 failed to create device");
         return NULL;
     }
 
     // create default render target
     if(!_sgctx_d3d11_create_default_render_target(sgctx)) {
-        _sgctx_set_error(SGCTX_CREATE_RENDER_TARGET_FAILED, "DirectX 11 failed to create default render target");
-        _sgctx_d3d11_destroy_default_render_target(sgctx);
-        _sgctx_d3d11_destroy_device(sgctx);
-        SOKOL_FREE(sgctx);
+        sgctx_d3d11_destroy(sgctx);
+        _sgctx_set_error(SGCTX_CREATE_RENDER_TARGET_FAILED, "D3D11 failed to create default render target");
         return NULL;
     }
 
@@ -421,6 +429,7 @@ void sgctx_d3d11_destroy(sgctx_d3d11_context* sgctx) {
     _sgctx_d3d11_destroy_device(sgctx);
     if(_sgctx_d3d11_active == sgctx)
         _sgctx_d3d11_active = NULL;
+    *sgctx = (sgctx_d3d11_context){0};
     SOKOL_FREE(sgctx);
 }
 
@@ -492,6 +501,10 @@ sgctx_dummy_context* sgctx_dummy_create(SDL_Window* window, sgctx_desc* desc) {
     SOKOL_ASSERT(window);
     _SOKOL_UNUSED(desc);
     sgctx_dummy_context* sgctx = (sgctx_dummy_context*)SOKOL_MALLOC(sizeof(sgctx_dummy_context));
+    if(!sgctx) {
+        _sgctx_set_error(SGCTX_ALLOC_FAILED, "SGCTX alloc failed");
+        return NULL;
+    }
     memset(sgctx, 0, sizeof(sgctx_dummy_context));
     sgctx->init_cookie = _SGCTX_INIT_COOKIE;
     sgctx->window = window;
@@ -500,6 +513,7 @@ sgctx_dummy_context* sgctx_dummy_create(SDL_Window* window, sgctx_desc* desc) {
 
 void sgctx_dummy_destroy(sgctx_dummy_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
+    *sgctx = (sgctx_dummy_context){0};
     SOKOL_FREE(sgctx);
 }
 
