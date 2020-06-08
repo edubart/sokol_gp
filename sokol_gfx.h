@@ -2998,6 +2998,7 @@ typedef struct {
     GLuint index_buffer;
     GLuint stored_vertex_buffer;
     GLuint stored_index_buffer;
+    GLuint prog;
     _sg_gl_texture_bind_slot textures[SG_MAX_SHADERSTAGE_IMAGES];
     _sg_gl_texture_bind_slot stored_texture;
     int cur_ib_offset;
@@ -5272,10 +5273,16 @@ _SOKOL_PRIVATE void _sg_gl_store_buffer_binding(GLenum target) {
 
 _SOKOL_PRIVATE void _sg_gl_restore_buffer_binding(GLenum target) {
     if (target == GL_ARRAY_BUFFER) {
-        _sg_gl_bind_buffer(target, _sg.gl.cache.stored_vertex_buffer);
+        if(_sg.gl.cache.stored_vertex_buffer != 0) {
+            /* we only care restoring valid ids */
+            _sg_gl_bind_buffer(target, _sg.gl.cache.stored_vertex_buffer);
+        }
     }
     else {
-        _sg_gl_bind_buffer(target, _sg.gl.cache.stored_index_buffer);
+        if(_sg.gl.cache.stored_index_buffer != 0) {
+            /* we only care restoring valid ids */
+            _sg_gl_bind_buffer(target, _sg.gl.cache.stored_index_buffer);
+        }
     }
 }
 
@@ -5339,7 +5346,10 @@ _SOKOL_PRIVATE void _sg_gl_store_texture_binding(int slot_index) {
 _SOKOL_PRIVATE void _sg_gl_restore_texture_binding(int slot_index) {
     SOKOL_ASSERT(slot_index < SG_MAX_SHADERSTAGE_IMAGES);
     const _sg_gl_texture_bind_slot* slot = &_sg.gl.cache.stored_texture;
-    _sg_gl_bind_texture(slot_index, slot->target, slot->texture);
+    if(slot->texture != 0) {
+        /* we only care restoring valid ids */
+        _sg_gl_bind_texture(slot_index, slot->target, slot->texture);
+    }
 }
 
 _SOKOL_PRIVATE void _sg_gl_setup_backend(const sg_desc* desc) {
@@ -5395,6 +5405,10 @@ _SOKOL_PRIVATE void _sg_gl_reset_state_cache(void) {
             _SG_GL_CHECK_ERROR();
         }
         _sg.gl.cache.cur_primitive_type = GL_TRIANGLES;
+
+        /* shader program */
+        glGetIntegerv(GL_CURRENT_PROGRAM, (GLint*)&_sg.gl.cache.prog);
+        _SG_GL_CHECK_ERROR();
 
         /* depth-stencil state */
         _sg_gl_init_depth_stencil_state(&_sg.gl.cache.ds);
@@ -6020,6 +6034,19 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_pass(_sg_pass_t* pass, _sg_image_
         return SG_RESOURCESTATE_FAILED;
     }
 
+    /* setup color attachments for the framebuffer */
+    #if !defined(SOKOL_GLES2)
+    if (!_sg.gl.gles2) {
+        GLenum att[SG_MAX_COLOR_ATTACHMENTS] = {
+            GL_COLOR_ATTACHMENT0,
+            GL_COLOR_ATTACHMENT1,
+            GL_COLOR_ATTACHMENT2,
+            GL_COLOR_ATTACHMENT3
+        };
+        glDrawBuffers(pass->cmn.num_color_atts, att);
+    }
+    #endif
+
     /* create MSAA resolve framebuffers if necessary */
     if (is_msaa) {
         for (int i = 0; i < SG_MAX_COLOR_ATTACHMENTS; i++) {
@@ -6053,6 +6080,13 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_pass(_sg_pass_t* pass, _sg_image_
                     SOKOL_LOG("Framebuffer completeness check failed (msaa resolve buffer)!\n");
                     return SG_RESOURCESTATE_FAILED;
                 }
+                /* setup color attachments for the framebuffer */
+                #if !defined(SOKOL_GLES2)
+                if (!_sg.gl.gles2) {
+                    const GLenum gl_draw_bufs = GL_COLOR_ATTACHMENT0;
+                    glDrawBuffers(1, &gl_draw_bufs);
+                }
+                #endif
             }
         }
     }
@@ -6117,17 +6151,6 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(_sg_pass_t* pass, const sg_pass_action* ac
         /* offscreen pass */
         SOKOL_ASSERT(pass->gl.fb);
         glBindFramebuffer(GL_FRAMEBUFFER, pass->gl.fb);
-        #if !defined(SOKOL_GLES2)
-        if (!_sg.gl.gles2) {
-            GLenum att[SG_MAX_COLOR_ATTACHMENTS] = {
-                GL_COLOR_ATTACHMENT0,
-                GL_COLOR_ATTACHMENT1,
-                GL_COLOR_ATTACHMENT2,
-                GL_COLOR_ATTACHMENT3
-            };
-            glDrawBuffers(num_color_atts, att);
-        }
-        #endif
     }
     else {
         /* default pass */
@@ -6261,8 +6284,6 @@ _SOKOL_PRIVATE void _sg_gl_end_pass(void) {
                     SOKOL_ASSERT(gl_att->gl_msaa_resolve_buffer);
                     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gl_att->gl_msaa_resolve_buffer);
                     glReadBuffer(GL_COLOR_ATTACHMENT0 + att_index);
-                    const GLenum gl_draw_bufs = GL_COLOR_ATTACHMENT0;
-                    glDrawBuffers(1, &gl_draw_bufs);
                     glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
                 }
                 else {
@@ -6457,7 +6478,10 @@ _SOKOL_PRIVATE void _sg_gl_apply_pipeline(_sg_pipeline_t* pip) {
         }
 
         /* bind shader program */
-        glUseProgram(pip->shader->gl.prog);
+        if (pip->shader->gl.prog != _sg.gl.cache.prog) {
+            _sg.gl.cache.prog = pip->shader->gl.prog;
+            glUseProgram(pip->shader->gl.prog);
+        }
     }
 }
 
