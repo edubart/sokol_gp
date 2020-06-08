@@ -46,6 +46,7 @@ void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
     _sg_gl_bind_texture(0, img->gl.target, img->gl.tex[img->cmn.active_slot]);
     glGetTexImage(img->gl.target, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     _SG_GL_CHECK_ERROR();
+    _sg_gl_restore_texture_binding(0);
 }
 
 void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
