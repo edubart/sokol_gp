@@ -121,7 +121,7 @@ SOKOL_API_DECL bool sgctx_dummy_set_swap_interval(sgctx_dummy_context* sgctx, in
 SOKOL_API_DECL bool sgctx_dummy_swap(sgctx_dummy_context* sgctx);
 
 #else
-#error "INVALID BACKEND"
+#error "Please define one of SOKOL_GLCORE33, SOKOL_GLES2, SOKOL_GLES3, SOKOL_D3D11, SOKOL_METAL, SOKOL_WGPU or SOKOL_DUMMY_BACKEND!"
 #endif
 
 typedef struct sgctx_context {
@@ -147,12 +147,6 @@ SOKOL_API_DECL bool sgctx_swap(sgctx_context sgctx);
 SOKOL_API_DECL const char* sgctx_get_error();
 SOKOL_API_DECL sgctx_error sgctx_get_error_code();
 SOKOL_API_DECL sg_backend sgctx_query_backend();
-
-// TODO:
-// SOKOL_GCTX_GLES2
-// SOKOL_GCTX_GLES3
-// SOKOL_GCTX_METAL
-// SOKOL_GCTX_D3D11
 
 #ifdef __cplusplus
 } // extern "C"
