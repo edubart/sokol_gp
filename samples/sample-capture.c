@@ -63,7 +63,6 @@ void draw_fbo() {
 
     sgp_end();
     sg_end_pass();
-    sg_commit();
 
     if(fb_captured_image.id != SG_INVALID_ID)
         sg_destroy_image(fb_captured_image);

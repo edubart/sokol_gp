@@ -838,11 +838,6 @@ void sgp_flush() {
     if(_sgp.cur_command <= _sgp.state._base_command)
         return;
 
-    // define the resource bindings
-    sg_bindings bind = (sg_bindings){
-        .vertex_buffers = {_sgp.vertex_buf},
-    };
-
     // flush commands
     const uint32_t SG_IMPOSSIBLE_ID = 0xffffffffU;
     uint32_t cur_pip_id = SG_IMPOSSIBLE_ID;
@@ -851,7 +846,14 @@ void sgp_flush() {
     uint32_t cur_base_vertex = 0;
     uint32_t base_vertex = _sgp.state._base_vertex;
     uint32_t size_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(_sgp_vertex);
-    sg_update_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], size_vertices);
+    int offset = sg_append_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], size_vertices);
+
+    // define the resource bindings
+    sg_bindings bind = (sg_bindings){
+        .vertex_buffers = {_sgp.vertex_buf},
+        .vertex_buffer_offsets = {offset},
+    };
+
     for(uint32_t i = _sgp.state._base_command; i < _sgp.cur_command; ++i) {
         _sgp_command* cmd = &_sgp.commands[i];
         switch(cmd->cmd) {
