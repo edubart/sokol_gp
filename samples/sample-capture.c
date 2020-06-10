@@ -1,4 +1,4 @@
-#include "sample_common.h"
+#include "sample_app.h"
 
 sg_image fb_image;
 sg_pass fb_pass;
@@ -69,10 +69,10 @@ void draw_fbo() {
     fb_captured_image = capture_fb_image();
 }
 
-void draw(int width, int height) {
+void draw() {
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
-    sgp_translate(width/2, height/2);
+    sgp_translate(app.width/2, app.height/2);
     sgp_draw_textured_rect(fb_captured_image, -256, -64, 128, 128);
     sgp_draw_textured_rect(fb_captured_image2,  128, -64, 128, 128);
 }
@@ -102,7 +102,7 @@ void terminate() {
 }
 
 int main(int argc, char *argv[]) {
-    return sample_app((sample_app_desc){
+    return sample_app_main(&(sample_app_desc){
         .init = init,
         .terminate = terminate,
         .draw = draw,

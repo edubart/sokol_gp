@@ -1,15 +1,14 @@
-#include "sample_common.h"
-
-int frame = 0;
+#include "sample_app.h"
 
 static sgp_vec2 points_buffer[4096];
+const float PI = 3.14159265358979323846264338327f;
 
 void draw_rects() {
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
     int size = 64;
     int hsize = size / 2;
-    float time = frame / 60.0f;
+    float time = app.frame / 60.0f;
     float t = (1.0f+sinf(time))/2.0f;
 
     // left
@@ -56,7 +55,7 @@ void draw_lines() {
     sgp_irect viewport = sgp_query_state()->viewport;
     sgp_vec2 c = {viewport.w / 2.0f, viewport.h / 2.0f};
     points_buffer[count++] = c;
-    for(float theta = 0.0f; theta <= M_PI*8.0f; theta+=M_PI/16.0f) {
+    for(float theta = 0.0f; theta <= PI*8.0f; theta+=PI/16.0f) {
         float r = 10.0f*theta;
         points_buffer[count++] = (sgp_vec2){c.x + r*cosf(theta), c.y + r*sinf(theta)};
     }
@@ -78,8 +77,8 @@ void draw_triangles() {
     sgp_draw_filled_triangle(ax, ay, bx, by, cx, cy);
     sgp_translate(w*3.0f, 0.0f);
     int count = 0;
-    float step = (2.0f*M_PI)/6.0f;
-    for(float theta = 0.0f; theta <= 2.0f*M_PI + step*0.5f; theta+=step) {
+    float step = (2.0f*PI)/6.0f;
+    for(float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
         points_buffer[count++] = (sgp_vec2){hw + w*cosf(theta), hh - w*sinf(theta)};
         if(count % 3 == 1)
             points_buffer[count++] = (sgp_vec2){hw, hh};
@@ -89,9 +88,9 @@ void draw_triangles() {
     sgp_pop_transform();
 }
 
-void draw(int width, int height) {
-    int hw = width / 2;
-    int hh = height / 2;
+void draw() {
+    int hw = app.width / 2;
+    int hh = app.height / 2;
 
     // top left
     sgp_viewport(0, 0, hw, hh);
@@ -123,8 +122,6 @@ void draw(int width, int height) {
     sgp_clear();
     sgp_reset_color();
     draw_lines();
-
-    frame++;
 }
 
 bool init() {
@@ -135,7 +132,8 @@ void terminate() {
 }
 
 int main(int argc, char *argv[]) {
-    return sample_app((sample_app_desc){
+    return sample_app_main(&(sample_app_desc){
+        .width=512, .height=512,
         .init = init,
         .terminate = terminate,
         .draw = draw,

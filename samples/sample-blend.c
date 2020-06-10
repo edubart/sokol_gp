@@ -1,6 +1,4 @@
-#include "sample_common.h"
-
-int frame = 0;
+#include "sample_app.h"
 
 void draw_3rects(float brightness, float alpha) {
     sgp_set_color(brightness, 0.0f, 0.0f, alpha);
@@ -62,11 +60,10 @@ void draw_checkboard(int width, int height) {
     sgp_reset_color();
 
 }
-void draw(int width, int height) {
-    draw_checkboard(width, height);
-    draw_rects(width/(float)height);
 
-    frame++;
+void draw() {
+    draw_checkboard(app.width, app.height);
+    draw_rects(app.width/(float)app.height);
 }
 
 bool init() {
@@ -77,7 +74,7 @@ void terminate() {
 }
 
 int main(int argc, char *argv[]) {
-    return sample_app((sample_app_desc){
+    return sample_app_main(&(sample_app_desc){
         .init = init,
         .terminate = terminate,
         .draw = draw,

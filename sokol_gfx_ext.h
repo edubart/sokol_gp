@@ -251,6 +251,7 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
     SOKOL_ASSERT(img);
     SOKOL_ASSERT(size >= (img->cmn.width * img->cmn.height * 4));
+    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_image_pixels(img, pixels);
 #elif defined(SOKOL_D3D11)
@@ -261,6 +262,7 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
 void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size) {
     SOKOL_ASSERT(pixels);
     SOKOL_ASSERT(size >= w*h);
+    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_pixels(x, y, w, h, origin_top_left, pixels);
 #elif defined(SOKOL_D3D11)

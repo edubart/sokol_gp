@@ -1,6 +1,7 @@
 /scratch
-/shaders
-/wgpu
+/build
+/build.*
+/play
 *.TODO
 *.exe
 *.dll

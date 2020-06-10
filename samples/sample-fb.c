@@ -1,19 +1,20 @@
-#include "sample_common.h"
+#include "sample_app.h"
 
 sg_image fb_image;
 sg_pass fb_pass;
 
-static sgp_vec2 points_buffer[4096];
-
 void draw_triangles() {
+    const float PI = 3.14159265358979323846264338327f;
+    static sgp_vec2 points_buffer[4096];
+
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
     float hw = width * 0.5f;
     float hh = height * 0.5f;
     float w = height*0.3f;
     int count = 0;
-    float step = (2.0f*M_PI)/6.0f;
-    for(float theta = 0.0f; theta <= 2.0f*M_PI + step*0.5f; theta+=step) {
+    float step = (2.0f*PI)/6.0f;
+    for(float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
         points_buffer[count++] = (sgp_vec2){hw*1.33f + w*cosf(theta), hh*1.33f - w*sinf(theta)};
         if(count % 3 == 1)
             points_buffer[count++] = (sgp_vec2){hw, hh};
@@ -38,7 +39,8 @@ void draw_fbo() {
     sg_end_pass();
 }
 
-void draw(int width, int height) {
+void draw() {
+    int height = app.height, width = app.width;
     float time = SDL_GetTicks() / 1000.0f;
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
@@ -80,7 +82,7 @@ void terminate() {
 }
 
 int main(int argc, char *argv[]) {
-    return sample_app((sample_app_desc){
+    return sample_app_main(&(sample_app_desc){
         .init = init,
         .terminate = terminate,
         .draw = draw,

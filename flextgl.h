@@ -1,6 +1,3 @@
-/* WARNING: This file was automatically generated */
-/* Do not edit. */
-
 #ifndef __gl_h_
 #define __gl_h_
 

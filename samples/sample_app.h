@@ -1,17 +1,6 @@
 #define SDL_DISABLE_IMMINTRIN_H
 #include <SDL2/SDL.h>
 
-//#define SOKOL_DUMMY_BACKEND
-#ifndef SOKOL_DUMMY_BACKEND
-#ifdef __WIN32__
-#define SOKOL_D3D11
-#else
-//#define SOKOL_GLES2
-//#define SOKOL_GLES3
-#define SOKOL_GLCORE33
-#endif
-#endif
-
 #define SOKOL_GCTX_IMPL
 #define SOKOL_IMPL
 #define SOKOL_GFX_EXT_IMPL
@@ -19,7 +8,7 @@
 
 #if defined(SOKOL_GLCORE33)
 #define FLEXTGL_IMPL
-#include "thirdparty/flextgl.h"
+#include "flextgl.h"
 #elif defined(SOKOL_GLES2)
 #define GL_GLEXT_PROTOTYPES
 #include <SDL2/SDL_opengles2.h>
@@ -37,19 +26,28 @@
 #include <stdio.h>
 #include <math.h>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846264338327
-#endif
-
 typedef struct sample_app_desc {
     bool (*init)();
     void (*terminate)();
-    void (*draw)(int, int);
+    void (*draw)();
+    int width;
+    int height;
     int argc;
     char **argv;
 } sample_app_desc;
 
-int sample_app(sample_app_desc app) {
+typedef struct sample_app {
+    sample_app_desc desc;
+    int width;
+    int height;
+    int frame;
+} sample_app;
+
+sample_app app;
+
+int sample_app_main(const sample_app_desc* app_desc) {
+    app.desc = *app_desc;
+
     // initialize SDL
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -69,7 +67,7 @@ int sample_app(sample_app_desc app) {
     // create window
     SDL_Window *window = SDL_CreateWindow("Sokol GP Sample",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        512, 512,
+        app.width, app.height,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if(!window) {
         fprintf(stderr, "Failed to create SDL window: %s\n", SDL_GetError());
@@ -85,8 +83,8 @@ int sample_app(sample_app_desc app) {
 
     // set swap interval
     bool vsync = true;
-    for(int i=1;i<app.argc;++i) {
-        if(strcmp(app.argv[i], "-no-vsync") == 0)
+    for(int i=1;i<app.desc.argc;++i) {
+        if(strcmp(app.desc.argv[i], "-no-vsync") == 0)
             vsync = false;
     }
     sgctx_set_swap_interval(sgctx, vsync ? 1 : 0);
@@ -125,22 +123,24 @@ int sample_app(sample_app_desc app) {
         return 1;
     }
 
-    // setup app resources
-    if(!app.init()) {
-        fprintf(stderr, "Failed to initialize app\n");
+    // setup app.desc resources
+    if(!app.desc.init()) {
+        fprintf(stderr, "Failed to initialize app.desc\n");
         return 1;
     }
 
     // run loop
     while(!SDL_QuitRequested()) {
         sgctx_isize size = sgctx_get_drawable_size(sgctx);
+        app.width = size.w;
+        app.height = size.h;
 
         // poll events
         SDL_Event event;
         while(SDL_PollEvent(&event)) { }
 
         sgp_begin(size.w,  size.h);
-        app.draw(size.w, size.h);
+        app.desc.draw();
 
         sg_pass_action default_pass_action = {
             .colors = {{.action = SG_ACTION_CLEAR, .val = {0.05f, 0.05f, 0.05f, 1.0f}}},
@@ -163,6 +163,7 @@ int sample_app(sample_app_desc app) {
         static uint32_t last = 0;
         uint32_t now = SDL_GetTicks();
         fps++;
+        app.frame++;
         if(now >= last + 1000) {
             printf("FPS: %d\n", fps);
             last = now;
@@ -171,7 +172,7 @@ int sample_app(sample_app_desc app) {
     }
 
     // destroy
-    app.terminate();
+    app.desc.terminate();
     sgp_shutdown();
     sg_shutdown();
     sgctx_destroy(sgctx);

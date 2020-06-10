@@ -3,13 +3,11 @@
 Minimal efficient cross platform 2D graphics painter in C 
 using modern graphics API through sokol_gfx.
 
-**Warning:** Under development.
-
 ## Features
 
 * Minimal
 * Single header
-* Pure C11
+* Pure C
 * Cross platform
 * Optimized for 2D rendering, no 3D support
 * Use modern unfixed pipeline graphics APIs for more efficiency
@@ -24,5 +22,4 @@ using modern graphics API through sokol_gfx.
 
 These are features I would like to implement someday in the future.
 
-* Asynchronous rendering (dispatch draw commands to dedicated render thread on the fly)
 * Automatic texture atlas packer (to allow more batching)
