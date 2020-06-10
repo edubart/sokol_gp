@@ -27,6 +27,7 @@ typedef enum sgp_error {
     SGP_ERROR_VERTICES_FULL,
     SGP_ERROR_UNIFORMS_FULL,
     SGP_ERROR_COMMANDS_FULL,
+    SGP_ERROR_VERTICES_OVERFLOW,
     SGP_ERROR_TRANSFORM_STACK_OVERFLOW,
     SGP_ERROR_TRANSFORM_STACK_UNDERFLOW,
     SGP_ERROR_STATE_STACK_OVERFLOW,
@@ -830,23 +831,36 @@ void sgp_flush() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
 
+    uint32_t end_command = _sgp.cur_command;
+    uint32_t end_vertex = _sgp.cur_vertex;
+
+    // rewind indexes
+    _sgp.cur_vertex = _sgp.state._base_vertex;
+    _sgp.cur_uniform = _sgp.state._base_uniform;
+    _sgp.cur_command = _sgp.state._base_command;
+
     // draw nothing on errors
     if(_sgp.last_error_code != SGP_NO_ERROR)
         return;
 
     // nothing to be drawn
-    if(_sgp.cur_command <= _sgp.state._base_command)
+    if(end_command<= _sgp.state._base_command)
         return;
 
-    // flush commands
+    // upload vertices
+    uint32_t base_vertex = _sgp.state._base_vertex;
+    uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(_sgp_vertex);
+    int offset = sg_append_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], num_vertices);
+    if(sg_query_buffer_overflow(_sgp.vertex_buf)) {
+        _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW, "SGP vertices buffer overflow");
+        return;
+    }
+
     const uint32_t SG_IMPOSSIBLE_ID = 0xffffffffU;
     uint32_t cur_pip_id = SG_IMPOSSIBLE_ID;
     uint32_t cur_img_id = SG_IMPOSSIBLE_ID;
     uint32_t cur_uniform_index = SG_IMPOSSIBLE_ID;
     uint32_t cur_base_vertex = 0;
-    uint32_t base_vertex = _sgp.state._base_vertex;
-    uint32_t size_vertices = (_sgp.cur_vertex - base_vertex) * sizeof(_sgp_vertex);
-    int offset = sg_append_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], size_vertices);
 
     // define the resource bindings
     sg_bindings bind = (sg_bindings){
@@ -854,7 +868,8 @@ void sgp_flush() {
         .vertex_buffer_offsets = {offset},
     };
 
-    for(uint32_t i = _sgp.state._base_command; i < _sgp.cur_command; ++i) {
+    // flush commands
+    for(uint32_t i = _sgp.state._base_command; i < end_command; ++i) {
         _sgp_command* cmd = &_sgp.commands[i];
         switch(cmd->cmd) {
             case SGP_COMMAND_VIEWPORT: {
@@ -902,11 +917,6 @@ void sgp_flush() {
             }
         }
     }
-
-    // rewind indexes
-    _sgp.cur_vertex = _sgp.state._base_vertex;
-    _sgp.cur_uniform = _sgp.state._base_uniform;
-    _sgp.cur_command = _sgp.state._base_command;
 }
 
 void sgp_end() {
@@ -1634,7 +1644,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
-            {rects[i].dst.x,                   rects[i].dst.y + rects[i].dst.h}, // bottom left
+            {rects[i].dst.x,                  rects[i].dst.y + rects[i].dst.h}, // bottom left
             {rects[i].dst.x + rects[i].dst.w, rects[i].dst.y + rects[i].dst.h}, // bottom right
             {rects[i].dst.x + rects[i].dst.w, rects[i].dst.y}, // top right
             {rects[i].dst.x,  rects[i].dst.y}, // top left
