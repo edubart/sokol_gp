@@ -632,8 +632,9 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type prim_type, sgp_blend_m
         .blend = blend
     };
     sg_pipeline pip = sg_make_pipeline(&pip_desc);
-    if(pip.id == SG_INVALID_ID)
+    if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         _sgp_set_error(SGP_ERROR_MAKE_PIPELINE_FAILED, "SGP failed to create common pipeline");
+    }
     _sgp.pipelines[pip_index] = pip;
     return pip;
 };
@@ -674,7 +675,7 @@ bool sgp_setup(const sgp_desc* desc) {
         .usage = SG_USAGE_STREAM,
     };
     _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
-    if(_sgp.vertex_buf.id == SG_INVALID_ID) {
+    if(sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_BUFFER_FAILED, "SGP failed to create vertex buffer");
         return false;
@@ -693,7 +694,7 @@ bool sgp_setup(const sgp_desc* desc) {
         .label = "sgp-white-texture",
     };
     _sgp.white_img = sg_make_image(&white_img_desc);
-    if(_sgp.white_img.id == SG_INVALID_ID) {
+    if(sg_query_image_state(_sgp.white_img) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_IMAGE_FAILED, "SGP failed to create white image");
         return false;
@@ -727,7 +728,7 @@ bool sgp_setup(const sgp_desc* desc) {
         },
     };
     _sgp.shader = sg_make_shader(&shader_desc);
-    if(_sgp.shader.id == SG_INVALID_ID) {
+    if(sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_SHADER_FAILED, "SGP failed to create common shader");
         return false;
@@ -1023,13 +1024,13 @@ void sgp_rotate(float theta) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     float sint = sinf(theta), cost = cosf(theta);
     // multiply by rotation matrix:
-    // sint,  cost, 0.0f,
     // cost, -sint, 0.0f,
+    // sint,  cost, 0.0f,
     // 0.0f,  0.0f, 1.0f,
     _sgp.state.transform = (sgp_mat3){{
-       {sint*_sgp.state.transform.v[0][0]+cost*_sgp.state.transform.v[0][1], cost*_sgp.state.transform.v[0][0]-sint*_sgp.state.transform.v[0][1], _sgp.state.transform.v[0][2]},
-       {sint*_sgp.state.transform.v[1][0]+cost*_sgp.state.transform.v[1][1], cost*_sgp.state.transform.v[1][0]-sint*_sgp.state.transform.v[1][1], _sgp.state.transform.v[1][2]},
-       {sint*_sgp.state.transform.v[2][0]+cost*_sgp.state.transform.v[2][1], cost*_sgp.state.transform.v[2][0]-sint*_sgp.state.transform.v[2][1], _sgp.state.transform.v[2][2]}
+       {cost*_sgp.state.transform.v[0][0]+sint*_sgp.state.transform.v[0][1], -sint*_sgp.state.transform.v[0][0]+cost*_sgp.state.transform.v[0][1], _sgp.state.transform.v[0][2]},
+       {cost*_sgp.state.transform.v[1][0]+sint*_sgp.state.transform.v[1][1], -sint*_sgp.state.transform.v[1][0]+cost*_sgp.state.transform.v[1][1], _sgp.state.transform.v[1][2]},
+       {cost*_sgp.state.transform.v[2][0]+sint*_sgp.state.transform.v[2][1], -sint*_sgp.state.transform.v[2][0]+cost*_sgp.state.transform.v[2][1], _sgp.state.transform.v[2][2]}
     }};
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
