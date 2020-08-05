@@ -1,20 +1,19 @@
 @vs sgp_vs
-layout(location=0) in vec4 coord;
-layout(location=0) out vec2 uv;
+in vec4 coord;
+out vec2 fragUV;
 void main() {
     gl_Position = vec4(coord.xy, 0.0, 1.0);
-    uv = coord.zw;
+    fragUV = coord.zw;
 }
 @end
 
 @fs sgp_fs
-layout(binding=0) uniform sampler2D tex;
-//uniform fs_in { vec4 color; };
-uniform vec4 color;
-layout(location=0) in vec2 uv;
-layout(location=0) out vec4 frag_color;
+uniform sampler2D iChannel0;
+uniform vec4 iColor;
+in vec2 fragUV;
+out vec4 fragColor;
 void main() {
-    frag_color = texture(tex, uv) * color;
+    fragColor = texture(iChannel0, fragUV) * iColor;
 }
 @end
 

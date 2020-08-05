@@ -152,6 +152,7 @@ int sample_app_main(const sample_app_desc* app_desc) {
         sg_end_pass();
         sgp_end();
         sg_commit();
+        app.frame++;
 
         if(!sgctx_swap(sgctx)) {
             fprintf(stderr, "Failed to swap window buffers: %s\n", sgctx_get_error());
@@ -163,7 +164,6 @@ int sample_app_main(const sample_app_desc* app_desc) {
         static uint32_t last = 0;
         uint32_t now = SDL_GetTicks();
         fps++;
-        app.frame++;
         if(now >= last + 1000) {
             printf("FPS: %d\n", fps);
             last = now;

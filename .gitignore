@@ -8,3 +8,4 @@
 *.o
 *.log
 *.dxvk-cache
+.luamonrc

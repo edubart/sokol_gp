@@ -70,3 +70,9 @@ project "sample-capture"
 
 project "sample-fb"
    files { "**.h", "samples/sample-fb.c" }
+
+project "sample-bench"
+   files { "**.h", "samples/sample-bench.c" }
+
+project "sample-sdf"
+   files { "**.h", "samples/sample-sdf.c" }

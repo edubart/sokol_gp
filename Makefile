@@ -4,18 +4,21 @@ LIBS=-lSDL2 -lm
 INCLUDES=-I.
 OUTDIR=build
 SHDC?=../scratch/sokol-tools-bin/bin/linux/sokol-shdc
+SHDCLANGS=glsl330:glsl100:glsl300es:hlsl5:metal_macos
 
 # platform
 ifndef platform
 	platform=linux
 endif
 ifeq ($(platform), windows)
-	CC?=x86_64-w64-mingw32-gcc
+	CC:=x86_64-w64-mingw32-gcc
 	DEFINES+=-DSDL_MAIN_HANDLED
 	LIBS+=-lSDL2main -lopengl32 -ld3d11 -ldxgi -ldxguid
+	OUTEXT=.exe
 else
+	OUTEXT=
 	CC?=gcc
-    LIBS+=-lGL -ldl
+	LIBS+=-lGL -ldl
 endif
 
 # build type
@@ -31,7 +34,11 @@ endif
 
 # backend
 ifndef backend
-  backend=glcore33
+	ifeq ($(platform), windows)
+		backend=d3d11
+	else
+		backend=glcore33
+	endif
 endif
 ifeq ($(backend), glcore33)
 	DEFINES+=-DSOKOL_GLCORE33
@@ -47,35 +54,20 @@ else ifeq ($(backend), dummy)
 	DEFINES+=-DSOKOL_DUMMY_BACKEND
 endif
 
-DEPS=sokol_gctx.h sokol_gfx.h sokol_gfx_ext.h sokol_gp.h flextgl.h samples/sample_app.h
-
 .PHONY: all clean shaders
 
-all: sample-prims sample-blend sample-capture sample-fb sample-bench
+all: sample-prims sample-blend sample-capture sample-fb sample-bench sample-sdf
 
 clean:
 	rm -rf $(OUTDIR)
 
 shaders:
 	@mkdir -p $(OUTDIR)
-	$(SHDC) -i sokol_gp_shaders.glsl -o $(OUTDIR)/sokol_gp_shaders.glsl.h -l glsl330:glsl100:glsl300es:hlsl5:metal_macos
-
-ifeq ($(platform), windows)
-
-$(OUTDIR)/%.exe: $(DEPS) samples/%.c
-	@mkdir -p $(OUTDIR)
-	$(CC) -o $@ $(subst .exe,.c,$(subst $(OUTDIR),samples,$@)) $(INCLUDES) $(DEFINES) $(CFLAGS) $(LIBS)
+	$(SHDC) -i sokol_gp_shaders.glsl -o $(OUTDIR)/sokol_gp_shaders.glsl.h -l $(SHDCLANGS)
 
 %:
-	@${MAKE} --no-print-directory $(OUTDIR)/$@.exe
-
-else
-
-$(OUTDIR)/%: $(DEPS) samples/%.c
 	@mkdir -p $(OUTDIR)
-	$(CC) -o $@ $(subst $(OUTDIR),samples,$@).c $(INCLUDES) $(DEFINES) $(CFLAGS) $(LIBS)
+	$(CC) -o $(OUTDIR)/$@$(OUTEXT) samples/$@.c $(INCLUDES) $(DEFINES) $(CFLAGS) $(LIBS)
 
-%:
-	@${MAKE} --no-print-directory $(OUTDIR)/$@
-
-endif
+samples/sample-sdf.glsl.h: samples/sample-sdf.glsl
+	$(SHDC) -i samples/sample-sdf.glsl -o samples/sample-sdf.glsl.h -l $(SHDCLANGS)

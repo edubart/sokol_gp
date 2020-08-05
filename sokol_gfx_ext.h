@@ -20,6 +20,7 @@ extern "C" {
 SOKOL_API_DECL void sg_query_image_pixels(sg_image img_id, void* pixels, int size);
 SOKOL_API_DECL void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size);
 SOKOL_API_DECL void sg_update_texture_filter(sg_image img_id, sg_filter min_filter, sg_filter mag_filter);
+SOKOL_API_DECL void sg_commit_command_buffer();
 
 #ifdef __cplusplus
 } // extern "C"
@@ -243,6 +244,83 @@ void _sg_d3d11_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_
     SOKOL_ASSERT(SUCCEEDED(hr) && img->d3d11.smp);
 }
 
+#elif defined(SOKOL_METAL)
+
+#import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
+
+void _sg_metal_encode_texture_pixels(int x, int y, int w, int h, bool origin_top_left, id<MTLTexture> mtl_src_texture, void* pixels) {
+    SOKOL_ASSERT(!_sg.mtl.in_pass);
+    sg_commit_command_buffer();
+    MTLTextureDescriptor* mtl_dst_texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+    mtl_dst_texture_desc.usage = MTLTextureUsageShaderRead;
+    id<MTLTexture> mtl_dst_texture = [mtl_src_texture.device newTextureWithDescriptor:mtl_dst_texture_desc];
+    id<MTLCommandBuffer> cmd_buffer = [_sg_mtl_cmd_queue commandBuffer];
+    id<MTLBlitCommandEncoder> blit_encoder = [cmd_buffer blitCommandEncoder];
+    [blit_encoder synchronizeResource:mtl_src_texture];
+    [blit_encoder copyFromTexture:mtl_src_texture
+        sourceSlice:0
+        sourceLevel:0
+        sourceOrigin:MTLOriginMake(x,(origin_top_left ? y : (mtl_src_texture.height - (y + h))),0)
+        sourceSize:MTLSizeMake(w,h,1)
+        toTexture:mtl_dst_texture
+        destinationSlice:0
+        destinationLevel:0
+        destinationOrigin:MTLOriginMake(0,0,0)
+    ];
+    [blit_encoder synchronizeResource:mtl_dst_texture];
+    [blit_encoder endEncoding];
+    [cmd_buffer commit];
+    [cmd_buffer waitUntilCompleted];
+
+    MTLRegion mtl_region = MTLRegionMake2D(0, 0, w, h);
+    void* temp_pixels = (void*)SOKOL_MALLOC(w * 4 * h);
+    SOKOL_ASSERT(temp_pixels);
+    [mtl_dst_texture getBytes:temp_pixels bytesPerRow:w * 4 fromRegion:mtl_region mipmapLevel:0];
+    int res = SDL_ConvertPixels(w, h, SDL_PIXELFORMAT_ARGB8888, temp_pixels, w * 4, SDL_PIXELFORMAT_RGBA32, pixels, w * 4);
+    SOKOL_FREE(temp_pixels);
+    SOKOL_ASSERT(res == 0);
+    _SOKOL_UNUSED(res);
+}
+
+void _sg_metal_query_image_pixels(_sg_image_t* img, void* pixels) {
+    id<MTLTexture> mtl_src_texture = _sg_mtl_idpool[img->mtl.tex[0]];
+    _sg_metal_encode_texture_pixels(0, 0, mtl_src_texture.width, mtl_src_texture.height, true, mtl_src_texture, pixels);
+}
+
+void _sg_metal_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
+    id<CAMetalDrawable> mtl_drawable = (__bridge id<CAMetalDrawable>)_sg.mtl.drawable_cb();
+    _sg_metal_encode_texture_pixels(x, y, w, h, origin_top_left, mtl_drawable.texture, pixels);
+}
+
+void _sg_metal_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
+    sg_image_desc image_desc = {
+        .min_filter = img->cmn.min_filter,
+        .mag_filter = img->cmn.mag_filter,
+        .wrap_u = img->cmn.wrap_u,
+        .wrap_v = img->cmn.wrap_v,
+        .wrap_w = img->cmn.wrap_w,
+        .max_anisotropy = img->cmn.max_anisotropy,
+        .border_color = img->cmn.border_color,
+    };
+    sg_image_desc desc_def = _sg_image_desc_defaults(&image_desc);
+    img->mtl.sampler_state = _sg_mtl_create_sampler(_sg_mtl_device, &desc_def);
+    img->cmn.min_filter = min_filter;
+    img->cmn.mag_filter = mag_filter;
+}
+
+void _sg_metal_commit_command_buffer() {
+    SOKOL_ASSERT(!_sg.mtl.in_pass);
+    if(_sg_mtl_cmd_buffer) {
+        #if defined(_SG_TARGET_MACOS)
+        [_sg_mtl_uniform_buffers[_sg.mtl.cur_frame_rotate_index] didModifyRange:NSMakeRange(0, _sg.mtl.cur_ub_offset)];
+        #endif
+        [_sg_mtl_cmd_buffer commit];
+        [_sg_mtl_cmd_buffer waitUntilCompleted];
+        _sg_mtl_cmd_buffer = [_sg_mtl_cmd_queue commandBufferWithUnretainedReferences];
+    }
+}
+
 #endif
 
 void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
@@ -251,22 +329,24 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
     SOKOL_ASSERT(img);
     SOKOL_ASSERT(size >= (img->cmn.width * img->cmn.height * 4));
-    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_image_pixels(img, pixels);
 #elif defined(SOKOL_D3D11)
     _sg_d3d11_query_image_pixels(img, pixels);
+#elif defined(SOKOL_METAL)
+    _sg_metal_query_image_pixels(img, pixels);
 #endif
 }
 
 void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size) {
     SOKOL_ASSERT(pixels);
     SOKOL_ASSERT(size >= w*h);
-    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_pixels(x, y, w, h, origin_top_left, pixels);
 #elif defined(SOKOL_D3D11)
     _sg_d3d11_query_pixels(x, y, w, h, origin_top_left, pixels);
+#elif defined(SOKOL_METAL)
+    _sg_metal_query_pixels(x, y, w, h, origin_top_left, pixels);
 #endif
 }
 
@@ -277,6 +357,14 @@ void sg_update_texture_filter(sg_image img_id, sg_filter min_filter, sg_filter m
     _sg_gl_update_texture_filter(img, min_filter, mag_filter);
 #elif defined(SOKOL_D3D11)
     _sg_d3d11_update_texture_filter(img, min_filter, mag_filter);
+#elif defined(SOKOL_METAL)
+    _sg_metal_update_texture_filter(img, min_filter, mag_filter);
+#endif
+}
+
+void sg_commit_command_buffer() {
+#if defined(SOKOL_METAL)
+    _sg_metal_commit_command_buffer();
 #endif
 }
 
