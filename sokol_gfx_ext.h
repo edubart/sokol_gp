@@ -17,10 +17,10 @@ https://github.com/edubart/sokol_gp
 extern "C" {
 #endif
 
-SOKOL_API_DECL void sg_query_image_pixels(sg_image img_id, void* pixels, int size);
-SOKOL_API_DECL void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size);
-SOKOL_API_DECL void sg_update_texture_filter(sg_image img_id, sg_filter min_filter, sg_filter mag_filter);
-SOKOL_API_DECL void sg_commit_command_buffer();
+SOKOL_GFX_API_DECL void sg_query_image_pixels(sg_image img_id, void* pixels, int size);
+SOKOL_GFX_API_DECL void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size);
+SOKOL_GFX_API_DECL void sg_update_texture_filter(sg_image img_id, sg_filter min_filter, sg_filter mag_filter);
+SOKOL_GFX_API_DECL void sg_commit_command_buffer();
 
 #ifdef __cplusplus
 } // extern "C"
@@ -44,11 +44,11 @@ void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
 #if defined(SOKOL_GLCORE33)
     SOKOL_ASSERT(img->gl.target == GL_TEXTURE_2D);
     SOKOL_ASSERT(0 != img->gl.tex[img->cmn.active_slot]);
-    _sg_gl_store_texture_binding(0);
-    _sg_gl_bind_texture(0, img->gl.target, img->gl.tex[img->cmn.active_slot]);
+    _sg_gl_cache_store_texture_binding(0);
+    _sg_gl_cache_bind_texture(0, img->gl.target, img->gl.tex[img->cmn.active_slot]);
     glGetTexImage(img->gl.target, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     _SG_GL_CHECK_ERROR();
-    _sg_gl_restore_texture_binding(0);
+    _sg_gl_cache_restore_texture_binding(0);
 #else
     // unsupported in GLES
     _SOKOL_UNUSED(img);
@@ -85,15 +85,15 @@ void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void 
 }
 
 void _sg_gl_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
-    _sg_gl_store_texture_binding(0);
-    _sg_gl_bind_texture(0, img->gl.target, img->gl.tex[img->cmn.active_slot]);
+    _sg_gl_cache_store_texture_binding(0);
+    _sg_gl_cache_bind_texture(0, img->gl.target, img->gl.tex[img->cmn.active_slot]);
     img->cmn.min_filter = min_filter;
     img->cmn.mag_filter = mag_filter;
     GLenum gl_min_filter = _sg_gl_filter(img->cmn.min_filter);
     GLenum gl_mag_filter = _sg_gl_filter(img->cmn.mag_filter);
     glTexParameteri(img->gl.target, GL_TEXTURE_MIN_FILTER, gl_min_filter);
     glTexParameteri(img->gl.target, GL_TEXTURE_MAG_FILTER, gl_mag_filter);
-    _sg_gl_restore_texture_binding(0);
+    _sg_gl_cache_restore_texture_binding(0);
 }
 
 #elif defined(SOKOL_D3D11)

@@ -133,73 +133,73 @@ typedef struct sgp_pipeline_desc {
 } sgp_pipeline_desc;
 
 // setup functions
-SOKOL_API_DECL bool sgp_setup(const sgp_desc* desc);
-SOKOL_API_DECL void sgp_shutdown();
-SOKOL_API_DECL bool sgp_is_valid();
-SOKOL_API_DECL sgp_error sgp_get_error_code();
-SOKOL_API_DECL const char* sgp_get_error();
+SOKOL_GFX_API_DECL bool sgp_setup(const sgp_desc* desc);
+SOKOL_GFX_API_DECL void sgp_shutdown();
+SOKOL_GFX_API_DECL bool sgp_is_valid();
+SOKOL_GFX_API_DECL sgp_error sgp_get_error_code();
+SOKOL_GFX_API_DECL const char* sgp_get_error();
 
 // custom pipeline creation
-SOKOL_API_DECL sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc);
+SOKOL_GFX_API_DECL sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc);
 
 // rendering functions
-SOKOL_API_DECL void sgp_begin(int width, int height);
-SOKOL_API_DECL void sgp_flush();
-SOKOL_API_DECL void sgp_end();
+SOKOL_GFX_API_DECL void sgp_begin(int width, int height);
+SOKOL_GFX_API_DECL void sgp_flush();
+SOKOL_GFX_API_DECL void sgp_end();
 
 // state projection functions
-SOKOL_API_DECL void sgp_ortho(float left, float right, float top, float bottom);
-SOKOL_API_DECL void sgp_reset_proj();
+SOKOL_GFX_API_DECL void sgp_ortho(float left, float right, float top, float bottom);
+SOKOL_GFX_API_DECL void sgp_reset_proj();
 
 // state transform functions
-SOKOL_API_DECL void sgp_push_transform();
-SOKOL_API_DECL void sgp_pop_transform();
-SOKOL_API_DECL void sgp_reset_transform();
-SOKOL_API_DECL void sgp_translate(float x, float y);
-SOKOL_API_DECL void sgp_rotate(float theta);
-SOKOL_API_DECL void sgp_rotate_at(float theta, float x, float y);
-SOKOL_API_DECL void sgp_scale(float sx, float sy);
-SOKOL_API_DECL void sgp_scale_at(float sx, float sy, float x, float y);
+SOKOL_GFX_API_DECL void sgp_push_transform();
+SOKOL_GFX_API_DECL void sgp_pop_transform();
+SOKOL_GFX_API_DECL void sgp_reset_transform();
+SOKOL_GFX_API_DECL void sgp_translate(float x, float y);
+SOKOL_GFX_API_DECL void sgp_rotate(float theta);
+SOKOL_GFX_API_DECL void sgp_rotate_at(float theta, float x, float y);
+SOKOL_GFX_API_DECL void sgp_scale(float sx, float sy);
+SOKOL_GFX_API_DECL void sgp_scale_at(float sx, float sy, float x, float y);
 
 // state change for custom pipelines
-SOKOL_API_DECL void sgp_set_pipeline(sg_pipeline pipeline);
-SOKOL_API_DECL void sgp_reset_pipeline();
-SOKOL_API_DECL void sgp_set_uniform(const void* data, uint32_t size);
-SOKOL_API_DECL void sgp_reset_uniform();
+SOKOL_GFX_API_DECL void sgp_set_pipeline(sg_pipeline pipeline);
+SOKOL_GFX_API_DECL void sgp_reset_pipeline();
+SOKOL_GFX_API_DECL void sgp_set_uniform(const void* data, uint32_t size);
+SOKOL_GFX_API_DECL void sgp_reset_uniform();
 
 // state change functions for the common pipelines
-SOKOL_API_DECL void sgp_set_blend_mode(sgp_blend_mode blend_mode);
-SOKOL_API_DECL void sgp_reset_blend_mode();
-SOKOL_API_DECL void sgp_set_color(float r, float g, float b, float a);
-SOKOL_API_DECL void sgp_reset_color();
+SOKOL_GFX_API_DECL void sgp_set_blend_mode(sgp_blend_mode blend_mode);
+SOKOL_GFX_API_DECL void sgp_reset_blend_mode();
+SOKOL_GFX_API_DECL void sgp_set_color(float r, float g, float b, float a);
+SOKOL_GFX_API_DECL void sgp_reset_color();
 
 // state change functions
-SOKOL_API_DECL void sgp_viewport(int x, int y, int w, int h);
-SOKOL_API_DECL void sgp_reset_viewport();
-SOKOL_API_DECL void sgp_scissor(int x, int y, int w, int h);
-SOKOL_API_DECL void sgp_reset_scissor();
-SOKOL_API_DECL void sgp_reset_state();
+SOKOL_GFX_API_DECL void sgp_viewport(int x, int y, int w, int h);
+SOKOL_GFX_API_DECL void sgp_reset_viewport();
+SOKOL_GFX_API_DECL void sgp_scissor(int x, int y, int w, int h);
+SOKOL_GFX_API_DECL void sgp_reset_scissor();
+SOKOL_GFX_API_DECL void sgp_reset_state();
 
 // drawing functions
-SOKOL_API_DECL void sgp_clear();
-SOKOL_API_DECL void sgp_draw_points(const sgp_point* points, uint32_t count);
-SOKOL_API_DECL void sgp_draw_point(float x, float y);
-SOKOL_API_DECL void sgp_draw_lines(const sgp_line* lines, uint32_t count);
-SOKOL_API_DECL void sgp_draw_line(float ax, float ay, float bx, float by);
-SOKOL_API_DECL void sgp_draw_line_strip(const sgp_point* points, uint32_t count);
-SOKOL_API_DECL void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count);
-SOKOL_API_DECL void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy);
-SOKOL_API_DECL void sgp_draw_filled_triangle_strip(const sgp_point* points, uint32_t count);
-SOKOL_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count);
-SOKOL_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);
-SOKOL_API_DECL void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t count);
-SOKOL_API_DECL void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h);
-SOKOL_API_DECL void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, uint32_t count);
-SOKOL_API_DECL void sgp_draw_textured_rect_ex(sg_image image, sgp_rect dest_rect, sgp_rect src_rect);
+SOKOL_GFX_API_DECL void sgp_clear();
+SOKOL_GFX_API_DECL void sgp_draw_points(const sgp_point* points, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_point(float x, float y);
+SOKOL_GFX_API_DECL void sgp_draw_lines(const sgp_line* lines, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_line(float ax, float ay, float bx, float by);
+SOKOL_GFX_API_DECL void sgp_draw_line_strip(const sgp_point* points, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy);
+SOKOL_GFX_API_DECL void sgp_draw_filled_triangle_strip(const sgp_point* points, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);
+SOKOL_GFX_API_DECL void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_textured_rect(sg_image image, float x, float y, float w, float h);
+SOKOL_GFX_API_DECL void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, uint32_t count);
+SOKOL_GFX_API_DECL void sgp_draw_textured_rect_ex(sg_image image, sgp_rect dest_rect, sgp_rect src_rect);
 
 // querying functions
-SOKOL_API_DECL sgp_state* sgp_query_state();
-SOKOL_API_DECL sgp_desc sgp_query_desc();
+SOKOL_GFX_API_DECL sgp_state* sgp_query_state();
+SOKOL_GFX_API_DECL sgp_desc sgp_query_desc();
 
 #ifdef __cplusplus
 } // extern "C"
@@ -638,8 +638,6 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
 
 static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blend_mode blend_mode, sg_shader shader) {
     sg_blend_state blend = _sgp_blend_state(blend_mode);
-    blend.color_format = _sg.desc.context.color_format;
-    blend.depth_format = _sg.desc.context.depth_format;
 
     if(primitive_type == _SG_PRIMITIVETYPE_DEFAULT)
         primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
@@ -656,7 +654,10 @@ static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blen
         },
         .shader = shader,
         .primitive_type = primitive_type,
-        .blend = blend
+        .colors = {[0] = {
+            .pixel_format = _sg.desc.context.color_format,
+            .blend = blend,
+        }}
     };
     sg_pipeline pip = sg_make_pipeline(&pip_desc);
     if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
@@ -701,7 +702,7 @@ static sg_shader _sgp_make_shader(const sg_shader_stage_desc* vs, const sg_shade
                 .size = sizeof(sgp_color),
                 .uniforms = {{.name="iColor", .type=SG_UNIFORMTYPE_FLOAT4}},
             }},
-            .images = {{.name = "iChannel0", .type=SG_IMAGETYPE_2D}},
+            .images = {{.name = "iChannel0", .image_type=SG_IMAGETYPE_2D}},
         }
     };
 
@@ -711,12 +712,12 @@ static sg_shader _sgp_make_shader(const sg_shader_stage_desc* vs, const sg_shade
     if(fs) {
         shader_desc.fs = *fs;
         shader_desc.fs.images[0].name = "iChannel0";
-        shader_desc.fs.images[0].type = SG_IMAGETYPE_2D;
+        shader_desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
     }
 
     sg_shader shader = sg_make_shader(&shader_desc);
     if(sg_query_shader_state(shader) != SG_RESOURCESTATE_VALID)
-        _sgp_set_error(SGP_ERROR_MAKE_SHADER_FAILED, "SGP failed to a shader");
+        _sgp_set_error(SGP_ERROR_MAKE_SHADER_FAILED, "SGP failed to make a shader");
     return shader;
 }
 
@@ -771,7 +772,7 @@ bool sgp_setup(const sgp_desc* desc) {
         .pixel_format = SG_PIXELFORMAT_RGBA8,
         .min_filter = SG_FILTER_NEAREST,
         .mag_filter = SG_FILTER_NEAREST,
-        .content = {.subimage = {{{.ptr = pixels, .size = sizeof(pixels)}}}},
+        .data = {.subimage = {{{.ptr = pixels, .size = sizeof(pixels)}}}},
         .label = "sgp-white-texture",
     };
     _sgp.white_img = sg_make_image(&white_img_desc);
@@ -915,7 +916,7 @@ void sgp_flush() {
     // upload vertices
     uint32_t base_vertex = _sgp.state._base_vertex;
     uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(_sgp_vertex);
-    int offset = sg_append_buffer(_sgp.vertex_buf, &_sgp.vertices[base_vertex], num_vertices);
+    int offset = sg_append_buffer(_sgp.vertex_buf, &(sg_range){&_sgp.vertices[base_vertex], num_vertices});
     if(sg_query_buffer_overflow(_sgp.vertex_buf)) {
         _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW, "SGP vertices buffer overflow");
         return;
@@ -968,7 +969,7 @@ void sgp_flush() {
                     cur_uniform_index = args->uniform_index;
                     sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
                     if(uniform->size > 0)
-                        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &uniform->content, uniform->size);
+                        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &(sg_range){&uniform->content, uniform->size});
                 }
                 sg_draw(args->vertex_index - cur_base_vertex, args->num_vertices, 1);
                 break;

@@ -29,7 +29,7 @@ void draw_fbo() {
     draw_triangles();
 
     sg_pass_action pass_action = {
-        .colors = {{.action = SG_ACTION_CLEAR, .val = {1.0f, 1.0f, 1.0f, 0.2f}}},
+        .colors = {{.action = SG_ACTION_CLEAR, .value = {1.0f, 1.0f, 1.0f, 0.2f}}},
         .depth = {.action = SG_ACTION_DONTCARE},
         .stencil = {.action = SG_ACTION_DONTCARE},
     };

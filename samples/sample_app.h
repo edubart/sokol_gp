@@ -143,7 +143,7 @@ int sample_app_main(const sample_app_desc* app_desc) {
         app.desc.draw();
 
         sg_pass_action default_pass_action = {
-            .colors = {{.action = SG_ACTION_CLEAR, .val = {0.05f, 0.05f, 0.05f, 1.0f}}},
+            .colors = {{.action = SG_ACTION_CLEAR, .value = {0.05f, 0.05f, 0.05f, 1.0f}}},
             .depth = {.action = SG_ACTION_DONTCARE},
             .stencil = {.action = SG_ACTION_DONTCARE},
         };

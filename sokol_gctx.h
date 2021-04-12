@@ -55,13 +55,13 @@ typedef struct sgctx_gl_context {
 } sgctx_gl_context;
 
 
-SOKOL_API_DECL void sgctx_gl_prepare_attributes(sgctx_desc* desc, sg_backend backend);
-SOKOL_API_DECL sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc);
-SOKOL_API_DECL void sgctx_gl_destroy(sgctx_gl_context* sgctx);
-SOKOL_API_DECL bool sgctx_gl_activate(sgctx_gl_context* sgctx);
-SOKOL_API_DECL sgctx_isize sgctx_gl_get_drawable_size(sgctx_gl_context* sgctx);
-SOKOL_API_DECL bool sgctx_gl_set_swap_interval(sgctx_gl_context* sgctx, int interval);
-SOKOL_API_DECL bool sgctx_gl_swap(sgctx_gl_context* sgctx);
+SOKOL_GFX_API_DECL void sgctx_gl_prepare_attributes(sgctx_desc* desc, sg_backend backend);
+SOKOL_GFX_API_DECL sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc);
+SOKOL_GFX_API_DECL void sgctx_gl_destroy(sgctx_gl_context* sgctx);
+SOKOL_GFX_API_DECL bool sgctx_gl_activate(sgctx_gl_context* sgctx);
+SOKOL_GFX_API_DECL sgctx_isize sgctx_gl_get_drawable_size(sgctx_gl_context* sgctx);
+SOKOL_GFX_API_DECL bool sgctx_gl_set_swap_interval(sgctx_gl_context* sgctx, int interval);
+SOKOL_GFX_API_DECL bool sgctx_gl_swap(sgctx_gl_context* sgctx);
 
 #elif defined(SOKOL_D3D11)
 
@@ -97,14 +97,14 @@ typedef struct sgctx_d3d11_context {
     ID3D11DepthStencilView* depth_stencil_view;
 } sgctx_d3d11_context;
 
-SOKOL_API_DECL sgctx_d3d11_context* sgctx_d3d11_create(SDL_Window* window, sgctx_desc* desc);
-SOKOL_API_DECL void sgctx_d3d11_destroy(sgctx_d3d11_context* sgctx);
-SOKOL_API_DECL bool sgctx_d3d11_activate(sgctx_d3d11_context* sgctx);
-SOKOL_API_DECL sgctx_isize sgctx_d3d11_get_drawable_size(sgctx_d3d11_context* sgctx);
-SOKOL_API_DECL bool sgctx_d3d11_set_swap_interval(sgctx_d3d11_context* sgctx, int interval);
-SOKOL_API_DECL bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx);
-SOKOL_API_DECL const void* sgctx_d3d11_render_target_view();
-SOKOL_API_DECL const void* sgctx_d3d11_depth_stencil_view();
+SOKOL_GFX_API_DECL sgctx_d3d11_context* sgctx_d3d11_create(SDL_Window* window, sgctx_desc* desc);
+SOKOL_GFX_API_DECL void sgctx_d3d11_destroy(sgctx_d3d11_context* sgctx);
+SOKOL_GFX_API_DECL bool sgctx_d3d11_activate(sgctx_d3d11_context* sgctx);
+SOKOL_GFX_API_DECL sgctx_isize sgctx_d3d11_get_drawable_size(sgctx_d3d11_context* sgctx);
+SOKOL_GFX_API_DECL bool sgctx_d3d11_set_swap_interval(sgctx_d3d11_context* sgctx, int interval);
+SOKOL_GFX_API_DECL bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx);
+SOKOL_GFX_API_DECL const void* sgctx_d3d11_render_target_view();
+SOKOL_GFX_API_DECL const void* sgctx_d3d11_depth_stencil_view();
 
 #elif defined(SOKOL_DUMMY_BACKEND)
 
@@ -113,12 +113,12 @@ typedef struct sgctx_dummy_context{
     SDL_Window* window;
 } sgctx_dummy_context;
 
-SOKOL_API_DECL sgctx_dummy_context* sgctx_dummy_create(SDL_Window* window, sgctx_desc* desc);
-SOKOL_API_DECL void sgctx_dummy_destroy(sgctx_dummy_context* sgctx);
-SOKOL_API_DECL bool sgctx_dummy_activate(sgctx_dummy_context* sgctx);
-SOKOL_API_DECL sgctx_isize sgctx_dummy_get_drawable_size(sgctx_dummy_context* sgctx);
-SOKOL_API_DECL bool sgctx_dummy_set_swap_interval(sgctx_dummy_context* sgctx, int interval);
-SOKOL_API_DECL bool sgctx_dummy_swap(sgctx_dummy_context* sgctx);
+SOKOL_GFX_API_DECL sgctx_dummy_context* sgctx_dummy_create(SDL_Window* window, sgctx_desc* desc);
+SOKOL_GFX_API_DECL void sgctx_dummy_destroy(sgctx_dummy_context* sgctx);
+SOKOL_GFX_API_DECL bool sgctx_dummy_activate(sgctx_dummy_context* sgctx);
+SOKOL_GFX_API_DECL sgctx_isize sgctx_dummy_get_drawable_size(sgctx_dummy_context* sgctx);
+SOKOL_GFX_API_DECL bool sgctx_dummy_set_swap_interval(sgctx_dummy_context* sgctx, int interval);
+SOKOL_GFX_API_DECL bool sgctx_dummy_swap(sgctx_dummy_context* sgctx);
 
 #else
 #error "Please define one of SOKOL_GLCORE33, SOKOL_GLES2, SOKOL_GLES3, SOKOL_D3D11, SOKOL_METAL, SOKOL_WGPU or SOKOL_DUMMY_BACKEND!"
@@ -137,16 +137,16 @@ typedef struct sgctx_context {
     };
 } sgctx_context;
 
-SOKOL_API_DECL sgctx_context sgctx_create(SDL_Window* window, sgctx_desc* desc);
-SOKOL_API_DECL void sgctx_destroy(sgctx_context sgctx);
-SOKOL_API_DECL bool sgctx_activate(sgctx_context sgctx);
-SOKOL_API_DECL bool sgctx_is_valid(sgctx_context sgctx);
-SOKOL_API_DECL sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx);
-SOKOL_API_DECL bool sgctx_set_swap_interval(sgctx_context sgctx, int interval);
-SOKOL_API_DECL bool sgctx_swap(sgctx_context sgctx);
-SOKOL_API_DECL const char* sgctx_get_error();
-SOKOL_API_DECL sgctx_error sgctx_get_error_code();
-SOKOL_API_DECL sg_backend sgctx_query_backend();
+SOKOL_GFX_API_DECL sgctx_context sgctx_create(SDL_Window* window, sgctx_desc* desc);
+SOKOL_GFX_API_DECL void sgctx_destroy(sgctx_context sgctx);
+SOKOL_GFX_API_DECL bool sgctx_activate(sgctx_context sgctx);
+SOKOL_GFX_API_DECL bool sgctx_is_valid(sgctx_context sgctx);
+SOKOL_GFX_API_DECL sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx);
+SOKOL_GFX_API_DECL bool sgctx_set_swap_interval(sgctx_context sgctx, int interval);
+SOKOL_GFX_API_DECL bool sgctx_swap(sgctx_context sgctx);
+SOKOL_GFX_API_DECL const char* sgctx_get_error();
+SOKOL_GFX_API_DECL sgctx_error sgctx_get_error_code();
+SOKOL_GFX_API_DECL sg_backend sgctx_query_backend();
 
 #ifdef __cplusplus
 } // extern "C"

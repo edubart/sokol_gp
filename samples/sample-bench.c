@@ -162,7 +162,7 @@ sg_image create_image(int width, int height) {
         .height = height,
         .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
         .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        .content = {.subimage = {{{.ptr = data, .size = size}}}},
+        .data = {.subimage = {{{.ptr = data, .size = size}}}},
     };
     sg_image image = sg_make_image(&image_desc);
     free(data);

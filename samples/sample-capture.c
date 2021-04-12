@@ -16,7 +16,7 @@ sg_image capture_fb_image() {
         .width = info.width,
         .height = info.height,
         .pixel_format = SG_PIXELFORMAT_RGBA8,
-        .content = {.subimage = {{{.ptr = pixels, .size = num_pixels}}}}
+        .data = {.subimage = {{{.ptr = pixels, .size = num_pixels}}}}
     };
     sg_image image = sg_make_image(&image_desc);
     assert(fb_image.id != SG_INVALID_ID);
@@ -34,7 +34,7 @@ sg_image capture_screen_image(int x, int y, int w , int h) {
         .width = info.width,
         .height = info.height,
         .pixel_format = SG_PIXELFORMAT_RGBA8,
-        .content = {.subimage = {{{.ptr = pixels, .size = num_pixels}}}}
+        .data = {.subimage = {{{.ptr = pixels, .size = num_pixels}}}}
     };
     sg_image image = sg_make_image(&image_desc);
     assert(fb_image.id != SG_INVALID_ID);
@@ -50,7 +50,7 @@ void draw_fbo() {
     sgp_set_color(1.0f, 0.0f, 0.0f, 1.0f);
     sgp_draw_filled_triangle(0, 0, 128, 0, 64, 128);
     sg_pass_action pass_action = {
-        .colors = {{.action = SG_ACTION_CLEAR, .val = {0.0f, 0.0f, 0.0f, 0.0f}}},
+        .colors = {{.action = SG_ACTION_CLEAR, .value = {0.0f, 0.0f, 0.0f, 0.0f}}},
         .depth = {.action = SG_ACTION_DONTCARE},
         .stencil = {.action = SG_ACTION_DONTCARE},
     };
