@@ -18,7 +18,7 @@ void draw() {
 
 bool init() {
     sgp_pipeline_desc pip_desc = {
-        .fs = sdf_shader_desc()->fs
+        .fs = sdf_shader_desc(SG_BACKEND_GLCORE33)->fs
     };
     pip = sgp_make_pipeline(&pip_desc);
     if(pip.id == SG_INVALID_ID) {
