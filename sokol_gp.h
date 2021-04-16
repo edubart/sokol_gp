@@ -37,8 +37,9 @@ typedef enum sgp_error {
     SGP_ERROR_STATE_STACK_OVERFLOW,
     SGP_ERROR_STATE_STACK_UNDERFLOW,
     SGP_ERROR_ALLOC_FAILED,
-    SGP_ERROR_MAKE_BUFFER_FAILED,
-    SGP_ERROR_MAKE_IMAGE_FAILED,
+    SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED,
+    SGP_ERROR_MAKE_WHITE_IMAGE_FAILED,
+    SGP_ERROR_MAKE_COMMON_SHADER_FAILED,
     SGP_ERROR_MAKE_SHADER_FAILED,
     SGP_ERROR_MAKE_PIPELINE_FAILED
 } sgp_error;
@@ -137,6 +138,7 @@ SOKOL_GFX_API_DECL bool sgp_setup(const sgp_desc* desc);
 SOKOL_GFX_API_DECL void sgp_shutdown();
 SOKOL_GFX_API_DECL bool sgp_is_valid();
 SOKOL_GFX_API_DECL sgp_error sgp_get_error_code();
+SOKOL_GFX_API_DECL const char* sgp_get_error_message(sgp_error error_code);
 SOKOL_GFX_API_DECL const char* sgp_get_error();
 
 // custom pipeline creation
@@ -312,10 +314,9 @@ static const sgp_mat2x3 _sgp_mat3_identity = {{
     {0.0f, 1.0f, 0.0f}
 }};
 
-static void _sgp_set_error(sgp_error code, const char *message) {
-    _sgp.last_error_code = code;
-    _sgp.last_error_message = message;
-    SOKOL_LOG(message);
+static void _sgp_set_error(sgp_error error_code) {
+    _sgp.last_error_code = error_code;
+    SOKOL_LOG(sgp_get_error_message(error_code));
 }
 
 #if defined(SOKOL_GLCORE33)
@@ -660,7 +661,7 @@ static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blen
     };
     sg_pipeline pip = sg_make_pipeline(&pip_desc);
     if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID)
-        _sgp_set_error(SGP_ERROR_MAKE_PIPELINE_FAILED, "SGP failed to create common pipeline");
+        _sgp_set_error(SGP_ERROR_MAKE_PIPELINE_FAILED);
     return pip;
 }
 
@@ -714,12 +715,17 @@ static sg_shader _sgp_make_shader(const sg_shader_stage_desc* vs, const sg_shade
 
     sg_shader shader = sg_make_shader(&shader_desc);
     if(sg_query_shader_state(shader) != SG_RESOURCESTATE_VALID)
-        _sgp_set_error(SGP_ERROR_MAKE_SHADER_FAILED, "SGP failed to make a shader");
+        _sgp_set_error(SGP_ERROR_MAKE_SHADER_FAILED);
     return shader;
 }
 
 bool sgp_setup(const sgp_desc* desc) {
     SOKOL_ASSERT(_sgp.init_cookie == 0);
+
+    if(!sg_isvalid()) {
+        _sgp_set_error(SGP_ERROR_SOKOL_INVALID);
+        return false;
+    }
 
     // init
     _sgp.init_cookie = _SGP_INIT_COOKIE;
@@ -740,7 +746,7 @@ bool sgp_setup(const sgp_desc* desc) {
     _sgp.commands = (_sgp_command*) SOKOL_MALLOC(_sgp.num_commands * sizeof(_sgp_command));
     if(!_sgp.commands || !_sgp.uniforms || !_sgp.commands) {
         sgp_shutdown();
-        _sgp_set_error(SGP_ERROR_ALLOC_FAILED, "SGP failed to allocate buffers");
+        _sgp_set_error(SGP_ERROR_ALLOC_FAILED);
         return false;
     }
     memset(_sgp.vertices, 0, _sgp.num_vertices * sizeof(_sgp_vertex));
@@ -756,7 +762,7 @@ bool sgp_setup(const sgp_desc* desc) {
     _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
     if(sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
-        _sgp_set_error(SGP_ERROR_MAKE_BUFFER_FAILED, "SGP failed to create vertex buffer");
+        _sgp_set_error(SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED);
         return false;
     }
 
@@ -775,7 +781,7 @@ bool sgp_setup(const sgp_desc* desc) {
     _sgp.white_img = sg_make_image(&white_img_desc);
     if(sg_query_image_state(_sgp.white_img) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
-        _sgp_set_error(SGP_ERROR_MAKE_IMAGE_FAILED, "SGP failed to create white image");
+        _sgp_set_error(SGP_ERROR_MAKE_WHITE_IMAGE_FAILED);
         return false;
     }
 
@@ -783,7 +789,7 @@ bool sgp_setup(const sgp_desc* desc) {
     _sgp.shader = _sgp_make_shader(NULL, NULL);
     if(sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
-        _sgp_set_error(SGP_ERROR_MAKE_SHADER_FAILED, "SGP failed to create common shader");
+        _sgp_set_error(SGP_ERROR_MAKE_COMMON_SHADER_FAILED);
         return false;
     }
 
@@ -800,7 +806,6 @@ bool sgp_setup(const sgp_desc* desc) {
     _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_BLEND);
     if(_sgp.last_error_code != SGP_NO_ERROR) {
         sgp_shutdown();
-        _sgp_set_error(SGP_ERROR_MAKE_PIPELINE_FAILED, "SGP failed to create common pipeline");
         return false;
     }
 
@@ -839,8 +844,47 @@ sgp_error sgp_get_error_code() {
     return _sgp.last_error_code;
 }
 
+const char* sgp_get_error_message(sgp_error error_code) {
+    switch(error_code) {
+        case SGP_NO_ERROR:
+            return "No error";
+        case SGP_ERROR_SOKOL_INVALID:
+            return "Sokol is not initialized";
+        case SGP_ERROR_VERTICES_FULL:
+            return "SGP vertices buffer is full";
+        case SGP_ERROR_UNIFORMS_FULL:
+            return "SGP uniform buffer is full";
+        case SGP_ERROR_COMMANDS_FULL:
+            return "SGP command buffer is full";
+        case SGP_ERROR_VERTICES_OVERFLOW:
+            return "SGP vertices buffer overflow";
+        case SGP_ERROR_TRANSFORM_STACK_OVERFLOW:
+            return "SGP transform stack overflow";
+        case SGP_ERROR_TRANSFORM_STACK_UNDERFLOW:
+            return "SGP transform stack underflow";
+        case SGP_ERROR_STATE_STACK_OVERFLOW:
+            return "SGP state stack overflow";
+        case SGP_ERROR_STATE_STACK_UNDERFLOW:
+            return "SGP state stack underflow";
+        case SGP_ERROR_ALLOC_FAILED:
+            return "SGP failed to allocate buffers";
+        case SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED:
+            return "SGP failed to create vertex buffer";
+        case SGP_ERROR_MAKE_WHITE_IMAGE_FAILED:
+            return "SGP failed to create white image";
+        case SGP_ERROR_MAKE_COMMON_SHADER_FAILED:
+            return "SGP failed to create the common shader";
+        case SGP_ERROR_MAKE_SHADER_FAILED:
+            return "SGP failed to create a shader";
+        case SGP_ERROR_MAKE_PIPELINE_FAILED:
+            return "SGP failed to create a pipeline";
+        default:
+            return "Invalid error code";
+    }
+}
+
 const char* sgp_get_error() {
-    return _sgp.last_error_message;
+    return sgp_get_error_message(_sgp.last_error_code);
 }
 
 sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
@@ -863,7 +907,7 @@ static inline sgp_mat2x3 _sgp_default_proj(int width, int height) {
 void sgp_begin(int width, int height) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(SOKOL_UNLIKELY(_sgp.cur_state >= _SGP_MAX_STACK_DEPTH)) {
-        _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW, "SGP state stack overflow");
+        _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW);
         return;
     }
 
@@ -914,7 +958,7 @@ void sgp_flush() {
     uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(_sgp_vertex);
     int offset = sg_append_buffer(_sgp.vertex_buf, &(sg_range){&_sgp.vertices[base_vertex], num_vertices});
     if(sg_query_buffer_overflow(_sgp.vertex_buf)) {
-        _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW, "SGP vertices buffer overflow");
+        _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW);
         return;
     }
 
@@ -985,7 +1029,7 @@ void sgp_flush() {
 void sgp_end() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     if(SOKOL_UNLIKELY(_sgp.cur_state <= 0)) {
-        _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW, "SGP state stack underflow");
+        _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW);
         return;
     }
 
@@ -1025,7 +1069,7 @@ void sgp_push_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
-        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW, "SGP transform stack overflow");
+        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW);
         return;
     }
     _sgp.transform_stack[_sgp.cur_transform++] = _sgp.state.transform;
@@ -1035,7 +1079,7 @@ void sgp_pop_transform() {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(_sgp.cur_transform <= 0)) {
-        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW, "SGP transform stack underflow");
+        _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW);
         return;
     }
     _sgp.state.transform = _sgp.transform_stack[--_sgp.cur_transform];
@@ -1180,7 +1224,7 @@ static _sgp_vertex* _sgp_next_vertices(uint32_t count) {
         _sgp.cur_vertex += count;
         return vertices;
     } else {
-        _sgp_set_error(SGP_ERROR_VERTICES_FULL, "SGP vertices buffer is full");
+        _sgp_set_error(SGP_ERROR_VERTICES_FULL);
         return NULL;
     }
 }
@@ -1197,7 +1241,7 @@ static sgp_uniform* _sgp_next_uniform() {
     if(SOKOL_LIKELY(_sgp.cur_uniform < _sgp.num_uniforms)) {
         return &_sgp.uniforms[_sgp.cur_uniform++];
     } else {
-        _sgp_set_error(SGP_ERROR_UNIFORMS_FULL, "SGP uniform buffer is full");
+        _sgp_set_error(SGP_ERROR_UNIFORMS_FULL);
         return NULL;
     }
 }
@@ -1214,7 +1258,7 @@ static _sgp_command* _sgp_next_command() {
     if(SOKOL_LIKELY(_sgp.cur_command < _sgp.num_commands)) {
         return &_sgp.commands[_sgp.cur_command++];
     } else {
-        _sgp_set_error(SGP_ERROR_COMMANDS_FULL, "SGP command buffer is full");
+        _sgp_set_error(SGP_ERROR_COMMANDS_FULL);
         return NULL;
     }
 }
