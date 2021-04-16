@@ -1196,12 +1196,15 @@ void sgp_reset_pipeline() {
 void sgp_set_uniform(const void* data, uint32_t size) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.state.pipeline.id != SG_INVALID_ID);
-    memset(&_sgp.state.uniform, 0, sizeof(sgp_uniform));
     if(size > 0) {
         SOKOL_ASSERT(data);
-        _sgp.state.uniform.size = size;
         memcpy(&_sgp.state.uniform.content, data, size);
     }
+    if(size < _sgp.state.uniform.size) {
+        // zero old uniform data
+        memset((uint8_t*)(&_sgp.state.uniform) + size, 0, _sgp.state.uniform.size - size);
+    }
+    _sgp.state.uniform.size = size;
 }
 
 void sgp_reset_uniform() {
