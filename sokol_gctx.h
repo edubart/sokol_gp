@@ -362,7 +362,7 @@ bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
         NULL,                               /* pAdapter (use default) */
         D3D_DRIVER_TYPE_HARDWARE,           /* DriverType */
         NULL,                               /* Software */
-        D3D11_CREATE_DEVICE_SINGLETHREADED, /* Flags */
+        D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, /* Flags */
         NULL,                               /* pFeatureLevels */
         0,                                  /* FeatureLevels */
         D3D11_SDK_VERSION,                  /* SDKVersion */
@@ -466,8 +466,25 @@ bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx) {
         // probably went through a fullscreen <-> windowed transition
     } else if (result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET) {
         // lost all resources
-        _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost");
-        return false;
+        switch(ID3D11Device_GetDeviceRemovedReason(sgctx->device)) {
+            case DXGI_ERROR_DEVICE_HUNG:
+                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - hung");
+                return false; // lost all resources
+            case DXGI_ERROR_DEVICE_REMOVED:
+                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - removed");
+                return false; // lost all resources
+            case DXGI_ERROR_DEVICE_RESET:
+                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - reset");
+                return false; // lost all resources
+            case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
+                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - internal error");
+                return false; // lost all resources
+            case DXGI_ERROR_INVALID_CALL:
+                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - invalid call");
+                return false; // lost all resources
+            default: // any other state should be recoverable (e.g. S_OK)
+                break;
+        }
     } else if(FAILED(result)) {
         _sgctx_set_error(SGCTX_SWAP_FAILED, "D3D11 present failed");
         return false;

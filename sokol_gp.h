@@ -92,9 +92,9 @@ typedef struct sgp_triangle {
     sgp_point a, b, c;
 } sgp_triangle;
 
-typedef struct sgp_mat3 {
-    float v[3][3];
-} sgp_mat3;
+typedef struct sgp_mat2x3 {
+    float v[2][3];
+} sgp_mat2x3;
 
 typedef struct sgp_color {
     float r, g, b, a;
@@ -114,9 +114,9 @@ typedef struct sgp_state {
     sgp_isize frame_size;
     sgp_irect viewport;
     sgp_irect scissor;
-    sgp_mat3 proj;
-    sgp_mat3 transform;
-    sgp_mat3 mvp;
+    sgp_mat2x3 proj;
+    sgp_mat2x3 transform;
+    sgp_mat2x3 mvp;
     sgp_color color;
     sgp_uniform uniform;
     sgp_blend_mode blend_mode;
@@ -301,16 +301,15 @@ typedef struct _sgp_context {
     // matrix stack
     uint32_t cur_transform;
     uint32_t cur_state;
-    sgp_mat3 transform_stack[_SGP_MAX_STACK_DEPTH];
+    sgp_mat2x3 transform_stack[_SGP_MAX_STACK_DEPTH];
     sgp_state state_stack[_SGP_MAX_STACK_DEPTH];
 } _sgp_context;
 
 static _sgp_context _sgp;
 
-static const sgp_mat3 _sgp_mat3_identity = {{
+static const sgp_mat2x3 _sgp_mat3_identity = {{
     {1.0f, 0.0f, 0.0f},
-    {0.0f, 1.0f, 0.0f},
-    {0.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 0.0f}
 }};
 
 static void _sgp_set_error(sgp_error code, const char *message) {
@@ -660,20 +659,18 @@ static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blen
         }}
     };
     sg_pipeline pip = sg_make_pipeline(&pip_desc);
-    if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
+    if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID)
         _sgp_set_error(SGP_ERROR_MAKE_PIPELINE_FAILED, "SGP failed to create common pipeline");
-    }
     return pip;
 }
 
 static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type primitive_type, sgp_blend_mode blend_mode) {
-    uint32_t pip_index = (primitive_type * _SGP_BLENDMODE_NUM) +
-                         blend_mode;
+    uint32_t pip_index = (primitive_type * _SGP_BLENDMODE_NUM) + blend_mode;
     if(_sgp.pipelines[pip_index].id != SG_INVALID_ID)
         return _sgp.pipelines[pip_index];
 
     sg_pipeline pip = _sgp_make_pipeline(primitive_type, blend_mode, _sgp.shader);
-    if(pip.id != SG_INVALID_ID)
+    if(sg_query_pipeline_state(pip) == SG_RESOURCESTATE_VALID)
         _sgp.pipelines[pip_index] = pip;
     return pip;
 };
@@ -849,18 +846,17 @@ const char* sgp_get_error() {
 sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
     sg_pipeline pip = {.id=SG_INVALID_ID};
     sg_shader shader = _sgp_make_shader(NULL, &desc->fs);
-    if(_sgp.shader.id != SG_INVALID_ID)
+    if(sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID)
         pip = _sgp_make_pipeline(desc->primitive_type, desc->blend_mode, shader);
     return pip;
 }
 
-static inline sgp_mat3 _sgp_default_proj(int width, int height) {
+static inline sgp_mat2x3 _sgp_default_proj(int width, int height) {
     // matrix to convert screen coordinate system
     // to the usual the coordinate system used on the backends
-    return (sgp_mat3){{
+    return (sgp_mat2x3){{
         {2.0f/width,           0.0f, -1.0f},
-        {      0.0f,   -2.0f/height,  1.0f},
-        {      0.0f,           0.0f,  1.0f}
+        {      0.0f,   -2.0f/height,  1.0f}
     }};
 }
 
@@ -997,30 +993,12 @@ void sgp_end() {
     _sgp.state = _sgp.state_stack[--_sgp.cur_state];
 }
 
-static inline sgp_mat3 _sgp_mat3_mul(const sgp_mat3* a, const sgp_mat3* b) {
-    sgp_mat3 p;
-    p.v[0][0] = a->v[0][0]*b->v[0][0] + a->v[0][1]*b->v[1][0] + a->v[0][2]*b->v[2][0];
-    p.v[0][1] = a->v[0][0]*b->v[0][1] + a->v[0][1]*b->v[1][1] + a->v[0][2]*b->v[2][1];
-    p.v[0][2] = a->v[0][0]*b->v[0][2] + a->v[0][1]*b->v[1][2] + a->v[0][2]*b->v[2][2];
-    p.v[1][0] = a->v[1][0]*b->v[0][0] + a->v[1][1]*b->v[1][0] + a->v[1][2]*b->v[2][0];
-    p.v[1][1] = a->v[1][0]*b->v[0][1] + a->v[1][1]*b->v[1][1] + a->v[1][2]*b->v[2][1];
-    p.v[1][2] = a->v[1][0]*b->v[0][2] + a->v[1][1]*b->v[1][2] + a->v[1][2]*b->v[2][2];
-    p.v[2][0] = a->v[2][0]*b->v[0][0] + a->v[2][1]*b->v[1][0] + a->v[2][2]*b->v[2][0];
-    p.v[2][1] = a->v[2][0]*b->v[0][1] + a->v[2][1]*b->v[1][1] + a->v[2][2]*b->v[2][1];
-    p.v[2][2] = a->v[2][0]*b->v[0][2] + a->v[2][1]*b->v[1][2] + a->v[2][2]*b->v[2][2];
-    return p;
-}
-
-static sgp_mat3 _sgp_mul_proj_transform(sgp_mat3* proj, sgp_mat3* transform) {
+static inline sgp_mat2x3 _sgp_mul_proj_transform(sgp_mat2x3* proj, sgp_mat2x3* transform) {
     // this actually multiply matrix projection and transform matrix in an optimized way
-    // the effect is the same as "return _sgp_mat3_mul(proj, transform);"
     float x = proj->v[0][0], y = proj->v[1][1];
-    float tx = proj->v[0][2], ty = proj->v[1][2];
-    float a = transform->v[2][0], b = transform->v[2][1], c = transform->v[2][2];
-    return (sgp_mat3) {{
-        {x*transform->v[0][0]+a*tx, x*transform->v[0][1]+b*tx, x*transform->v[0][2]+c*tx},
-        {y*transform->v[1][0]+a*ty, y*transform->v[1][1]+b*ty, y*transform->v[1][2]+c*ty},
-        {a, b, c}
+    return (sgp_mat2x3) {{
+        {x*transform->v[0][0], x*transform->v[0][1], x*transform->v[0][2]+proj->v[0][2]},
+        {y*transform->v[1][0], y*transform->v[1][1], y*transform->v[1][2]+proj->v[1][2]}
     }};
 }
 
@@ -1029,10 +1007,9 @@ void sgp_ortho(float left, float right, float top, float bottom) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     float w = right - left;
     float h = top - bottom;
-    _sgp.state.proj = (sgp_mat3){{
+    _sgp.state.proj = (sgp_mat2x3){{
         {2.0f/w,   0.0f,  -(right+left)/w},
-        {0.0f,   2.0f/h,  -(top+bottom)/h},
-        {0.0f,     0.0f,             1.0f}
+        {0.0f,   2.0f/h,  -(top+bottom)/h}
     }};
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
@@ -1081,7 +1058,6 @@ void sgp_translate(float x, float y) {
     // 0.0f, 0.0f, 1.0f,
     _sgp.state.transform.v[0][2] += x*_sgp.state.transform.v[0][0] + y*_sgp.state.transform.v[0][1];
     _sgp.state.transform.v[1][2] += x*_sgp.state.transform.v[1][0] + y*_sgp.state.transform.v[1][1];
-    _sgp.state.transform.v[2][2] += x*_sgp.state.transform.v[2][0] + y*_sgp.state.transform.v[2][1];
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
@@ -1093,10 +1069,9 @@ void sgp_rotate(float theta) {
     // cost, -sint, 0.0f,
     // sint,  cost, 0.0f,
     // 0.0f,  0.0f, 1.0f,
-    _sgp.state.transform = (sgp_mat3){{
+    _sgp.state.transform = (sgp_mat2x3){{
        {cost*_sgp.state.transform.v[0][0]+sint*_sgp.state.transform.v[0][1], -sint*_sgp.state.transform.v[0][0]+cost*_sgp.state.transform.v[0][1], _sgp.state.transform.v[0][2]},
-       {cost*_sgp.state.transform.v[1][0]+sint*_sgp.state.transform.v[1][1], -sint*_sgp.state.transform.v[1][0]+cost*_sgp.state.transform.v[1][1], _sgp.state.transform.v[1][2]},
-       {cost*_sgp.state.transform.v[2][0]+sint*_sgp.state.transform.v[2][1], -sint*_sgp.state.transform.v[2][0]+cost*_sgp.state.transform.v[2][1], _sgp.state.transform.v[2][2]}
+       {cost*_sgp.state.transform.v[1][0]+sint*_sgp.state.transform.v[1][1], -sint*_sgp.state.transform.v[1][0]+cost*_sgp.state.transform.v[1][1], _sgp.state.transform.v[1][2]}
     }};
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
@@ -1405,8 +1380,9 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sg_image img, sgp_uniform 
             memcpy(&_sgp.vertices[prev_end_vertex], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
 
             // offset vertices of intermediate draw commands
-            for(uint32_t i=0;i<inter_cmd_count;++i)
+            for(uint32_t i=0;i<inter_cmd_count;++i) {
                 inter_cmds[i]->args.draw.vertex_index += num_vertices;
+            }
         }
 
         // update draw region and vertices
@@ -1495,16 +1471,17 @@ static void _sgp_queue_draw(sg_pipeline pip, sg_image img, _sgp_region region, u
     };
 }
 
-static inline sgp_vec2 _sgp_mat3_vec2_mul(const sgp_mat3* m, const sgp_vec2* v) {
+static inline sgp_vec2 _sgp_mat3_vec2_mul(const sgp_mat2x3* m, const sgp_vec2* v) {
     return (sgp_vec2){
         .x = m->v[0][0]*v->x + m->v[0][1]*v->y + m->v[0][2],
         .y = m->v[1][0]*v->x + m->v[1][1]*v->y + m->v[1][2]
     };
 }
 
-static void _sgp_transform_vec2(sgp_mat3* matrix, sgp_vec2* dst, const sgp_vec2 *src, uint32_t count) {
-    for(uint32_t i=0;i<count;++i)
+static void _sgp_transform_vec2(sgp_mat2x3* matrix, sgp_vec2* dst, const sgp_vec2 *src, uint32_t count) {
+    for(uint32_t i=0;i<count;++i) {
         dst[i] = _sgp_mat3_vec2_mul(matrix, &src[i]);
+    }
 }
 
 static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t num_vertices) {
@@ -1512,7 +1489,7 @@ static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint3
     _sgp_vertex* transformed_vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
 
-    sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<num_vertices;++i) {
         sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
@@ -1637,7 +1614,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     // compute vertices
     _sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
-    sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<count;v+=6, rect++, i++) {
         sgp_vec2 quad[4] = {
@@ -1694,7 +1671,7 @@ void sgp_draw_textured_rects(sg_image image, const sgp_rect* rects, uint32_t cou
     if(SOKOL_UNLIKELY(!vertices)) return;
 
     // compute vertices
-    sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
@@ -1762,7 +1739,7 @@ void sgp_draw_textured_rects_ex(sg_image image, const sgp_textured_rect* rects, 
     float iw = 1.0f/image_size.w, ih = 1.0f/image_size.h;
 
     // compute vertices
-    sgp_mat3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {.x1=1.0f, .y1=1.0f, .x2=-1.0f, .y2=-1.0f};
     for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
