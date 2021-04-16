@@ -34,10 +34,10 @@ void terminate() {
 
 int main(int argc, char *argv[]) {
     return sample_app_main(&(sample_app_desc){
-        .width=512, .height=512,
         .init = init,
         .terminate = terminate,
         .draw = draw,
+        .width=512, .height=512,
         .argc = argc,
         .argv = argv
     });

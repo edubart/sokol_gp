@@ -587,8 +587,10 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
                 .enabled = false,
                 .src_factor_rgb = SG_BLENDFACTOR_ONE,
                 .dst_factor_rgb = SG_BLENDFACTOR_ZERO,
+                .op_rgb = SG_BLENDOP_ADD,
                 .src_factor_alpha = SG_BLENDFACTOR_ONE,
                 .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
+                .op_alpha = SG_BLENDOP_ADD
             };
             break;
         case SGP_BLENDMODE_BLEND:
@@ -596,8 +598,10 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
                 .enabled = true,
                 .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                 .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .op_rgb = SG_BLENDOP_ADD,
                 .src_factor_alpha = SG_BLENDFACTOR_ONE,
                 .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .op_alpha = SG_BLENDOP_ADD
             };
             break;
         case SGP_BLENDMODE_ADD:
@@ -605,8 +609,10 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
                 .enabled = true,
                 .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                 .dst_factor_rgb = SG_BLENDFACTOR_ONE,
+                .op_rgb = SG_BLENDOP_ADD,
                 .src_factor_alpha = SG_BLENDFACTOR_ZERO,
                 .dst_factor_alpha = SG_BLENDFACTOR_ONE,
+                .op_alpha = SG_BLENDOP_ADD
             };
             break;
         case SGP_BLENDMODE_MOD:
@@ -614,8 +620,10 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
                 .enabled = true,
                 .src_factor_rgb = SG_BLENDFACTOR_DST_COLOR,
                 .dst_factor_rgb = SG_BLENDFACTOR_ZERO,
+                .op_rgb = SG_BLENDOP_ADD,
                 .src_factor_alpha = SG_BLENDFACTOR_ZERO,
                 .dst_factor_alpha = SG_BLENDFACTOR_ONE,
+                .op_alpha = SG_BLENDOP_ADD
 
             };
             break;
@@ -624,12 +632,22 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
                 .enabled = true,
                 .src_factor_rgb = SG_BLENDFACTOR_DST_COLOR,
                 .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .op_rgb = SG_BLENDOP_ADD,
                 .src_factor_alpha = SG_BLENDFACTOR_DST_ALPHA,
                 .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .op_alpha = SG_BLENDOP_ADD
             };
             break;
         default:
-            blend = (sg_blend_state) {.enabled = false};
+            blend = (sg_blend_state) {
+                .enabled = false,
+                .src_factor_rgb = SG_BLENDFACTOR_ONE,
+                .dst_factor_rgb = SG_BLENDFACTOR_ZERO,
+                .op_rgb = SG_BLENDOP_ADD,
+                .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
+                .op_alpha = SG_BLENDOP_ADD
+            };
             SOKOL_UNREACHABLE;
             break;
     }
@@ -644,6 +662,7 @@ static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blen
 
     // create pipeline
     sg_pipeline_desc pip_desc = {
+        .shader = shader,
         .layout = {
             .buffers = {
                 {.stride=sizeof(_sgp_vertex)},
@@ -652,12 +671,11 @@ static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blen
                 {.offset=0, .format=SG_VERTEXFORMAT_FLOAT4},
             },
         },
-        .shader = shader,
-        .primitive_type = primitive_type,
-        .colors = {[0] = {
+        .colors = {{
             .pixel_format = _sg.desc.context.color_format,
             .blend = blend,
-        }}
+        }},
+        .primitive_type = primitive_type,
     };
     sg_pipeline pip = sg_make_pipeline(&pip_desc);
     if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID)
@@ -674,7 +692,7 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type primitive_type, sgp_bl
     if(sg_query_pipeline_state(pip) == SG_RESOURCESTATE_VALID)
         _sgp.pipelines[pip_index] = pip;
     return pip;
-};
+}
 
 static sg_shader _sgp_make_shader(const sg_shader_stage_desc* vs, const sg_shader_stage_desc* fs) {
     sg_shader_desc shader_desc = {
@@ -755,7 +773,7 @@ bool sgp_setup(const sgp_desc* desc) {
 
     // create vertex buffer
     sg_buffer_desc vertex_buf_desc = {
-        .size = (int)(_sgp.num_vertices * sizeof(_sgp_vertex)),
+        .size = (size_t)(_sgp.num_vertices * sizeof(_sgp_vertex)),
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
     };
@@ -890,7 +908,7 @@ const char* sgp_get_error() {
 sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
     sg_pipeline pip = {.id=SG_INVALID_ID};
     sg_shader shader = _sgp_make_shader(NULL, &desc->fs);
-    if(sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID)
+    if(sg_query_shader_state(_sgp.shader) == SG_RESOURCESTATE_VALID)
         pip = _sgp_make_pipeline(desc->primitive_type, desc->blend_mode, shader);
     return pip;
 }
@@ -956,7 +974,8 @@ void sgp_flush() {
     // upload vertices
     uint32_t base_vertex = _sgp.state._base_vertex;
     uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(_sgp_vertex);
-    int offset = sg_append_buffer(_sgp.vertex_buf, &(sg_range){&_sgp.vertices[base_vertex], num_vertices});
+    sg_range vertex_range = {&_sgp.vertices[base_vertex], num_vertices};
+    int offset = sg_append_buffer(_sgp.vertex_buf, &vertex_range);
     if(sg_query_buffer_overflow(_sgp.vertex_buf)) {
         _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW);
         return;
@@ -1008,8 +1027,10 @@ void sgp_flush() {
                 if(cur_uniform_index != args->uniform_index) {
                     cur_uniform_index = args->uniform_index;
                     sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
-                    if(uniform->size > 0)
-                        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &(sg_range){&uniform->content, uniform->size});
+                    if(uniform->size > 0) {
+                        sg_range uniform_range = {&uniform->content, uniform->size};
+                        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &uniform_range);
+                    }
                 }
                 sg_draw(args->vertex_index - cur_base_vertex, args->num_vertices, 1);
                 break;
