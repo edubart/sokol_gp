@@ -1175,10 +1175,8 @@ void sgp_scale(float sx, float sy) {
     // 0.0f, 0.0f, 1.0f,
     _sgp.state.transform.v[0][0] *= sx;
     _sgp.state.transform.v[1][0] *= sx;
-    _sgp.state.transform.v[2][0] *= sx;
     _sgp.state.transform.v[0][1] *= sy;
     _sgp.state.transform.v[1][1] *= sy;
-    _sgp.state.transform.v[2][1] *= sy;
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
