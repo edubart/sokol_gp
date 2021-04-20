@@ -60,6 +60,7 @@ all: sample-prims sample-blend sample-capture sample-fb sample-bench sample-sdf
 
 clean:
 	rm -rf $(OUTDIR)
+	rm -f *.log *.dxvk-cache
 
 shaders:
 	@mkdir -p $(OUTDIR)

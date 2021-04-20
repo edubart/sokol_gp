@@ -1,24 +1,7 @@
 #define SDL_DISABLE_IMMINTRIN_H
 #include <SDL2/SDL.h>
 
-#define SOKOL_GCTX_IMPL
 #define SOKOL_IMPL
-#define SOKOL_GFX_EXT_IMPL
-#define SOKOL_GP_IMPL
-
-#if defined(SOKOL_GLCORE33)
-#define FLEXTGL_IMPL
-#include "flextgl.h"
-#elif defined(SOKOL_GLES2)
-#define GL_GLEXT_PROTOTYPES
-#include <SDL2/SDL_opengles2.h>
-#elif defined(SOKOL_GLES3)
-#define GL_GLEXT_PROTOTYPES
-#include <GLES3/gl3platform.h>
-#include <GLES3/gl3.h>
-#include <GLES3/gl3ext.h>
-#endif
-
 #include "sokol_gfx.h"
 #include "sokol_gfx_ext.h"
 #include "sokol_gctx.h"
@@ -88,14 +71,6 @@ int sample_app_main(const sample_app_desc* app_desc) {
             vsync = false;
     }
     sgctx_set_swap_interval(sgctx, vsync ? 1 : 0);
-
-#if defined(SOKOL_GLCORE33)
-    // load opengl api
-    if(!flextInit()) {
-        fprintf(stderr, "OpenGL version 3.3 unsupported");
-        return 1;
-    }
-#endif
 
     // setup sokol
     sg_desc desc = {
