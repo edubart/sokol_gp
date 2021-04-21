@@ -9,7 +9,9 @@ void main() {
 
 @fs sgp_fs
 uniform sampler2D iChannel0;
-uniform vec4 iColor;
+uniform fs_params {
+    vec4 iColor;
+};
 in vec2 fragUV;
 out vec4 fragColor;
 void main() {

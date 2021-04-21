@@ -3,8 +3,8 @@ DEFINES=
 LIBS=-lSDL2 -lm
 INCLUDES=-I.
 OUTDIR=build
-SHDC?=../scratch/sokol-tools-bin/bin/linux/sokol-shdc
-SHDCLANGS=glsl330:glsl100:glsl300es:hlsl5:metal_macos
+SHDC=sokol-shdc
+SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos
 
 # platform
 ifndef platform
@@ -64,11 +64,11 @@ clean:
 
 shaders:
 	@mkdir -p $(OUTDIR)
-	$(SHDC) -i sokol_gp_shaders.glsl -o $(OUTDIR)/sokol_gp_shaders.glsl.h -l $(SHDCLANGS)
+	$(SHDC) $(SHDCFLAGS) -i sokol_gp_shaders.glsl -o $(OUTDIR)/sokol_gp_shaders.glsl.h
 
 %:
 	@mkdir -p $(OUTDIR)
 	$(CC) -o $(OUTDIR)/$@$(OUTEXT) samples/$@.c $(INCLUDES) $(DEFINES) $(CFLAGS) $(LIBS)
 
-samples/sample-sdf.glsl.h: samples/sample-sdf.glsl
-	$(SHDC) -i samples/sample-sdf.glsl -o samples/sample-sdf.glsl.h -l $(SHDCLANGS)
+sample-shaders:
+	$(SHDC) $(SHDCFLAGS) -i samples/sample-sdf.glsl -o samples/sample-sdf.glsl.h

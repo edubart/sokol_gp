@@ -1,6 +1,7 @@
 #define SGP_UNIFORM_CONTENT_SLOTS 4
 
 #include "sample_app.h"
+#define SOKOL_SHDC_IMPL
 #include "sample-sdf.glsl.h"
 
 sg_pipeline pip;
@@ -18,10 +19,10 @@ void draw() {
 
 bool init() {
     sgp_pipeline_desc pip_desc = {
-        .fs = sdf_shader_desc(SG_BACKEND_GLCORE33)->fs
+        .fs = sdf_shader_desc(sg_query_backend())->fs
     };
     pip = sgp_make_pipeline(&pip_desc);
-    if(pip.id == SG_INVALID_ID) {
+    if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to make custom pipeline %s\n", sgp_get_error());
         return false;
     }
