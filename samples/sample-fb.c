@@ -48,7 +48,9 @@ void draw() {
         for(int x=0;x<width;x+=192) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
-            sgp_draw_textured_rect(fb_image, x, y, 128, 128);
+            sgp_set_image(0, fb_image);
+            sgp_draw_textured_rect(x, y, 128, 128);
+            sgp_reset_image(0);
             sgp_pop_transform();
         }
     }

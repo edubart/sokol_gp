@@ -13,7 +13,9 @@ void draw() {
         .iTime = SDL_GetTicks() / 1000.0f
     };
     sgp_set_uniform(&uniform, sizeof(sdf_uniform_t));
+    sgp_unset_image(0);
     sgp_draw_filled_rect(0, 0, app.width, app.height);
+    sgp_reset_image(0);
     sgp_reset_pipeline();
 }
 

@@ -71,8 +71,11 @@ void draw() {
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
     sgp_translate(app.width/2, app.height/2);
-    sgp_draw_textured_rect(fb_captured_image, -256, -64, 128, 128);
-    sgp_draw_textured_rect(fb_captured_image2,  128, -64, 128, 128);
+    sgp_set_image(0, fb_captured_image);
+    sgp_draw_textured_rect(-256, -64, 128, 128);
+    sgp_set_image(0, fb_captured_image2);
+    sgp_draw_textured_rect(128, -64, 128, 128);
+    sgp_reset_image(0);
 }
 
 bool init() {
