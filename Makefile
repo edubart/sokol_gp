@@ -72,3 +72,4 @@ shaders:
 
 sample-shaders:
 	$(SHDC) $(SHDCFLAGS) -i samples/sample-sdf.glsl -o samples/sample-sdf.glsl.h
+	$(SHDC) $(SHDCFLAGS) -i samples/sample-effect.glsl -o samples/sample-effect.glsl.h
