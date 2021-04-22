@@ -56,7 +56,7 @@ endif
 
 .PHONY: all clean shaders
 
-all: sample-prims sample-blend sample-capture sample-fb sample-bench sample-sdf
+all: sample-prims sample-blend sample-capture sample-fb sample-bench sample-sdf sample-effect
 
 clean:
 	rm -rf $(OUTDIR)

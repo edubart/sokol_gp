@@ -11,18 +11,28 @@
 
 sg_pipeline pip;
 sg_image image;
-float image_ratio = 1.0f;
+sg_image perlin_image;
 
 void draw() {
     sgp_set_pipeline(pip);
     float secs = SDL_GetTicks() / 1000.0f;
+    sg_image_info info = sg_query_image_info(image);
+    float image_ratio = info.width / (float) info.height;
     effect_uniform_t uniform = {
-        .iResolution = {app.width, app.height},
+        .iPressure = 0.3f,
+        .iVelocity = {0.02f, 0.01f},
+        .iRatio = image_ratio,
         .iTime = secs,
-        .iLevel = sinf(secs)*0.5f + 0.5f,
+        .iWarpiness = 0.2f,
+        .iZoom = 0.4f,
+        .iLevel = 1.0f,
     };
     sgp_set_uniform(&uniform, sizeof(effect_uniform_t));
-    sgp_draw_textured_rect(image, 0, 0, app.width, app.width/image_ratio);
+    sgp_set_image(SLOT_iChannel0, image);
+    sgp_set_image(SLOT_iChannel1, perlin_image);
+    sgp_draw_textured_rect(0, 0, app.width, app.width/image_ratio);
+    sgp_reset_image(1);
+    sgp_reset_image(0);
     sgp_reset_pipeline();
 }
 
@@ -31,12 +41,11 @@ sg_image load_image(const char *filename) {
     uint8_t* data = stbi_load(filename, &width, &height, &channels, 4);
     if(!data)
         return (sg_image){.id=0};
-    image_ratio = width / (float) height;
     sg_image_desc image_desc = {
         .width = width,
         .height = height,
-        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+        .wrap_u = SG_WRAP_REPEAT,
+        .wrap_v = SG_WRAP_REPEAT,
         .min_filter = SG_FILTER_LINEAR,
         .mag_filter = SG_FILTER_LINEAR,
         .data = {.subimage = {{{.ptr = data, .size = width * height * 4}}}},
@@ -48,8 +57,9 @@ sg_image load_image(const char *filename) {
 
 bool init() {
     image = load_image("images/2d_magic_lands.png");
-    if(sg_query_image_state(image) != SG_RESOURCESTATE_VALID) {
-        fprintf(stderr, "failed to load image!");
+    perlin_image = load_image("images/perlin.png");
+    if(sg_query_image_state(image) != SG_RESOURCESTATE_VALID || sg_query_image_state(perlin_image) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "failed to load images");
         return false;
     }
     sgp_pipeline_desc pip_desc = {
@@ -64,6 +74,8 @@ bool init() {
 }
 
 void terminate() {
+    sg_destroy_image(image);
+    sg_destroy_image(perlin_image);
     sg_destroy_pipeline(pip);
 }
 
