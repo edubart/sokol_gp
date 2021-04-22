@@ -65,13 +65,13 @@ bool init() {
         .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
     };
     fb_image = sg_make_image(&fb_image_desc);
-    if(fb_image.id == SG_INVALID_ID)
+    if(sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID)
         return false;
     sg_pass_desc pass_desc = {
         .color_attachments = {{.image = fb_image}},
     };
     fb_pass = sg_make_pass(&pass_desc);
-    if(fb_pass.id == SG_INVALID_ID)
+    if(sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID)
         return false;
     return true;
 }

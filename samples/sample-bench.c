@@ -166,10 +166,7 @@ sg_image create_image(int width, int height) {
     };
     sg_image image = sg_make_image(&image_desc);
     free(data);
-    if(image.id == SG_INVALID_ID) {
-        fprintf(stderr, "failed to create imaged\n");
-        return (sg_image){.id=0};
-    }
+    assert(sg_query_image_state(image) == SG_RESOURCESTATE_VALID);
     return image;
 }
 
@@ -178,8 +175,6 @@ bool init() {
     image2 = create_image(128, 128);
     sg_image_info imginfo = sg_query_image_info(image);
     image_ratio = imginfo.width / (float)imginfo.height;
-    if(image.id == SG_INVALID_ID)
-        return false;
     return true;
 }
 

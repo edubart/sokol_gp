@@ -19,7 +19,7 @@ sg_image capture_fb_image() {
         .data = {.subimage = {{{.ptr = pixels, .size = num_pixels}}}}
     };
     sg_image image = sg_make_image(&image_desc);
-    assert(fb_image.id != SG_INVALID_ID);
+    assert(sg_query_image_state(image) == SG_RESOURCESTATE_VALID);
     SOKOL_FREE(pixels);
     return image;
 }
@@ -37,7 +37,7 @@ sg_image capture_screen_image(int x, int y, int w , int h) {
         .data = {.subimage = {{{.ptr = pixels, .size = num_pixels}}}}
     };
     sg_image image = sg_make_image(&image_desc);
-    assert(fb_image.id != SG_INVALID_ID);
+    assert(sg_query_image_state(image) == SG_RESOURCESTATE_VALID);
     SOKOL_FREE(pixels);
     return image;
 
@@ -57,15 +57,13 @@ void draw_fbo() {
     sg_begin_pass(fb_pass, &pass_action);
     sgp_flush();
 
-    if(fb_captured_image2.id != SG_INVALID_ID)
-        sg_destroy_image(fb_captured_image2);
+    sg_destroy_image(fb_captured_image2);
     fb_captured_image2 = capture_screen_image(0, 0, 128, 128);
 
     sgp_end();
     sg_end_pass();
 
-    if(fb_captured_image.id != SG_INVALID_ID)
-        sg_destroy_image(fb_captured_image);
+    sg_destroy_image(fb_captured_image);
     fb_captured_image = capture_fb_image();
 }
 
@@ -85,13 +83,13 @@ bool init() {
         .height = 128
     };
     fb_image = sg_make_image(&fb_image_desc);
-    if(fb_image.id == SG_INVALID_ID)
+    if(sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID)
         return false;
     sg_pass_desc pass_desc = {
         .color_attachments = {{.image = fb_image}},
     };
     fb_pass = sg_make_pass(&pass_desc);
-    if(fb_pass.id == SG_INVALID_ID)
+    if(sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID)
         return false;
     return true;
 }
