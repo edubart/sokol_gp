@@ -1238,6 +1238,7 @@ void sgp_reset_pipeline() {
 void sgp_set_uniform(const void* data, uint32_t size) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.state.pipeline.id != SG_INVALID_ID);
+    SOKOL_ASSERT(size <= sizeof(float) * SGP_UNIFORM_CONTENT_SLOTS);
     if(size > 0) {
         SOKOL_ASSERT(data);
         memcpy(&_sgp.state.uniform.content, data, size);
