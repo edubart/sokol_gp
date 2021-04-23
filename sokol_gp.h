@@ -1056,7 +1056,7 @@ void sgp_flush() {
                 }
                 // bindings
                 for(uint32_t i=0;i<SGP_TEXTURE_SLOTS;++i) {
-                    uint32_t img_id = i < args->images.count ? args->images.images[i].id : SG_INVALID_ID;
+                    uint32_t img_id = i < args->images.count ? args->images.images[i].id : (uint32_t)SG_INVALID_ID;
                     if(cur_imgs_id[i] != img_id) {
                         // when an image binding change we need to re-apply bindings
                         cur_imgs_id[i] = img_id;
@@ -1288,6 +1288,9 @@ void sgp_set_image(int channel, sg_image image) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
+    if(_sgp.state.images.images[channel].id == image.id)
+        return;
+
     _sgp.state.images.images[channel] = image;
 
     // recalculate images count
