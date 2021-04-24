@@ -982,9 +982,10 @@ void sgp_begin(int width, int height) {
         _sgp.state.images.images[i] = (sg_image){.id=SG_INVALID_ID};
 }
 
-static int _sgp_get_pipeline_vs_uniform_count(sg_pipeline pip) {
+static void _sgp_get_pipeline_uniform_count(sg_pipeline pip, int* vs_uniform_count, int* fs_uniform_count) {
     _sg_pipeline_t* p = _sg_lookup_pipeline(&_sg.pools, pip.id);
-    return p ? p->shader->cmn.stage[SG_SHADERSTAGE_VS].num_uniform_blocks : 0;
+    *vs_uniform_count = p ? p->shader->cmn.stage[SG_SHADERSTAGE_VS].num_uniform_blocks : 0;
+    *fs_uniform_count = p ? p->shader->cmn.stage[SG_SHADERSTAGE_FS].num_uniform_blocks : 0;
 }
 
 void sgp_flush() {
@@ -1075,11 +1076,14 @@ void sgp_flush() {
                     sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
                     if(uniform->size > 0) {
                         sg_range uniform_range = {&uniform->content, uniform->size};
+                        int vs_uniform_count, fs_uniform_count;
+                        _sgp_get_pipeline_uniform_count(args->pip, &vs_uniform_count, &fs_uniform_count);
                         // apply uniforms on vertex shader only when needed
-                        if(_sgp_get_pipeline_vs_uniform_count(args->pip) > 0)
+                        if(vs_uniform_count > 0)
                             sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniform_range);
                         // apply uniforms on fragment shader
-                        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &uniform_range);
+                        if(fs_uniform_count > 0)
+                            sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &uniform_range);
                     }
                 }
                 //  draw
