@@ -8,11 +8,11 @@ sg_pipeline pip;
 
 void draw() {
     sgp_set_pipeline(pip);
-    sdf_uniform_t uniform = {
+    sdf_uniforms_t uniform = {
         .iResolution = {app.width, app.height},
         .iTime = SDL_GetTicks() / 1000.0f
     };
-    sgp_set_uniform(&uniform, sizeof(sdf_uniform_t));
+    sgp_set_uniform(&uniform, sizeof(sdf_uniforms_t));
     sgp_unset_image(0);
     sgp_draw_filled_rect(0, 0, app.width, app.height);
     sgp_reset_image(0);
@@ -21,7 +21,7 @@ void draw() {
 
 bool init() {
     sgp_pipeline_desc pip_desc = {
-        .fs = sdf_shader_desc(sg_query_backend())->fs
+        .shader = *sdf_program_shader_desc(sg_query_backend())
     };
     pip = sgp_make_pipeline(&pip_desc);
     if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {

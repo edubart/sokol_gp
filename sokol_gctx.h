@@ -595,7 +595,7 @@ sgctx_metal_context* sgctx_metal_create(SDL_Window* window, sgctx_desc* desc) { 
         return NULL;
     }
 
-    SDL_MetalView view = SDL_Metal_CreateView(*window);
+    SDL_MetalView view = SDL_Metal_CreateView(window);
     if(!view) {
         _sgctx_set_error(SGCTX_CREATE_CONTEXT_FAILED, SDL_GetError());
         return NULL;
@@ -628,7 +628,7 @@ sgctx_metal_context* sgctx_metal_create(SDL_Window* window, sgctx_desc* desc) { 
     memset(sgctx, 0, sizeof(sgctx_metal_context));
     sgctx->init_cookie = _SGCTX_INIT_COOKIE;
     sgctx->desc = *desc;
-    sgctx->window = *window;
+    sgctx->window = window;
     sgctx->view = view;
     sgctx->device = (__bridge void*)_sgctx_metal_device;
     return sgctx;

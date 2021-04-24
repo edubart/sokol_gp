@@ -14,11 +14,10 @@ sg_image image;
 sg_image perlin_image;
 
 void draw() {
-    sgp_set_pipeline(pip);
     float secs = SDL_GetTicks() / 1000.0f;
     sg_image_info info = sg_query_image_info(image);
     float image_ratio = info.width / (float) info.height;
-    effect_uniform_t uniform = {
+    effect_uniforms_t uniform = {
         .iPressure = 0.3f,
         .iVelocity = {0.02f, 0.01f},
         .iRatio = image_ratio,
@@ -27,12 +26,13 @@ void draw() {
         .iZoom = 0.4f,
         .iLevel = 1.0f,
     };
-    sgp_set_uniform(&uniform, sizeof(effect_uniform_t));
-    sgp_set_image(SLOT_iChannel0, image);
-    sgp_set_image(SLOT_iChannel1, perlin_image);
+    sgp_set_pipeline(pip);
+    sgp_set_uniform(&uniform, sizeof(effect_uniforms_t));
+    sgp_set_image(SLOT_effect_iChannel0, image);
+    sgp_set_image(SLOT_effect_iChannel1, perlin_image);
     sgp_draw_textured_rect(0, 0, app.width, app.width/image_ratio);
-    sgp_reset_image(1);
-    sgp_reset_image(0);
+    sgp_reset_image(SLOT_effect_iChannel0);
+    sgp_reset_image(SLOT_effect_iChannel1);
     sgp_reset_pipeline();
 }
 
@@ -63,7 +63,7 @@ bool init() {
         return false;
     }
     sgp_pipeline_desc pip_desc = {
-        .fs = effect_shader_desc(sg_query_backend())->fs
+        .shader = *effect_program_shader_desc(sg_query_backend())
     };
     pip = sgp_make_pipeline(&pip_desc);
     if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {

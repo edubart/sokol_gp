@@ -4,7 +4,7 @@ LIBS=-lSDL2 -lm
 INCLUDES=-I.
 OUTDIR=build
 SHDC=sokol-shdc
-SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos
+SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos:wgpu
 
 # platform
 ifndef platform
