@@ -227,8 +227,8 @@ SOKOL_GP_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t cou
 SOKOL_GP_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);
 SOKOL_GP_API_DECL void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count);
 SOKOL_GP_API_DECL void sgp_draw_textured_rect(float x, float y, float w, float h);
-SOKOL_GP_API_DECL void sgp_draw_textured_rects_ex(const sgp_textured_rect* rects, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_textured_rect_ex(sgp_rect dest_rect, sgp_rect src_rect);
+SOKOL_GP_API_DECL void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count);
+SOKOL_GP_API_DECL void sgp_draw_textured_rect_ex(int channel, sgp_rect dest_rect, sgp_rect src_rect);
 
 // querying functions
 SOKOL_GP_API_DECL sgp_state* sgp_query_state();
@@ -1819,8 +1819,7 @@ void sgp_draw_filled_rect(float x, float y, float w, float h) {
 void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    sg_image image = _sgp.state.images.images[0];
-    if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
+    if(SOKOL_UNLIKELY(count == 0)) return;
 
     // setup vertices
     uint32_t num_vertices = count * 6;
@@ -1880,10 +1879,11 @@ static sgp_isize _sgp_query_image_size(sg_image img_id) {
     return (sgp_isize){img->cmn.width, img->cmn.height};
 }
 
-void sgp_draw_textured_rects_ex(const sgp_textured_rect* rects, uint32_t count) {
+void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    sg_image image = _sgp.state.images.images[0];
+    SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
+    sg_image image = _sgp.state.images.images[channel];
     if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
 
     // setup vertices
@@ -1953,11 +1953,11 @@ void sgp_draw_textured_rects_ex(const sgp_textured_rect* rects, uint32_t count) 
     _sgp_queue_draw(pip, region, vertex_index, num_vertices);
 }
 
-void sgp_draw_textured_rect_ex(sgp_rect dest_rect, sgp_rect src_rect) {
+void sgp_draw_textured_rect_ex(int channel, sgp_rect dest_rect, sgp_rect src_rect) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_textured_rect rect = {dest_rect, src_rect};
-    sgp_draw_textured_rects_ex(&rect, 1);
+    sgp_draw_textured_rects_ex(channel, &rect, 1);
 }
 
 sgp_desc sgp_query_desc() {
