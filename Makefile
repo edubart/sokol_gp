@@ -5,6 +5,17 @@ INCLUDES=-I.
 OUTDIR=build
 SHDC=sokol-shdc
 SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos:wgpu
+SAMPLES=\
+	sample-prims\
+	sample-blend\
+	sample-capture\
+	sample-fb\
+	sample-bench\
+	sample-sdf\
+	sample-effect
+SAMPLE_SHADERS=\
+	samples/sample-effect.glsl.h\
+	samples/sample-sdf.glsl.h
 
 # platform
 ifndef platform
@@ -56,20 +67,22 @@ endif
 
 .PHONY: all clean shaders
 
-all: sample-prims sample-blend sample-capture sample-fb sample-bench sample-sdf sample-effect
+
+all: $(SAMPLES)
 
 clean:
 	rm -rf $(OUTDIR)
 	rm -f *.log *.dxvk-cache
 
-shaders:
+sokolgp-shaders:
 	@mkdir -p $(OUTDIR)
 	$(SHDC) $(SHDCFLAGS) -i sokol_gp_shaders.glsl -o $(OUTDIR)/sokol_gp_shaders.glsl.h
 
-%:
+$(SAMPLES): %:
 	@mkdir -p $(OUTDIR)
 	$(CC) -o $(OUTDIR)/$@$(OUTEXT) samples/$@.c $(INCLUDES) $(DEFINES) $(CFLAGS) $(LIBS)
 
-sample-shaders:
-	$(SHDC) $(SHDCFLAGS) -i samples/sample-sdf.glsl -o samples/sample-sdf.glsl.h
-	$(SHDC) $(SHDCFLAGS) -i samples/sample-effect.glsl -o samples/sample-effect.glsl.h
+samples/%.glsl.h: samples/%.glsl
+	$(SHDC) $(SHDCFLAGS) -i $^ -o $@
+
+sample-shaders: $(SAMPLE_SHADERS)
