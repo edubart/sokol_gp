@@ -984,6 +984,7 @@ void sgp_begin(int width, int height) {
 
 static void _sgp_get_pipeline_uniform_count(sg_pipeline pip, int* vs_uniform_count, int* fs_uniform_count) {
     _sg_pipeline_t* p = _sg_lookup_pipeline(&_sg.pools, pip.id);
+    SOKOL_ASSERT(p);
     *vs_uniform_count = p ? p->shader->cmn.stage[SG_SHADERSTAGE_VS].num_uniform_blocks : 0;
     *fs_uniform_count = p ? p->shader->cmn.stage[SG_SHADERSTAGE_FS].num_uniform_blocks : 0;
 }
@@ -1876,7 +1877,8 @@ void sgp_draw_textured_rect(float x, float y, float w, float h) {
 
 static sgp_isize _sgp_query_image_size(sg_image img_id) {
     const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
-    return (sgp_isize){img->cmn.width, img->cmn.height};
+    SOKOL_ASSERT(img);
+    return (sgp_isize){img ? img->cmn.width : 0, img ? img->cmn.height : 0};
 }
 
 void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count) {
