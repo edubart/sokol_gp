@@ -34,8 +34,8 @@ typedef enum sgctx_error {
     SGCTX_CREATE_RENDER_TARGET_FAILED,
     SGCTX_ACTIVATE_CONTEXT_FAILED,
     SGCTX_SWAP_FAILED,
+    SGCTX_RESIZE_FAILED,
     SGCTX_DEVICE_LOST,
-    SGCTX_WMINFO_FAILED,
     SGCTX_INVALID_BACKEND
 } sgctx_error;
 
@@ -59,7 +59,7 @@ typedef struct sgctx_gl_context {
 } sgctx_gl_context;
 
 
-SOKOL_GFX_API_DECL void sgctx_gl_prepare_attributes(sgctx_desc* desc, sg_backend backend);
+SOKOL_GFX_API_DECL void sgctx_gl_prepare_attributes(sgctx_desc* desc);
 SOKOL_GFX_API_DECL sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc);
 SOKOL_GFX_API_DECL void sgctx_gl_destroy(sgctx_gl_context* sgctx);
 SOKOL_GFX_API_DECL bool sgctx_gl_activate(sgctx_gl_context* sgctx);
@@ -215,20 +215,20 @@ sgctx_error sgctx_get_error_code() {
 
 #if defined(_SOKOL_ANY_GL)
 
-void sgctx_gl_prepare_attributes(sgctx_desc* desc, sg_backend backend) {
-    if(backend == SG_BACKEND_GLES2) {
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-    } else if(backend == SG_BACKEND_GLES3) {
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-    } else {
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    }
+void sgctx_gl_prepare_attributes(sgctx_desc* desc) {
+#if defined(SOKOL_GLCORE33)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+#elif defined(SOKOL_GLES3)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#elif defined(SOKOL_GLES2)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, desc->depth_size);
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, desc->sample_count > 0 ? 1 : 0);
@@ -247,6 +247,8 @@ sgctx_gl_context* sgctx_gl_create(SDL_Window* window, sgctx_desc* desc) {
     memset(sgctx, 0, sizeof(sgctx_gl_context));
     sgctx->init_cookie = _SGCTX_INIT_COOKIE;
     sgctx->window = window;
+
+    sgctx_gl_prepare_attributes(desc);
 
     sgctx->context = SDL_GL_CreateContext(window);
     if(!sgctx->context) {
@@ -337,7 +339,7 @@ static inline HRESULT _sgctx_d3d11_GetDeviceRemovedReason(ID3D11Device* self) {
 
 static sgctx_d3d11_context* _sgctx_d3d11_active = NULL;
 
-bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
+static bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
     HRESULT result;
     #ifdef __cplusplus
     result = _sgctx_dxgi_GetBuffer(sgctx->swap_chain, 0, IID_ID3D11Texture2D, (void**)&sgctx->render_target);
@@ -345,13 +347,17 @@ bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
     result = _sgctx_dxgi_GetBuffer(sgctx->swap_chain, 0, &IID_ID3D11Texture2D, (void**)&sgctx->render_target);
     #endif
 
-    if(!SUCCEEDED(result))
+    if(!SUCCEEDED(result)) {
+        SOKOL_LOG("_sgctx_dxgi_GetBuffer() failed");
         return false;
+    }
 
     SOKOL_ASSERT(sgctx->render_target);
     result = _sg_d3d11_CreateRenderTargetView(sgctx->device, (ID3D11Resource*)sgctx->render_target, NULL, &sgctx->render_target_view);
-    if(!SUCCEEDED(result) || !sgctx->render_target_view)
+    if(!SUCCEEDED(result) || !sgctx->render_target_view) {
+        SOKOL_LOG("_sg_d3d11_CreateRenderTargetView() failed");
         return false;
+    }
 
     D3D11_TEXTURE2D_DESC ds_desc = {
         .Width = (UINT)sgctx->width,
@@ -364,39 +370,49 @@ bool _sgctx_d3d11_create_default_render_target(sgctx_d3d11_context* sgctx) {
         .BindFlags = D3D11_BIND_DEPTH_STENCIL,
     };
     result = _sg_d3d11_CreateTexture2D(sgctx->device, &ds_desc, NULL, &sgctx->depth_stencil_buffer);
-    if(!SUCCEEDED(result) || !sgctx->depth_stencil_buffer)
+    if(!SUCCEEDED(result) || !sgctx->depth_stencil_buffer) {
+        SOKOL_LOG("_sg_d3d11_CreateTexture2D() failed");
         return false;
+    }
 
     D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc = {
         .Format = ds_desc.Format,
         .ViewDimension = sgctx->desc.sample_count > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D
     };
     result = _sg_d3d11_CreateDepthStencilView(sgctx->device, (ID3D11Resource*)sgctx->depth_stencil_buffer, &dsv_desc, &sgctx->depth_stencil_view);
-    if(!SUCCEEDED(result) || !sgctx->depth_stencil_view)
+    if(!SUCCEEDED(result) || !sgctx->depth_stencil_view) {
+        SOKOL_LOG("_sg_d3d11_CreateDepthStencilView() failed");
         return false;
+    }
     return true;
 }
 
-void _sgctx_d3d11_destroy_default_render_target(sgctx_d3d11_context* sgctx) {
-    _sg_d3d11_Release(sgctx->render_target); sgctx->render_target = NULL;
-    _sg_d3d11_Release(sgctx->render_target_view); sgctx->render_target_view = NULL;
-    _sg_d3d11_Release(sgctx->depth_stencil_buffer); sgctx->depth_stencil_buffer = NULL;
-    _sg_d3d11_Release(sgctx->depth_stencil_view); sgctx->depth_stencil_view = NULL;
+static void _sgctx_d3d11_destroy_default_render_target(sgctx_d3d11_context* sgctx) {
+    if(sgctx->render_target) {
+        _sg_d3d11_Release(sgctx->render_target);
+        sgctx->render_target = NULL;
+    }
+    if(sgctx->render_target_view) {
+        _sg_d3d11_Release(sgctx->render_target_view);
+        sgctx->render_target_view = NULL;
+    }
+    if(sgctx->depth_stencil_buffer) {
+        _sg_d3d11_Release(sgctx->depth_stencil_buffer);
+        sgctx->depth_stencil_buffer = NULL;
+    }
+    if(sgctx->depth_stencil_view) {
+        _sg_d3d11_Release(sgctx->depth_stencil_view);
+        sgctx->depth_stencil_view = NULL;
+    }
 }
 
-bool _sgctx_d3d11_update_default_render_target(sgctx_d3d11_context* sgctx) {
-    if(!sgctx->swap_chain)
+static bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx) {
+    SDL_SysWMinfo wminfo;
+    SDL_VERSION(&wminfo.version);
+    if(!SDL_GetWindowWMInfo(sgctx->window, &wminfo)) {
+        SOKOL_LOG("SDL_GetWindowWMInfo() failed");
         return false;
-    _sgctx_d3d11_destroy_default_render_target(sgctx);
-    HRESULT result = _sgctx_dxgi_ResizeBuffers(sgctx->swap_chain, 1, sgctx->width, sgctx->height, DXGI_FORMAT_UNKNOWN, 0);
-    if(FAILED(result))
-        return false;
-    if(!_sgctx_d3d11_create_default_render_target(sgctx))
-        return false;
-    return true;
-}
-
-bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
+    }
     sgctx->swap_chain_desc = (DXGI_SWAP_CHAIN_DESC) {
         .BufferDesc = {
             .Width = (UINT)sgctx->width,
@@ -409,11 +425,11 @@ bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
         },
         .SampleDesc = {
             .Count = (UINT)(sgctx->desc.sample_count > 0 ? sgctx->desc.sample_count : 1),
-            .Quality = (UINT)(sgctx->desc.sample_count > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0)
+            .Quality = (UINT)(sgctx->desc.sample_count > 1 ? (UINT)D3D11_STANDARD_MULTISAMPLE_PATTERN : 0)
         },
         .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
         .BufferCount = 1,
-        .OutputWindow = hwnd,
+        .OutputWindow = wminfo.info.win.window,
         .Windowed = true,
         .SwapEffect = DXGI_SWAP_EFFECT_DISCARD,
     };
@@ -431,29 +447,30 @@ bool _sgctx_d3d11_create_device(sgctx_d3d11_context* sgctx, HWND hwnd) {
         &sgctx->device,                     /* ppDevice */
         &feature_level,                     /* pFeatureLevel */
         &sgctx->device_context);            /* ppImmediateContext */
-    if(!SUCCEEDED(result))
+    if(!SUCCEEDED(result) || !sgctx->swap_chain || !sgctx->device || !sgctx->device_context) {
+        SOKOL_LOG("D3D11CreateDeviceAndSwapChain() failed");
         return false;
-    if(!sgctx->swap_chain || !sgctx->device || !sgctx->device_context)
-        return false;
+    }
     return true;
 }
 
-void _sgctx_d3d11_destroy_device(sgctx_d3d11_context* sgctx) {
-    _sg_d3d11_Release(sgctx->swap_chain); sgctx->swap_chain = NULL;
-    _sg_d3d11_Release(sgctx->device_context); sgctx->device_context = NULL;
-    _sg_d3d11_Release(sgctx->device); sgctx->device = NULL;
+static void _sgctx_d3d11_destroy_device(sgctx_d3d11_context* sgctx) {
+    if(sgctx->swap_chain) {
+        _sg_d3d11_Release(sgctx->swap_chain);
+        sgctx->swap_chain = NULL;
+    }
+    if(sgctx->device_context) {
+        _sg_d3d11_Release(sgctx->device_context);
+        sgctx->device_context = NULL;
+    }
+    if(sgctx->device) {
+        _sg_d3d11_Release(sgctx->device);
+        sgctx->device = NULL;
+    }
 }
 
 sgctx_d3d11_context* sgctx_d3d11_create(SDL_Window* window, sgctx_desc* desc) {
     SOKOL_ASSERT(window);
-
-    SDL_SysWMinfo wminfo;
-    SDL_VERSION(&wminfo.version);
-
-    if(!SDL_GetWindowWMInfo(window, &wminfo)) {
-        _sgctx_set_error(SGCTX_WMINFO_FAILED, SDL_GetError());
-        return NULL;
-    }
 
     int width, height;
     SDL_GetWindowSize(window, &width, &height);
@@ -471,7 +488,7 @@ sgctx_d3d11_context* sgctx_d3d11_create(SDL_Window* window, sgctx_desc* desc) {
     sgctx->height = height;
 
     // create device and swap chain
-    if(!_sgctx_d3d11_create_device(sgctx, wminfo.info.win.window)) {
+    if(!_sgctx_d3d11_create_device(sgctx)) {
         sgctx_d3d11_destroy(sgctx);
         _sgctx_set_error(SGCTX_CREATE_CONTEXT_FAILED, "D3D11 failed to create device");
         return NULL;
@@ -514,6 +531,29 @@ bool sgctx_d3d11_set_swap_interval(sgctx_d3d11_context* sgctx, int interval) {
     return true;
 }
 
+static void _sgctx_d3d_debug_device_lost(sgctx_d3d11_context* sgctx) {
+    switch(_sgctx_d3d11_GetDeviceRemovedReason(sgctx->device)) {
+        case DXGI_ERROR_DEVICE_HUNG:
+            SOKOL_LOG("D3D11 device lost - hung");
+            break;
+        case DXGI_ERROR_DEVICE_REMOVED:
+            SOKOL_LOG("D3D11 device lost - removed");
+            break;
+        case DXGI_ERROR_DEVICE_RESET:
+            SOKOL_LOG("D3D11 device lost - reset");
+            break;
+        case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
+            SOKOL_LOG("D3D11 device lost - internal error");
+            break;
+        case DXGI_ERROR_INVALID_CALL:
+            SOKOL_LOG("D3D11 device lost - invalid call");
+            break;
+        default:
+            SOKOL_LOG("D3D11 device lost - unknown reason")
+            break;
+    }
+}
+
 bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
 
@@ -525,25 +565,9 @@ bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx) {
     } else if(result == DXGI_ERROR_INVALID_CALL) {
         // probably went through a fullscreen <-> windowed transition
     } else if (result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET) {
-        switch(_sgctx_d3d11_GetDeviceRemovedReason(sgctx->device)) {
-            case DXGI_ERROR_DEVICE_HUNG:
-                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - hung");
-                return false; // lost all resources
-            case DXGI_ERROR_DEVICE_REMOVED:
-                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - removed");
-                return false; // lost all resources
-            case DXGI_ERROR_DEVICE_RESET:
-                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - reset");
-                return false; // lost all resources
-            case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
-                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - internal error");
-                return false; // lost all resources
-            case DXGI_ERROR_INVALID_CALL:
-                _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost - invalid call");
-                return false; // lost all resources
-            default: // any other state should be recoverable (e.g. S_OK)
-                break;
-        }
+        _sgctx_d3d_debug_device_lost(sgctx);
+        _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost");
+        return false;
     } else if(FAILED(result)) {
         _sgctx_set_error(SGCTX_SWAP_FAILED, "D3D11 present failed");
         return false;
@@ -555,8 +579,21 @@ bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx) {
     if(sgctx->width != width || sgctx->height != height) {
         sgctx->width = width;
         sgctx->height = height;
-        if(!_sgctx_d3d11_update_default_render_target(sgctx)) {
-            _sgctx_set_error(SGCTX_CREATE_RENDER_TARGET_FAILED, "D3D11 failed to recreate default render target");
+
+        // recreate default render target
+        _sgctx_d3d11_destroy_default_render_target(sgctx);
+        HRESULT hr = _sgctx_dxgi_ResizeBuffers(sgctx->swap_chain, 1, sgctx->width, sgctx->height, DXGI_FORMAT_UNKNOWN, 0);
+        // device may be lost after ResizeBuffers
+        if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
+            _sgctx_d3d_debug_device_lost(sgctx);
+            _sgctx_set_error(SGCTX_DEVICE_LOST, "D3D11 device lost");
+            return false;
+        } else if(FAILED(hr)) {
+            _sgctx_set_error(SGCTX_RESIZE_FAILED, "D3D11 failed to resize buffers");
+            return false;
+        }
+        if(!_sgctx_d3d11_create_default_render_target(sgctx)) {
+            _sgctx_set_error(SGCTX_CREATE_RENDER_TARGET_FAILED, "D3D11 failed to create default render target");
             return false;
         }
     }

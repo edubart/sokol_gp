@@ -1,5 +1,6 @@
 CFLAGS?=-std=c99 -Wall -Wextra
 DEFINES=
+CC=gcc
 LIBS=-lSDL2 -lm
 INCLUDES=-I.
 OUTDIR=build

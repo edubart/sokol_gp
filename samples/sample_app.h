@@ -39,12 +39,8 @@ int sample_app_main(const sample_app_desc* app_desc) {
         .sample_count = 0
     };
 
-#if defined(SOKOL_GLCORE33)
-    sgctx_gl_prepare_attributes(&ctx_desc, SG_BACKEND_GLCORE33);
-#elif defined(SOKOL_GLES2)
-    sgctx_gl_prepare_attributes(&ctx_desc, SG_BACKEND_GLES2);
-#elif defined(SOKOL_GLES3)
-    sgctx_gl_prepare_attributes(&ctx_desc, SG_BACKEND_GLES3);
+#if defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
+    sgctx_gl_prepare_attributes(&ctx_desc);
 #endif
 
     // create window

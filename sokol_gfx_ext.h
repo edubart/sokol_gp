@@ -234,6 +234,7 @@ void _sg_d3d11_query_pixels(int x, int y, int w, int h, bool origin_top_left, vo
     ID3D11Texture2D *staging_tex = NULL;
     HRESULT hr = _sg_d3d11_CreateTexture2D(_sg.d3d11.dev, &staging_desc, NULL, &staging_tex);
     SOKOL_ASSERT(SUCCEEDED(hr));
+    _SOKOL_UNUSED(hr);
 
     // copy the desired portion of the back buffer to the staging texture
     y = (origin_top_left ? y : (_sg.d3d11.cur_height - (y + h)));
@@ -409,6 +410,7 @@ void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pix
 void sg_update_texture_filter(sg_image img_id, sg_filter min_filter, sg_filter mag_filter) {
     SOKOL_ASSERT(img_id.id != SG_INVALID_ID);
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    SOKOL_ASSERT(img);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_update_texture_filter(img, min_filter, mag_filter);
 #elif defined(SOKOL_D3D11)
