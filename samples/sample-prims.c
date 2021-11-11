@@ -1,9 +1,9 @@
 #include "sample_app.h"
 
 static sgp_vec2 points_buffer[4096];
-const float PI = 3.14159265358979323846264338327f;
+static const float PI = 3.14159265358979323846264338327f;
 
-void draw_rects() {
+static void draw_rects(void) {
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
     int size = 64;
@@ -36,20 +36,21 @@ void draw_rects() {
     sgp_pop_transform();
 }
 
-void draw_points() {
+static void draw_points(void) {
     sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
     unsigned int count = 0;
     for(int y=64;y<height-64 && count < 4096;y+=8) {
         for(int x=64;x<width-64 && count < 4096;x+=8) {
-            points_buffer[count++] = (sgp_vec2){(float)x,(float)y};
+            sgp_vec2 v = {(float)x,(float)y};
+            points_buffer[count++] = v;
         }
     }
     sgp_draw_points(points_buffer, count);
 }
 
-void draw_lines() {
+static void draw_lines(void) {
     sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
     unsigned int count = 0;
     sgp_irect viewport = sgp_query_state()->viewport;
@@ -57,12 +58,13 @@ void draw_lines() {
     points_buffer[count++] = c;
     for(float theta = 0.0f; theta <= PI*8.0f; theta+=PI/16.0f) {
         float r = 10.0f*theta;
-        points_buffer[count++] = (sgp_vec2){c.x + r*cosf(theta), c.y + r*sinf(theta)};
+        sgp_vec2 v = {c.x + r*cosf(theta), c.y + r*sinf(theta)};
+        points_buffer[count++] = v;
     }
     sgp_draw_line_strip(points_buffer, count);
 }
 
-void draw_triangles() {
+static void draw_triangles(void) {
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
     float hw = width * 0.5f;
@@ -76,19 +78,22 @@ void draw_triangles() {
     sgp_translate(-w*1.5f, 0.0f);
     sgp_draw_filled_triangle(ax, ay, bx, by, cx, cy);
     sgp_translate(w*3.0f, 0.0f);
-    int count = 0;
+    unsigned int count = 0;
     float step = (2.0f*PI)/6.0f;
     for(float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
-        points_buffer[count++] = (sgp_vec2){hw + w*cosf(theta), hh - w*sinf(theta)};
-        if(count % 3 == 1)
-            points_buffer[count++] = (sgp_vec2){hw, hh};
+        sgp_vec2 v = {hw + w*cosf(theta), hh - w*sinf(theta)};
+        points_buffer[count++] = v;
+        if(count % 3 == 1) {
+            sgp_vec2 u = {hw, hh};
+            points_buffer[count++] = u;
+        }
     }
     sgp_set_color(0.0f, 1.0f, 1.0f, 1.0f);
     sgp_draw_filled_triangle_strip(points_buffer, count);
     sgp_pop_transform();
 }
 
-void draw() {
+static void draw(void) {
     int hw = app.width / 2;
     int hh = app.height / 2;
 
@@ -124,20 +129,20 @@ void draw() {
     draw_lines();
 }
 
-bool init() {
+static bool init(void) {
     return true;
 }
 
-void terminate() {
+static void terminate(void) {
 }
 
 int main(int argc, char *argv[]) {
-    return sample_app_main(&(sample_app_desc){
-        .init = init,
-        .terminate = terminate,
-        .draw = draw,
-        .width=512, .height=512,
-        .argc = argc,
-        .argv = argv
-    });
+    sample_app_desc app_desc;
+    memset(&app_desc, 0, sizeof(app_desc));
+    app_desc.init = init;
+    app_desc.terminate = terminate;
+    app_desc.draw = draw;
+    app_desc.argc = argc;
+    app_desc.argv = argv;
+    return sample_app_main(&app_desc);
 }

@@ -1,4 +1,6 @@
 @module effect
+@ctype vec2 sgp_vec2
+@ctype float float
 
 @vs vs
 layout(location=0) in vec4 coord;

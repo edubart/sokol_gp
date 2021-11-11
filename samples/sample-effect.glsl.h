@@ -62,6 +62,8 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
+#include <stddef.h>
 #if !defined(SOKOL_GFX_INCLUDED)
   #error "Please include sokol_gfx.h before sample-effect.glsl.h"
 #endif
@@ -79,7 +81,7 @@ const sg_shader_desc* effect_program_shader_desc(sg_backend backend);
 #define SLOT_effect_uniforms (0)
 #pragma pack(push,1)
 SOKOL_SHDC_ALIGN(16) typedef struct effect_uniforms_t {
-    float iVelocity[2];
+    sgp_vec2 iVelocity;
     float iPressure;
     float iTime;
     float iWarpiness;
@@ -1088,7 +1090,7 @@ const sg_shader_desc* effect_program_shader_desc(sg_backend backend) {
       desc.fs.images[1].image_type = SG_IMAGETYPE_2D;
       desc.fs.images[1].sampler_type = SG_SAMPLERTYPE_FLOAT;
       desc.label = "effect_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_GLES2) {
@@ -1112,7 +1114,7 @@ const sg_shader_desc* effect_program_shader_desc(sg_backend backend) {
       desc.fs.images[1].image_type = SG_IMAGETYPE_2D;
       desc.fs.images[1].sampler_type = SG_SAMPLERTYPE_FLOAT;
       desc.label = "effect_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_GLES3) {
@@ -1136,7 +1138,7 @@ const sg_shader_desc* effect_program_shader_desc(sg_backend backend) {
       desc.fs.images[1].image_type = SG_IMAGETYPE_2D;
       desc.fs.images[1].sampler_type = SG_SAMPLERTYPE_FLOAT;
       desc.label = "effect_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_D3D11) {
@@ -1160,7 +1162,7 @@ const sg_shader_desc* effect_program_shader_desc(sg_backend backend) {
       desc.fs.images[1].image_type = SG_IMAGETYPE_2D;
       desc.fs.images[1].sampler_type = SG_SAMPLERTYPE_FLOAT;
       desc.label = "effect_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_METAL_MACOS) {
@@ -1180,7 +1182,7 @@ const sg_shader_desc* effect_program_shader_desc(sg_backend backend) {
       desc.fs.images[1].image_type = SG_IMAGETYPE_2D;
       desc.fs.images[1].sampler_type = SG_SAMPLERTYPE_FLOAT;
       desc.label = "effect_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_WGPU) {
@@ -1202,7 +1204,7 @@ const sg_shader_desc* effect_program_shader_desc(sg_backend backend) {
       desc.fs.images[1].image_type = SG_IMAGETYPE_2D;
       desc.fs.images[1].sampler_type = SG_SAMPLERTYPE_FLOAT;
       desc.label = "effect_program_shader";
-    };
+    }
     return &desc;
   }
   return 0;

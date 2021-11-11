@@ -43,7 +43,7 @@ SOKOL_GFX_API_DECL void sg_update_texture_filter(sg_image img_id, sg_filter min_
 
 #if defined(_SOKOL_ANY_GL)
 
-void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
+static void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
     SOKOL_ASSERT(img->gl.target == GL_TEXTURE_2D);
     SOKOL_ASSERT(0 != img->gl.tex[img->cmn.active_slot]);
 #if defined(SOKOL_GLCORE33)
@@ -68,7 +68,7 @@ void _sg_gl_query_image_pixels(_sg_image_t* img, void* pixels) {
 #endif
 }
 
-void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
+static void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
     SOKOL_ASSERT(pixels);
     GLuint gl_fb;
     GLint dims[4];
@@ -88,15 +88,15 @@ void _sg_gl_query_pixels(int x, int y, int w, int h, bool origin_top_left, void 
     _SG_GL_CHECK_ERROR();
 }
 
-void _sg_gl_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
+static void _sg_gl_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
     _sg_gl_cache_store_texture_binding(0);
     _sg_gl_cache_bind_texture(0, img->gl.target, img->gl.tex[img->cmn.active_slot]);
     img->cmn.min_filter = min_filter;
     img->cmn.mag_filter = mag_filter;
     GLenum gl_min_filter = _sg_gl_filter(img->cmn.min_filter);
     GLenum gl_mag_filter = _sg_gl_filter(img->cmn.mag_filter);
-    glTexParameteri(img->gl.target, GL_TEXTURE_MIN_FILTER, gl_min_filter);
-    glTexParameteri(img->gl.target, GL_TEXTURE_MAG_FILTER, gl_mag_filter);
+    glTexParameteri(img->gl.target, GL_TEXTURE_MIN_FILTER, (GLint)gl_min_filter);
+    glTexParameteri(img->gl.target, GL_TEXTURE_MAG_FILTER, (GLint)gl_mag_filter);
     _sg_gl_cache_restore_texture_binding(0);
 }
 
@@ -153,7 +153,7 @@ static uint32_t _sg_d3d11_dxgi_format_to_sdl_pixel_format(DXGI_FORMAT dxgi_forma
     }
 }
 
-void _sg_d3d11_query_image_pixels(_sg_image_t* img, void* pixels) {
+static void _sg_d3d11_query_image_pixels(_sg_image_t* img, void* pixels) {
     SOKOL_ASSERT(_sg.d3d11.ctx);
     SOKOL_ASSERT(img->d3d11.tex2d);
     HRESULT hr;
@@ -207,7 +207,7 @@ void _sg_d3d11_query_image_pixels(_sg_image_t* img, void* pixels) {
     if(staging_tex) _sg_d3d11_Release(staging_tex);
 }
 
-void _sg_d3d11_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
+static void _sg_d3d11_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
     // get current render target
     ID3D11RenderTargetView* render_target_view = NULL;
     _sgext_d3d11_OMGetRenderTargets(_sg.d3d11.ctx, 1, &render_target_view, NULL);
@@ -274,7 +274,7 @@ void _sg_d3d11_query_pixels(int x, int y, int w, int h, bool origin_top_left, vo
     if(staging_tex) _sg_d3d11_Release(staging_tex);
 }
 
-void _sg_d3d11_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
+static void _sg_d3d11_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
     SOKOL_ASSERT(img->d3d11.tex2d || img->d3d11.tex3d);
     HRESULT hr;
     _SOKOL_UNUSED(hr);
@@ -317,7 +317,7 @@ static void _sg_metal_commit_command_buffer() {
     }
 }
 
-void _sg_metal_encode_texture_pixels(int x, int y, int w, int h, bool origin_top_left, id<MTLTexture> mtl_src_texture, void* pixels) {
+static void _sg_metal_encode_texture_pixels(int x, int y, int w, int h, bool origin_top_left, id<MTLTexture> mtl_src_texture, void* pixels) {
     SOKOL_ASSERT(!_sg.mtl.in_pass);
     _sg_metal_commit_command_buffer();
     MTLTextureDescriptor* mtl_dst_texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:mtl_src_texture.pixelFormat width:w height:h mipmapped:NO];
@@ -352,17 +352,17 @@ void _sg_metal_encode_texture_pixels(int x, int y, int w, int h, bool origin_top
     _SOKOL_UNUSED(res);
 }
 
-void _sg_metal_query_image_pixels(_sg_image_t* img, void* pixels) {
+static void _sg_metal_query_image_pixels(_sg_image_t* img, void* pixels) {
     id<MTLTexture> mtl_src_texture = _sg.mtl.idpool.pool[img->mtl.tex[0]];
     _sg_metal_encode_texture_pixels(0, 0, mtl_src_texture.width, mtl_src_texture.height, true, mtl_src_texture, pixels);
 }
 
-void _sg_metal_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
+static void _sg_metal_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels) {
     id<CAMetalDrawable> mtl_drawable = (__bridge id<CAMetalDrawable>)_sg.mtl.drawable_cb();
     _sg_metal_encode_texture_pixels(x, y, w, h, origin_top_left, mtl_drawable.texture, pixels);
 }
 
-void _sg_metal_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
+static void _sg_metal_update_texture_filter(_sg_image_t* img, sg_filter min_filter, sg_filter mag_filter) {
     sg_image_desc image_desc = {
         .min_filter = min_filter,
         .mag_filter = mag_filter,
@@ -386,6 +386,7 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
     SOKOL_ASSERT(img);
     SOKOL_ASSERT(size >= (img->cmn.width * img->cmn.height * 4));
+    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_image_pixels(img, pixels);
 #elif defined(SOKOL_D3D11)
@@ -398,6 +399,7 @@ void sg_query_image_pixels(sg_image img_id, void* pixels, int size) {
 void sg_query_pixels(int x, int y, int w, int h, bool origin_top_left, void *pixels, int size) {
     SOKOL_ASSERT(pixels);
     SOKOL_ASSERT(size >= w*h);
+    _SOKOL_UNUSED(size);
 #if defined(_SOKOL_ANY_GL)
     _sg_gl_query_pixels(x, y, w, h, origin_top_left, pixels);
 #elif defined(SOKOL_D3D11)

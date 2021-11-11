@@ -10,9 +10,9 @@
 #include <math.h>
 
 typedef struct sample_app_desc {
-    bool (*init)();
-    void (*terminate)();
-    void (*draw)();
+    bool (*init)(void);
+    void (*terminate)(void);
+    void (*draw)(void);
     int width;
     int height;
     int argc;
@@ -26,18 +26,18 @@ typedef struct sample_app {
     int frame;
 } sample_app;
 
-sample_app app;
+static sample_app app;
 
-int sample_app_main(const sample_app_desc* app_desc) {
+static int sample_app_main(const sample_app_desc* app_desc) {
     app.desc = *app_desc;
 
     // initialize SDL
     SDL_Init(SDL_INIT_VIDEO);
 
     // setup context attributes before window and context creation
-    sgctx_desc ctx_desc = {
-        .sample_count = 0
-    };
+    sgctx_desc ctx_desc;
+    memset(&ctx_desc, 0, sizeof(sgctx_desc));
+    ctx_desc.sample_count = 0;
 
 #if defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
     sgctx_gl_prepare_attributes(&ctx_desc);
@@ -69,9 +69,9 @@ int sample_app_main(const sample_app_desc* app_desc) {
     sgctx_set_swap_interval(sgctx, vsync ? 1 : 0);
 
     // setup sokol
-    sg_desc desc = {
-        .context = {.depth_format = SG_PIXELFORMAT_NONE}
-    };
+    sg_desc desc;
+    memset(&desc, 0, sizeof(sg_desc));
+    desc.context.depth_format = SG_PIXELFORMAT_NONE;
 #if defined(SOKOL_D3D11)
     desc.context.d3d11.device = sgctx.d3d11->device;
     desc.context.d3d11.device_context = sgctx.d3d11->device_context;
@@ -85,10 +85,11 @@ int sample_app_main(const sample_app_desc* app_desc) {
     }
 
     // setup sokol gp
-    sgp_desc sample_sgp_desc = {
-        .max_vertices=262144,
-        .max_commands=32768,
-    };
+    sgp_desc sample_sgp_desc;
+    memset(&sample_sgp_desc, 0, sizeof(sgp_desc));
+    sample_sgp_desc.max_vertices = 262144;
+    sample_sgp_desc.max_commands = 32768;
+
     if(!sgp_setup(&sample_sgp_desc)) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error());
         return 1;
@@ -113,11 +114,15 @@ int sample_app_main(const sample_app_desc* app_desc) {
         sgp_begin(size.w,  size.h);
         app.desc.draw();
 
-        sg_pass_action default_pass_action = {
-            .colors = {{.action = SG_ACTION_CLEAR, .value = {0.05f, 0.05f, 0.05f, 1.0f}}},
-            .depth = {.action = SG_ACTION_DONTCARE},
-            .stencil = {.action = SG_ACTION_DONTCARE},
-        };
+        sg_pass_action default_pass_action;
+        memset(&default_pass_action, 0, sizeof(sg_pass_action));
+        default_pass_action.colors[0].action = SG_ACTION_CLEAR;
+        default_pass_action.colors[0].value.r = 0.05f;
+        default_pass_action.colors[0].value.g = 0.05f;
+        default_pass_action.colors[0].value.b = 0.05f;
+        default_pass_action.colors[0].value.a = 1.0f;
+        default_pass_action.depth.action = SG_ACTION_DONTCARE;
+        default_pass_action.stencil.action = SG_ACTION_DONTCARE;
         sg_begin_default_pass(&default_pass_action, size.w, size.h);
         sgp_flush();
         sg_end_pass();

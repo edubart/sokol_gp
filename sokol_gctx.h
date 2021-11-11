@@ -107,8 +107,8 @@ SOKOL_GFX_API_DECL bool sgctx_d3d11_activate(sgctx_d3d11_context* sgctx);
 SOKOL_GFX_API_DECL sgctx_isize sgctx_d3d11_get_drawable_size(sgctx_d3d11_context* sgctx);
 SOKOL_GFX_API_DECL bool sgctx_d3d11_set_swap_interval(sgctx_d3d11_context* sgctx, int interval);
 SOKOL_GFX_API_DECL bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx);
-SOKOL_GFX_API_DECL const void* sgctx_d3d11_render_target_view();
-SOKOL_GFX_API_DECL const void* sgctx_d3d11_depth_stencil_view();
+SOKOL_GFX_API_DECL const void* sgctx_d3d11_render_target_view(void);
+SOKOL_GFX_API_DECL const void* sgctx_d3d11_depth_stencil_view(void);
 
 #elif defined(SOKOL_METAL)
 
@@ -129,8 +129,8 @@ SOKOL_GFX_API_DECL bool sgctx_metal_activate(sgctx_metal_context* sgctx);
 SOKOL_GFX_API_DECL sgctx_isize sgctx_metal_get_drawable_size(sgctx_metal_context* sgctx);
 SOKOL_GFX_API_DECL bool sgctx_metal_set_swap_interval(sgctx_metal_context* sgctx, int interval);
 SOKOL_GFX_API_DECL bool sgctx_metal_swap(sgctx_metal_context* sgctx);
-SOKOL_GFX_API_DECL const void* sgctx_metal_default_renderpass_descriptor();
-SOKOL_GFX_API_DECL const void* sgctx_metal_current_drawable();
+SOKOL_GFX_API_DECL const void* sgctx_metal_default_renderpass_descriptor(void);
+SOKOL_GFX_API_DECL const void* sgctx_metal_current_drawable(void);
 
 #elif defined(SOKOL_DUMMY_BACKEND)
 
@@ -150,19 +150,17 @@ SOKOL_GFX_API_DECL bool sgctx_dummy_swap(sgctx_dummy_context* sgctx);
 #error "Please define one of SOKOL_GLCORE33, SOKOL_GLES2, SOKOL_GLES3, SOKOL_D3D11, SOKOL_METAL, SOKOL_WGPU or SOKOL_DUMMY_BACKEND!"
 #endif
 
-typedef struct sgctx_context {
-    union {
-        void *p;
+typedef union sgctx_context {
+    void *p;
 #if defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
-        sgctx_gl_context* gl;
+    sgctx_gl_context* gl;
 #elif defined(SOKOL_D3D11)
-        sgctx_d3d11_context* d3d11;
+    sgctx_d3d11_context* d3d11;
 #elif defined(SOKOL_METAL)
-        sgctx_metal_context* metal;
+    sgctx_metal_context* metal;
 #elif defined(SOKOL_DUMMY_BACKEND)
-        sgctx_dummy_context* dummy;
+    sgctx_dummy_context* dummy;
 #endif
-    };
 } sgctx_context;
 
 SOKOL_GFX_API_DECL sgctx_context sgctx_create(SDL_Window* window, sgctx_desc* desc);
@@ -172,9 +170,9 @@ SOKOL_GFX_API_DECL bool sgctx_is_valid(sgctx_context sgctx);
 SOKOL_GFX_API_DECL sgctx_isize sgctx_get_drawable_size(sgctx_context sgctx);
 SOKOL_GFX_API_DECL bool sgctx_set_swap_interval(sgctx_context sgctx, int interval);
 SOKOL_GFX_API_DECL bool sgctx_swap(sgctx_context sgctx);
-SOKOL_GFX_API_DECL const char* sgctx_get_error();
-SOKOL_GFX_API_DECL sgctx_error sgctx_get_error_code();
-SOKOL_GFX_API_DECL sg_backend sgctx_query_backend();
+SOKOL_GFX_API_DECL const char* sgctx_get_error(void);
+SOKOL_GFX_API_DECL sgctx_error sgctx_get_error_code(void);
+SOKOL_GFX_API_DECL sg_backend sgctx_query_backend(void);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -205,11 +203,11 @@ static void _sgctx_set_error(sgctx_error code, const char *message) {
     SOKOL_LOG(message);
 }
 
-const char* sgctx_get_error() {
+const char* sgctx_get_error(void) {
     return sgctx_last_error.message;
 }
 
-sgctx_error sgctx_get_error_code() {
+sgctx_error sgctx_get_error_code(void) {
     return sgctx_last_error.code;
 }
 
@@ -269,7 +267,7 @@ void sgctx_gl_destroy(sgctx_gl_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
     if(sgctx->context)
         SDL_GL_DeleteContext(sgctx->context);
-    *sgctx = (sgctx_gl_context){.init_cookie=0};
+    memset(sgctx, 0, sizeof(sgctx_gl_context));
     SOKOL_FREE(sgctx);
 }
 
@@ -511,7 +509,7 @@ void sgctx_d3d11_destroy(sgctx_d3d11_context* sgctx) {
     _sgctx_d3d11_destroy_device(sgctx);
     if(_sgctx_d3d11_active == sgctx)
         _sgctx_d3d11_active = NULL;
-    *sgctx = (sgctx_d3d11_context){.init_cookie=0};
+    memset(sgctx, 0, sizeof(sgctx_d3d11_context));
     SOKOL_FREE(sgctx);
 }
 
@@ -601,13 +599,13 @@ bool sgctx_d3d11_swap(sgctx_d3d11_context* sgctx) {
     return true;
 }
 
-const void* sgctx_d3d11_render_target_view() {
+const void* sgctx_d3d11_render_target_view(void) {
     if(_sgctx_d3d11_active)
         return (const void*) _sgctx_d3d11_active->render_target_view;
     return NULL;
 }
 
-const void* sgctx_d3d11_depth_stencil_view() {
+const void* sgctx_d3d11_depth_stencil_view(void) {
     if(_sgctx_d3d11_active)
         return (const void*) _sgctx_d3d11_active->depth_stencil_view;
     return NULL;
@@ -678,7 +676,7 @@ void sgctx_metal_destroy(sgctx_metal_context* sgctx) { @autoreleasepool {
     _sgctx_metal_layer = nil;
     _sgctx_metal_device = nil;
     SDL_Metal_DestroyView(sgctx->view);
-    *sgctx = (sgctx_metal_context){.init_cookie=0};
+    memset(sgctx, 0, sizeof(sgctx_metal_context));
     SOKOL_FREE(sgctx);
 }}
 
@@ -708,13 +706,13 @@ bool sgctx_metal_swap(sgctx_metal_context* sgctx) { @autoreleasepool {
     return true;
 }}
 
-const void* sgctx_metal_default_renderpass_descriptor() {
+const void* sgctx_metal_default_renderpass_descriptor(void) {
     _sgctx_metal_current_drawable = [_sgctx_metal_layer nextDrawable];
     _sgctx_metal_default_renderpass_descriptor.colorAttachments[0].texture = _sgctx_metal_current_drawable.texture;
     return (__bridge const void*) _sgctx_metal_default_renderpass_descriptor;
 }
 
-const void* sgctx_metal_current_drawable() {
+const void* sgctx_metal_current_drawable(void) {
     return (__bridge const void*) _sgctx_metal_current_drawable;
 }
 
@@ -736,7 +734,7 @@ sgctx_dummy_context* sgctx_dummy_create(SDL_Window* window, sgctx_desc* desc) {
 
 void sgctx_dummy_destroy(sgctx_dummy_context* sgctx) {
     SOKOL_ASSERT(sgctx->init_cookie == _SGCTX_INIT_COOKIE);
-    *sgctx = (sgctx_dummy_context){.init_cookie=0};
+    memset(sgctx, 0, sizeof(sgctx_dummy_context));
     SOKOL_FREE(sgctx);
 }
 
@@ -860,7 +858,7 @@ bool sgctx_swap(sgctx_context sgctx) {
 #endif
 }
 
-sg_backend sgctx_query_backend() {
+sg_backend sgctx_query_backend(void) {
 #if defined(_SOKOL_ANY_GL)
     return SG_BACKEND_GLCORE33;
 #elif defined(SOKOL_D3D11)

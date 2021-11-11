@@ -50,6 +50,8 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
+#include <stddef.h>
 #if !defined(SOKOL_GFX_INCLUDED)
   #error "Please include sokol_gfx.h before sample-sdf.glsl.h"
 #endif
@@ -8066,7 +8068,7 @@ const sg_shader_desc* sdf_program_shader_desc(sg_backend backend) {
       desc.fs.uniform_blocks[0].uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
       desc.fs.uniform_blocks[0].uniforms[0].array_count = 1;
       desc.label = "sdf_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_GLES2) {
@@ -8088,7 +8090,7 @@ const sg_shader_desc* sdf_program_shader_desc(sg_backend backend) {
       desc.fs.uniform_blocks[0].uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
       desc.fs.uniform_blocks[0].uniforms[0].array_count = 1;
       desc.label = "sdf_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_GLES3) {
@@ -8110,7 +8112,7 @@ const sg_shader_desc* sdf_program_shader_desc(sg_backend backend) {
       desc.fs.uniform_blocks[0].uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
       desc.fs.uniform_blocks[0].uniforms[0].array_count = 1;
       desc.label = "sdf_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_D3D11) {
@@ -8129,7 +8131,7 @@ const sg_shader_desc* sdf_program_shader_desc(sg_backend backend) {
       desc.fs.entry = "main";
       desc.fs.uniform_blocks[0].size = 16;
       desc.label = "sdf_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_METAL_MACOS) {
@@ -8144,7 +8146,7 @@ const sg_shader_desc* sdf_program_shader_desc(sg_backend backend) {
       desc.fs.entry = "main0";
       desc.fs.uniform_blocks[0].size = 16;
       desc.label = "sdf_program_shader";
-    };
+    }
     return &desc;
   }
   if (backend == SG_BACKEND_WGPU) {
@@ -8161,7 +8163,7 @@ const sg_shader_desc* sdf_program_shader_desc(sg_backend backend) {
       desc.fs.entry = "main";
       desc.fs.uniform_blocks[0].size = 16;
       desc.label = "sdf_program_shader";
-    };
+    }
     return &desc;
   }
   return 0;

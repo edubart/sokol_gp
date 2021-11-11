@@ -1,15 +1,15 @@
 #include "sample_app.h"
 
-sg_image image;
-sg_image image2;
-float image_ratio;
+static sg_image image1;
+static sg_image image2;
+static float image_ratio;
 
-const int count = 48;
-const int rect_count = 4;
+static const int count = 48;
+static const int rect_count = 4;
 
-void bench_repeated_textured() {
+static void bench_repeated_textured(void) {
     sgp_reset_color();
-    sgp_set_image(0, image);
+    sgp_set_image(0, image1);
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
             sgp_draw_textured_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
@@ -18,20 +18,20 @@ void bench_repeated_textured() {
     sgp_reset_image(0);
 }
 
-void bench_multiple_textured() {
+static void bench_multiple_textured(void) {
     sgp_reset_color();
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
-            sgp_set_image(0, x % 2 == 0 ? image : image2);
+            sgp_set_image(0, x % 2 == 0 ? image1 : image2);
             sgp_draw_textured_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
     sgp_reset_image(0);
 }
 
-void bench_colored_textured() {
+static void bench_colored_textured(void) {
     sgp_reset_color();
-    sgp_set_image(0, image);
+    sgp_set_image(0, image1);
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
             if(x % 3 == 0)
@@ -46,7 +46,7 @@ void bench_colored_textured() {
     sgp_reset_image(0);
 }
 
-void bench_repeated_filled() {
+static void bench_repeated_filled(void) {
     sgp_reset_color();
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
@@ -55,16 +55,7 @@ void bench_repeated_filled() {
     }
 }
 
-void bench_multiple_filled() {
-    sgp_reset_color();
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
-            sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
-        }
-    }
-}
-
-void bench_colored_filled() {
+static void bench_colored_filled(void) {
     sgp_reset_color();
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
@@ -79,8 +70,8 @@ void bench_colored_filled() {
     }
 }
 
-void bench_mixed() {
-    sgp_set_image(0, image);
+static void bench_mixed(void) {
+    sgp_set_image(0, image1);
     for(int diagonal = 0; diagonal < 2*count - 1; ++diagonal) {
         int advance = _sg_max(diagonal - count + 1, 0);
         for(int y = diagonal - advance, x = advance; y >= 0 && x < count; --y, ++x) {
@@ -99,8 +90,8 @@ void bench_mixed() {
     sgp_reset_image(0);
 }
 
-void bench_sync_mixed() {
-    sgp_set_image(0, image);
+static void bench_sync_mixed(void) {
+    sgp_set_image(0, image1);
     sgp_reset_color();
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
@@ -116,19 +107,19 @@ void bench_sync_mixed() {
     sgp_reset_image(0);
 }
 
-void draw_cat() {
+static void draw_cat(void) {
     sgp_reset_color();
-    sgp_set_image(0, image);
+    sgp_set_image(0, image1);
     sgp_draw_textured_rect(0, 0, rect_count*count*2, rect_count*count*2);
     sgp_reset_image(0);
 }
 
-void draw_rect() {
+static void draw_rect(void) {
     sgp_reset_color();
     sgp_draw_filled_rect(0, 0, rect_count*count*2, rect_count*count*2);
 }
 
-void draw() {
+static void draw(void) {
     int off = count*rect_count*2;
     bench_repeated_textured();
 
@@ -157,9 +148,9 @@ void draw() {
     bench_sync_mixed();
 }
 
-sg_image create_image(int width, int height) {
-    int size = width * height * 4;
-    unsigned char* data = (unsigned char*)malloc(size);
+static sg_image create_image(int width, int height) {
+    size_t num_pixels = (size_t)(width * height * 4);
+    unsigned char* data = (unsigned char*)malloc(num_pixels);
     assert(data);
     for(int y=0;y<height;++y) {
         for(int x=0;x<width;++x) {
@@ -169,38 +160,40 @@ sg_image create_image(int width, int height) {
             data[y*width*4+x*4+3] = 255;
         }
     }
-    sg_image_desc image_desc = {
-        .width = width,
-        .height = height,
-        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        .data = {.subimage = {{{.ptr = data, .size = size}}}},
-    };
+    sg_image_desc image_desc;
+    memset(&image_desc, 0, sizeof(sg_image_desc));
+    image_desc.width = width;
+    image_desc.height = height;
+    image_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    image_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    image_desc.data.subimage[0][0].ptr = data;
+    image_desc.data.subimage[0][0].size = num_pixels;
     sg_image image = sg_make_image(&image_desc);
     free(data);
     assert(sg_query_image_state(image) == SG_RESOURCESTATE_VALID);
     return image;
 }
 
-bool init() {
-    image = create_image(128, 128);
+static bool init(void) {
+    image1 = create_image(128, 128);
     image2 = create_image(128, 128);
-    sg_image_info imginfo = sg_query_image_info(image);
+    sg_image_info imginfo = sg_query_image_info(image1);
     image_ratio = imginfo.width / (float)imginfo.height;
     return true;
 }
 
-void terminate() {
-    sg_destroy_image(image);
+static void terminate(void) {
+    sg_destroy_image(image1);
     sg_destroy_image(image2);
 }
 
 int main(int argc, char *argv[]) {
-    return sample_app_main(&(sample_app_desc){
-        .init = init,
-        .terminate = terminate,
-        .draw = draw,
-        .argc = argc,
-        .argv = argv
-    });
+    sample_app_desc app_desc;
+    memset(&app_desc, 0, sizeof(app_desc));
+    app_desc.init = init;
+    app_desc.terminate = terminate;
+    app_desc.draw = draw;
+    app_desc.argc = argc;
+    app_desc.argv = argv;
+    return sample_app_main(&app_desc);
 }

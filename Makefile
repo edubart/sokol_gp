@@ -1,6 +1,7 @@
-CFLAGS?=-std=c99 -Wall -Wextra
+CFLAGS=-std=c99
+CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes
 DEFINES=
-CC=gcc
+CC=tcc
 LIBS=-lSDL2 -lm
 INCLUDES=-I.
 OUTDIR=build
@@ -23,7 +24,7 @@ ifndef platform
 	platform=linux
 endif
 ifeq ($(platform), windows)
-	CC:=x86_64-w64-mingw32-gcc
+	CC=x86_64-w64-mingw32-gcc
 	DEFINES+=-DSDL_MAIN_HANDLED
 	LIBS+=-lSDL2main -lopengl32 -ld3d11 -ldxgi -ldxguid
 	OUTEXT=.exe

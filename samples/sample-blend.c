@@ -1,6 +1,6 @@
 #include "sample_app.h"
 
-void draw_3rects(float brightness, float alpha) {
+static void draw_3rects(float brightness, float alpha) {
     sgp_set_color(brightness, 0.0f, 0.0f, alpha);
     sgp_draw_filled_rect(0, 0, 10, 10);
     sgp_set_color(0.0f, brightness, 0.0f, alpha);
@@ -9,7 +9,7 @@ void draw_3rects(float brightness, float alpha) {
     sgp_draw_filled_rect(5, 2.5f, 10, 10);
 }
 
-void draw_rects(float ratio) {
+static void draw_rects(float ratio) {
     sgp_ortho(0, 100*ratio, 0, 100);
     sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -49,7 +49,7 @@ void draw_rects(float ratio) {
     sgp_pop_transform();
 }
 
-void draw_checkboard(int width, int height) {
+static void draw_checkboard(int width, int height) {
     sgp_set_color(0.2f, 0.2f, 0.2f, 1.0f);
     sgp_clear();
     sgp_set_color(0.4f, 0.4f, 0.4f, 1.0f);
@@ -61,24 +61,25 @@ void draw_checkboard(int width, int height) {
 
 }
 
-void draw() {
+static void draw(void) {
     draw_checkboard(app.width, app.height);
     draw_rects(app.width/(float)app.height);
 }
 
-bool init() {
+static bool init(void) {
     return true;
 }
 
-void terminate() {
+static void terminate(void) {
 }
 
 int main(int argc, char *argv[]) {
-    return sample_app_main(&(sample_app_desc){
-        .init = init,
-        .terminate = terminate,
-        .draw = draw,
-        .argc = argc,
-        .argv = argv
-    });
+    sample_app_desc app_desc;
+    memset(&app_desc, 0, sizeof(app_desc));
+    app_desc.init = init;
+    app_desc.terminate = terminate;
+    app_desc.draw = draw;
+    app_desc.argc = argc;
+    app_desc.argv = argv;
+    return sample_app_main(&app_desc);
 }
