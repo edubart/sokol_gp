@@ -1,9 +1,8 @@
 CFLAGS=-std=c99
 CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes
-DEFINES=
-CC=tcc
+DEFS=
 LIBS=-lSDL2 -lm
-INCLUDES=-I.
+INCS=-I. -Ithirdparty -Ishaders
 OUTDIR=build
 SHDC=sokol-shdc
 SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos:wgpu
@@ -15,9 +14,10 @@ SAMPLES=\
 	sample-bench\
 	sample-sdf\
 	sample-effect
-SAMPLE_SHADERS=\
-	samples/sample-effect.glsl.h\
-	samples/sample-sdf.glsl.h
+SHADERS=\
+	shaders/sample-effect.glsl.h\
+	shaders/sample-sdf.glsl.h\
+	shaders/sokol_gp.glsl.h
 
 # platform
 ifndef platform
@@ -25,12 +25,12 @@ ifndef platform
 endif
 ifeq ($(platform), windows)
 	CC=x86_64-w64-mingw32-gcc
-	DEFINES+=-DSDL_MAIN_HANDLED
+	DEFS+=-DSDL_MAIN_HANDLED
 	LIBS+=-lSDL2main -lopengl32 -ld3d11 -ldxgi -ldxguid
 	OUTEXT=.exe
 else
 	OUTEXT=
-	CC?=gcc
+	CC=gcc
 	LIBS+=-lGL -ldl
 endif
 
@@ -42,7 +42,7 @@ ifeq ($(build), debug)
 	CFLAGS+=-Og -g
 else ifeq ($(build), release)
 	CFLAGS+=-O3 -g -ffast-math -fno-plt -flto
-	DEFINES+=-DNDEBUG
+	DEFS+=-DNDEBUG
 endif
 
 # backend
@@ -54,17 +54,17 @@ ifndef backend
 	endif
 endif
 ifeq ($(backend), glcore33)
-	DEFINES+=-DSOKOL_GLCORE33
+	DEFS+=-DSOKOL_GLCORE33
 else ifeq ($(backend), gles2)
-	DEFINES+=-DSOKOL_GLES2
+	DEFS+=-DSOKOL_GLES2
 else ifeq ($(backend), gles3)
-	DEFINES+=-DSOKOL_GLES3
+	DEFS+=-DSOKOL_GLES3
 else ifeq ($(backend), d3d11)
-	DEFINES+=-DSOKOL_D3D11
+	DEFS+=-DSOKOL_D3D11
 else ifeq ($(backend), metal)
-	DEFINES+=-DSOKOL_METAL
+	DEFS+=-DSOKOL_METAL
 else ifeq ($(backend), dummy)
-	DEFINES+=-DSOKOL_DUMMY_BACKEND
+	DEFS+=-DSOKOL_DUMMY_BACKEND
 endif
 
 .PHONY: all clean shaders
@@ -72,19 +72,14 @@ endif
 
 all: $(SAMPLES)
 
+shaders: $(SHADERS)
+
 clean:
 	rm -rf $(OUTDIR)
-	rm -f *.log *.dxvk-cache
-
-sokolgp-shaders:
-	@mkdir -p $(OUTDIR)
-	$(SHDC) $(SHDCFLAGS) -i sokol_gp_shaders.glsl -o $(OUTDIR)/sokol_gp_shaders.glsl.h
 
 $(SAMPLES): %:
 	@mkdir -p $(OUTDIR)
-	$(CC) -o $(OUTDIR)/$@$(OUTEXT) samples/$@.c $(INCLUDES) $(DEFINES) $(CFLAGS) $(LIBS)
+	$(CC) -o $(OUTDIR)/$@$(OUTEXT) samples/$@.c $(INCS) $(DEFS) $(CFLAGS) $(LIBS)
 
-samples/%.glsl.h: samples/%.glsl
+shaders/%.glsl.h: shaders/%.glsl
 	$(SHDC) $(SHDCFLAGS) -i $^ -o $@
-
-sample-shaders: $(SAMPLE_SHADERS)

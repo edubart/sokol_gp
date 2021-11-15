@@ -1,4 +1,6 @@
+/* This is the shader used by the default SGP pipeline */
 @module sgp
+
 @vs vs
 in vec4 coord;
 out vec2 texUV;
