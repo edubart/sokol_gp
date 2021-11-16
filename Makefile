@@ -1,5 +1,5 @@
 CFLAGS=-std=c99
-CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes
+CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-function
 DEFS=
 LIBS=-lSDL2 -lm
 INCS=-I. -Ithirdparty -Ishaders
@@ -9,7 +9,6 @@ SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_maco
 SAMPLES=\
 	sample-prims\
 	sample-blend\
-	sample-capture\
 	sample-fb\
 	sample-bench\
 	sample-sdf\

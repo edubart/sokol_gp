@@ -3,7 +3,6 @@
 
 #define SOKOL_IMPL
 #include "sokol_gfx.h"
-#include "sokol_gfx_ext.h"
 #include "sokol_gctx.h"
 #include "sokol_gp.h"
 #include <stdio.h>
