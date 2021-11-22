@@ -26,7 +26,7 @@ static bool init(void) {
     pip_desc.shader = *sdf_program_shader_desc(sg_query_backend());
     pip = sgp_make_pipeline(&pip_desc);
     if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
-        fprintf(stderr, "failed to make custom pipeline: %s\n", sgp_get_error());
+        fprintf(stderr, "failed to make custom pipeline\n");
         return false;
     }
     return true;

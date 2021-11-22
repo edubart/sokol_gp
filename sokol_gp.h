@@ -61,8 +61,7 @@ typedef enum sgp_error {
     SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED,
     SGP_ERROR_MAKE_WHITE_IMAGE_FAILED,
     SGP_ERROR_MAKE_COMMON_SHADER_FAILED,
-    SGP_ERROR_MAKE_SHADER_FAILED,
-    SGP_ERROR_MAKE_PIPELINE_FAILED
+    SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED,
 } sgp_error;
 
 typedef enum sgp_blend_mode {
@@ -165,9 +164,8 @@ typedef struct sgp_pipeline_desc {
 SOKOL_GP_API_DECL bool sgp_setup(const sgp_desc* desc);
 SOKOL_GP_API_DECL void sgp_shutdown(void);
 SOKOL_GP_API_DECL bool sgp_is_valid(void);
-SOKOL_GP_API_DECL sgp_error sgp_get_error_code(void);
+SOKOL_GP_API_DECL sgp_error sgp_get_last_error(void);
 SOKOL_GP_API_DECL const char* sgp_get_error_message(sgp_error error_code);
-SOKOL_GP_API_DECL const char* sgp_get_error(void);
 
 // custom pipeline creation
 SOKOL_GP_API_DECL sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc);
@@ -307,7 +305,6 @@ typedef struct _sgp_command {
 
 typedef struct _sgp_context {
     uint32_t init_cookie;
-    const char *last_error_message;
     sgp_error last_error_code;
     sgp_desc desc;
 
@@ -697,8 +694,10 @@ static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blen
     pip_desc.primitive_type = primitive_type;
 
     sg_pipeline pip = sg_make_pipeline(&pip_desc);
-    if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID)
-        _sgp_set_error(SGP_ERROR_MAKE_PIPELINE_FAILED);
+    if(pip.id != SG_INVALID_ID && sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
+        sg_destroy_pipeline(pip);
+        pip.id = SG_INVALID_ID;
+    }
     return pip;
 }
 
@@ -708,7 +707,7 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type primitive_type, sgp_bl
         return _sgp.pipelines[pip_index];
 
     sg_pipeline pip = _sgp_make_pipeline(primitive_type, blend_mode, _sgp.shader);
-    if(sg_query_pipeline_state(pip) == SG_RESOURCESTATE_VALID)
+    if(pip.id != SG_INVALID_ID)
         _sgp.pipelines[pip_index] = pip;
     return pip;
 }
@@ -750,7 +749,6 @@ bool sgp_setup(const sgp_desc* desc) {
     // init
     _sgp.init_cookie = _SGP_INIT_COOKIE;
     _sgp.last_error_code = SGP_NO_ERROR;
-    _sgp.last_error_message = "";
 
     // set desc default values
     _sgp.desc = *desc;
@@ -818,18 +816,20 @@ bool sgp_setup(const sgp_desc* desc) {
     }
 
     // create common pipelines
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_BLEND);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_NONE);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_BLEND);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_NONE);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_BLEND);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_NONE);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_BLEND);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_NONE);
-    _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_BLEND);
-    if(_sgp.last_error_code != SGP_NO_ERROR) {
+    bool pips_ok = true;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_BLEND).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_NONE).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, SGP_BLENDMODE_BLEND).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_NONE).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, SGP_BLENDMODE_BLEND).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_NONE).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_BLEND).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_NONE).id != SG_INVALID_ID;
+    pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_BLEND).id != SG_INVALID_ID;
+    if(!pips_ok) {
         sgp_shutdown();
+        _sgp_set_error(SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED);
         return false;
     }
 
@@ -864,7 +864,7 @@ bool sgp_is_valid(void) {
     return _sgp.init_cookie == _SGP_INIT_COOKIE;
 }
 
-sgp_error sgp_get_error_code(void) {
+sgp_error sgp_get_last_error(void) {
     return _sgp.last_error_code;
 }
 
@@ -898,27 +898,20 @@ const char* sgp_get_error_message(sgp_error error_code) {
             return "SGP failed to create white image";
         case SGP_ERROR_MAKE_COMMON_SHADER_FAILED:
             return "SGP failed to create the common shader";
-        case SGP_ERROR_MAKE_SHADER_FAILED:
-            return "SGP failed to create a shader";
-        case SGP_ERROR_MAKE_PIPELINE_FAILED:
-            return "SGP failed to create a pipeline";
+        case SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED:
+            return "SGP failed to create the common pipeline";
         default:
             return "Invalid error code";
     }
 }
 
-const char* sgp_get_error(void) {
-    return sgp_get_error_message(_sgp.last_error_code);
-}
-
 sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
-    sg_shader shader = sg_make_shader(&desc->shader);
     sg_pipeline pip = {SG_INVALID_ID};
-    if(sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID) {
-        _sgp_set_error(SGP_ERROR_MAKE_SHADER_FAILED);
-        return pip;
-    }
-    pip = _sgp_make_pipeline(desc->primitive_type, desc->blend_mode, shader);
+    sg_shader shader = sg_make_shader(&desc->shader);
+    if(sg_query_shader_state(shader) == SG_RESOURCESTATE_VALID)
+        pip = _sgp_make_pipeline(desc->primitive_type, desc->blend_mode, shader);
+    else if(shader.id != SG_INVALID_ID)
+        sg_destroy_shader(shader);
     return pip;
 }
 
@@ -940,7 +933,6 @@ void sgp_begin(int width, int height) {
     }
 
     // begin reset last error
-    _sgp.last_error_message = "";
     _sgp.last_error_code = SGP_NO_ERROR;
 
     // save current state

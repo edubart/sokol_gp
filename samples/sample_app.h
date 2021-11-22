@@ -90,7 +90,7 @@ static int sample_app_main(const sample_app_desc* app_desc) {
     sample_sgp_desc.max_commands = 32768;
 
     if(!sgp_setup(&sample_sgp_desc)) {
-        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error());
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         return 1;
     }
 
