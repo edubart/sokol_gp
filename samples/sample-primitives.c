@@ -1,4 +1,15 @@
-#include "sample_app.h"
+/*
+This examples shows all primitives shapes and transformation functions.
+*/
+
+#define SOKOL_IMPL
+#include "sokol_gfx.h"
+#include "sokol_gp.h"
+#include "sokol_app.h"
+#include "sokol_glue.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 
 static sgp_vec2 points_buffer[4096];
 static const float PI = 3.14159265358979323846264338327f;
@@ -8,7 +19,7 @@ static void draw_rects(void) {
     int width = viewport.w, height = viewport.h;
     int size = 64;
     int hsize = size / 2;
-    float time = app.frame / 60.0f;
+    float time = sapp_frame_count() / 60.0f;
     float t = (1.0f+sinf(time))/2.0f;
 
     // left
@@ -93,9 +104,18 @@ static void draw_triangles(void) {
     sgp_pop_transform();
 }
 
-static void draw(void) {
-    int hw = app.width / 2;
-    int hh = app.height / 2;
+static void frame(void) {
+    // begin draw commands queue
+    int width = sapp_width(), height = sapp_height();
+    sgp_begin(width, height);
+
+    int hw = width / 2;
+    int hh = height / 2;
+
+    // draw background
+    sgp_set_color(0.05f, 0.05f, 0.05f, 1.0f);
+    sgp_clear();
+    sgp_reset_color();
 
     // top left
     sgp_viewport(0, 0, hw, hh);
@@ -127,22 +147,47 @@ static void draw(void) {
     sgp_clear();
     sgp_reset_color();
     draw_lines();
+
+    // dispatch draw commands
+    sg_pass_action pass_action = {0};
+    sg_begin_default_pass(&pass_action, width, height);
+    sgp_flush();
+    sgp_end();
+    sg_end_pass();
+    sg_commit();
 }
 
-static bool init(void) {
-    return true;
+static void init(void) {
+    // initialize Sokol GFX
+    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE;
+    sg_setup(&sgdesc);
+    if(!sg_isvalid()) {
+        fprintf(stderr, "Failed to create Sokol GFX context!\n");
+        exit(-1);
+    }
+
+    // initialize Sokol GP
+    sgp_desc sgpdesc = {0};
+    sgp_setup(&sgpdesc);
+    if(!sgp_is_valid()) {
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
+        exit(-1);
+    }
 }
 
-static void terminate(void) {
+static void cleanup(void) {
+    sgp_shutdown();
+    sg_shutdown();
 }
 
-int main(int argc, char *argv[]) {
-    sample_app_desc app_desc;
-    memset(&app_desc, 0, sizeof(app_desc));
-    app_desc.init = init;
-    app_desc.terminate = terminate;
-    app_desc.draw = draw;
-    app_desc.argc = argc;
-    app_desc.argv = argv;
-    return sample_app_main(&app_desc);
+sapp_desc sokol_main(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+    return (sapp_desc){
+        .init_cb = init,
+        .frame_cb = frame,
+        .cleanup_cb = cleanup,
+        .window_title = "Primitives (Sokol GP)",
+    };
 }

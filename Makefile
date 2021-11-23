@@ -1,4 +1,4 @@
-CFLAGS=-std=c99
+CFLAGS=-std=c11
 CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-function
 DEFS=
 LIBS=-lSDL2 -lm
@@ -7,7 +7,8 @@ OUTDIR=build
 SHDC=sokol-shdc
 SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos:wgpu
 SAMPLES=\
-	sample-prims\
+	sample-triangle\
+	sample-primitives\
 	sample-blend\
 	sample-fb\
 	sample-bench\
@@ -24,13 +25,14 @@ ifndef platform
 endif
 ifeq ($(platform), windows)
 	CC=x86_64-w64-mingw32-gcc
-	DEFS+=-DSDL_MAIN_HANDLED
-	LIBS+=-lSDL2main -lopengl32 -ld3d11 -ldxgi -ldxguid
+	LIBS+=-lkernel32 -luser32 -lshell32 -lgdi32 -ld3d11 -ldxgi
 	OUTEXT=.exe
-else
-	OUTEXT=
+else ifeq($(platform), linux)
 	CC=gcc
-	LIBS+=-lGL -ldl
+	DEFS+=-D_GNU_SOURCE
+	CFLAGS+=-pthread
+	LIBS+=-lX11 -lXi -lXcursor -lGL -ldl -lm
+	OUTEXT=
 endif
 
 # build type

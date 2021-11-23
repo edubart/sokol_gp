@@ -1,8 +1,13 @@
-#define SGP_UNIFORM_CONTENT_SLOTS 16
+/*
+This sample showcases how to create 2D shader effects using multiple textures.
+*/
 
-#include "sample_app.h"
-#define SOKOL_SHDC_IMPL
-#include "sample-effect.glsl.h"
+#define SGP_UNIFORM_CONTENT_SLOTS 16
+#define SOKOL_IMPL
+#include "sokol_gfx.h"
+#include "sokol_gp.h"
+#include "sokol_app.h"
+#include "sokol_glue.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
@@ -10,14 +15,22 @@
 #define STBI_ONLY_PNG
 #include "stb_image.h"
 
+#define SOKOL_SHDC_IMPL
+#include "sample-effect.glsl.h"
+
 static sg_pipeline pip;
 static sg_image image;
 static sg_image perlin_image;
 
-static void draw(void) {
-    float secs = SDL_GetTicks() / 1000.0f;
-    sg_image_info info = sg_query_image_info(image);
-    float image_ratio = info.width / (float) info.height;
+static void frame(void) {
+    // begin draw commands queue
+    int window_width = sapp_width(), window_height = sapp_height();
+    sgp_begin(window_width, window_height);
+
+    float secs = sapp_frame_count() * sapp_frame_duration();
+    sg_image_info image_info = sg_query_image_info(image);
+    float window_ratio = window_width / (float)window_height;
+    float image_ratio = image_info.width / (float)image_info.height;
     effect_uniforms_t uniforms;
     memset(&uniforms, 0, sizeof(effect_uniforms_t));
     uniforms.iVelocity.x = 0.02f;
@@ -32,10 +45,20 @@ static void draw(void) {
     sgp_set_uniform(&uniforms, sizeof(effect_uniforms_t));
     sgp_set_image(SLOT_effect_iChannel0, image);
     sgp_set_image(SLOT_effect_iChannel1, perlin_image);
-    sgp_draw_textured_rect(0, 0, app.width, app.width/image_ratio);
+    float width = (window_ratio >= image_ratio) ? window_width : image_ratio*window_height;
+    float height = (window_ratio >= image_ratio) ? window_width/image_ratio : window_height;
+    sgp_draw_textured_rect(0, 0, width, height);
     sgp_reset_image(SLOT_effect_iChannel0);
     sgp_reset_image(SLOT_effect_iChannel1);
     sgp_reset_pipeline();
+
+    // dispatch draw commands
+    sg_pass_action pass_action = {0};
+    sg_begin_default_pass(&pass_action, window_width, window_height);
+    sgp_flush();
+    sgp_end();
+    sg_end_pass();
+    sg_commit();
 }
 
 static sg_image load_image(const char *filename) {
@@ -59,38 +82,58 @@ static sg_image load_image(const char *filename) {
     return img;
 }
 
-static bool init(void) {
-    image = load_image("images/2d_magic_lands.png");
+static void init(void) {
+    // initialize Sokol GFX
+    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE;
+    sg_setup(&sgdesc);
+    if(!sg_isvalid()) {
+        fprintf(stderr, "Failed to create Sokol GFX context!\n");
+        exit(-1);
+    }
+
+    // initialize Sokol GP
+    sgp_desc sgpdesc;
+    sgp_setup(&sgpdesc);
+    if(!sgp_is_valid()) {
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
+        exit(-1);
+    }
+
+    // load image
+    image = load_image("images/lpc_winter_preview.png");
     perlin_image = load_image("images/perlin.png");
     if(sg_query_image_state(image) != SG_RESOURCESTATE_VALID || sg_query_image_state(perlin_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to load images");
-        return false;
+        exit(-1);
     }
+
+    // initialize shader
     sgp_pipeline_desc pip_desc;
     memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
     pip_desc.shader = *effect_program_shader_desc(sg_query_backend());
-
     pip = sgp_make_pipeline(&pip_desc);
     if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to make custom pipeline\n");
-        return false;
+        exit(-1);
     }
-    return true;
 }
 
-static void terminate(void) {
+static void cleanup(void) {
     sg_destroy_image(image);
     sg_destroy_image(perlin_image);
     sg_destroy_pipeline(pip);
+    sgp_shutdown();
+    sg_shutdown();
 }
 
-int main(int argc, char *argv[]) {
-    sample_app_desc app_desc;
-    memset(&app_desc, 0, sizeof(app_desc));
-    app_desc.init = init;
-    app_desc.terminate = terminate;
-    app_desc.draw = draw;
-    app_desc.argc = argc;
-    app_desc.argv = argv;
-    return sample_app_main(&app_desc);
+sapp_desc sokol_main(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+    return (sapp_desc){
+        .init_cb = init,
+        .frame_cb = frame,
+        .cleanup_cb = cleanup,
+        .window_title = "SDF (Sokol GP)",
+    };
 }

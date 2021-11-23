@@ -1,4 +1,23 @@
-#include "sample_app.h"
+/*
+This sample is used to benchmark, it intentionally draws lots of primitives
+with interleaved textures or pipelines, to measure then gains of the batch optimizer.
+
+In my latest tests on my computer (edubart) with batch optimizer active
+there is a 2.2x in FPS gains.
+*/
+
+// Uncomment this to disable the batch optimizer.
+// #define SGP_BATCH_OPTIMIZER_DEPTH 0
+
+#define SOKOL_IMPL
+#include "sokol_gfx.h"
+#include "sokol_gp.h"
+#include "sokol_app.h"
+#include "sokol_glue.h"
+#include "sokol_time.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 
 static sg_image image1;
 static sg_image image2;
@@ -119,7 +138,16 @@ static void draw_rect(void) {
     sgp_draw_filled_rect(0, 0, rect_count*count*2, rect_count*count*2);
 }
 
-static void draw(void) {
+static void frame(void) {
+    // begin draw commands queue
+    int width = sapp_width(), height = sapp_height();
+    sgp_begin(width, height);
+
+    // draw background
+    sgp_set_color(0.05f, 0.05f, 0.05f, 1.0f);
+    sgp_clear();
+    sgp_reset_color();
+
     int off = count*rect_count*2;
     bench_repeated_textured();
 
@@ -146,6 +174,26 @@ static void draw(void) {
 
     sgp_translate(off, 0);
     bench_sync_mixed();
+
+    // dispatch draw commands
+    sg_pass_action pass_action = {0};
+    sg_begin_default_pass(&pass_action, width, height);
+    sgp_flush();
+    sgp_end();
+    sg_end_pass();
+    sg_commit();
+
+
+    // count frames
+    static int fps = 0;
+    static uint64_t last = 0;
+    uint64_t now = stm_now();
+    fps++;
+    if(stm_sec(now - last) >= 1.0) {
+        printf("FPS: %d\n", fps);
+        last = now;
+        fps = 0;
+    }
 }
 
 static sg_image create_image(int width, int height) {
@@ -174,26 +222,54 @@ static sg_image create_image(int width, int height) {
     return image;
 }
 
-static bool init(void) {
+static void init(void) {
+    stm_setup();
+
+    // initialize Sokol GFX
+    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE;
+    sg_setup(&sgdesc);
+    if(!sg_isvalid()) {
+        fprintf(stderr, "Failed to create Sokol GFX context!\n");
+        exit(-1);
+    }
+
+    // initialize Sokol GP
+    sgp_desc sgpdesc = {
+        .max_vertices = 262144,
+        .max_commands = 32768
+    };
+    sgp_setup(&sgpdesc);
+    if(!sgp_is_valid()) {
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
+        exit(-1);
+    }
+
+#ifdef _SAPP_LINUX
+    /* Disable swap interval */
+    _sapp_glx_swapinterval(0);
+#endif
+
     image1 = create_image(128, 128);
     image2 = create_image(128, 128);
     sg_image_info imginfo = sg_query_image_info(image1);
     image_ratio = imginfo.width / (float)imginfo.height;
-    return true;
 }
 
-static void terminate(void) {
+static void cleanup(void) {
     sg_destroy_image(image1);
     sg_destroy_image(image2);
+    sgp_shutdown();
+    sg_shutdown();
 }
 
-int main(int argc, char *argv[]) {
-    sample_app_desc app_desc;
-    memset(&app_desc, 0, sizeof(app_desc));
-    app_desc.init = init;
-    app_desc.terminate = terminate;
-    app_desc.draw = draw;
-    app_desc.argc = argc;
-    app_desc.argv = argv;
-    return sample_app_main(&app_desc);
+sapp_desc sokol_main(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+    return (sapp_desc){
+        .init_cb = init,
+        .frame_cb = frame,
+        .cleanup_cb = cleanup,
+        .window_title = "Bench (Sokol GP)"
+    };
 }

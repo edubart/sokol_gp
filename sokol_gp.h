@@ -161,7 +161,7 @@ typedef struct sgp_pipeline_desc {
 } sgp_pipeline_desc;
 
 // setup functions
-SOKOL_GP_API_DECL bool sgp_setup(const sgp_desc* desc);
+SOKOL_GP_API_DECL void sgp_setup(const sgp_desc* desc);
 SOKOL_GP_API_DECL void sgp_shutdown(void);
 SOKOL_GP_API_DECL bool sgp_is_valid(void);
 SOKOL_GP_API_DECL sgp_error sgp_get_last_error(void);
@@ -738,12 +738,12 @@ static sg_shader _sgp_make_common_shader(void) {
     return sg_make_shader(&shader_desc);
 }
 
-bool sgp_setup(const sgp_desc* desc) {
+void sgp_setup(const sgp_desc* desc) {
     SOKOL_ASSERT(_sgp.init_cookie == 0);
 
     if(!sg_isvalid()) {
         _sgp_set_error(SGP_ERROR_SOKOL_INVALID);
-        return false;
+        return;
     }
 
     // init
@@ -765,7 +765,7 @@ bool sgp_setup(const sgp_desc* desc) {
     if(!_sgp.commands || !_sgp.uniforms || !_sgp.commands) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_ALLOC_FAILED);
-        return false;
+        return;
     }
     memset(_sgp.vertices, 0, _sgp.num_vertices * sizeof(_sgp_vertex));
     memset(_sgp.uniforms, 0, _sgp.num_uniforms * sizeof(sgp_uniform));
@@ -782,7 +782,7 @@ bool sgp_setup(const sgp_desc* desc) {
     if(sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED);
-        return false;
+        return;
     }
 
     // create white texture
@@ -804,7 +804,7 @@ bool sgp_setup(const sgp_desc* desc) {
     if(sg_query_image_state(_sgp.white_img) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_WHITE_IMAGE_FAILED);
-        return false;
+        return;
     }
 
     // create common shader
@@ -812,7 +812,7 @@ bool sgp_setup(const sgp_desc* desc) {
     if(sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_COMMON_SHADER_FAILED);
-        return false;
+        return;
     }
 
     // create common pipelines
@@ -830,10 +830,8 @@ bool sgp_setup(const sgp_desc* desc) {
     if(!pips_ok) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED);
-        return false;
+        return;
     }
-
-    return true;
 }
 
 void sgp_shutdown(void) {
@@ -1465,8 +1463,9 @@ static inline bool _sgp_region_overlaps(_sgp_region a, _sgp_region b) {
 }
 
 static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_images_uniform images, sgp_uniform uniform, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
-    _sgp_command* inter_cmds[SGP_BATCH_OPTIMIZER_DEPTH];
+#if SGP_BATCH_OPTIMIZER_DEPTH > 0
     _sgp_command* prev_cmd = NULL;
+    _sgp_command* inter_cmds[SGP_BATCH_OPTIMIZER_DEPTH];
     uint32_t inter_cmd_count = 0;
 
     // find a command that is a good candidate to batch
@@ -1498,7 +1497,6 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_images_uniform images,
             inter_cmd_count++;
         }
     }
-
     if(!prev_cmd)
         return false;
 
@@ -1582,6 +1580,15 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_images_uniform images,
         prev_cmd->cmd = SGP_COMMAND_NONE;
     }
     return true;
+#else
+    _SOKOL_UNUSED(pip);
+    _SOKOL_UNUSED(images);
+    _SOKOL_UNUSED(uniform);
+    _SOKOL_UNUSED(region);
+    _SOKOL_UNUSED(vertex_index);
+    _SOKOL_UNUSED(num_vertices);
+    return false;
+#endif // SGP_BATCH_OPTIMIZER_DEPTH > 0
 }
 
 static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {

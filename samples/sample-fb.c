@@ -1,10 +1,21 @@
-#include "sample_app.h"
+/*
+This sample showcases how to use Sokol GP to draw inside frame buffers (render targets).
+*/
+
+#define SOKOL_IMPL
+#include "sokol_gfx.h"
+#include "sokol_gp.h"
+#include "sokol_app.h"
+#include "sokol_glue.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 
 static sg_image fb_image;
 static sg_pass fb_pass;
 
 static void draw_triangles(void) {
-    const float PI = 3.14159265358979323846264338327f;
+    const float PI = 3.14159265f;
     static sgp_vec2 points_buffer[4096];
 
     sgp_irect viewport = sgp_query_state()->viewport;
@@ -38,17 +49,23 @@ static void draw_fbo(void) {
     pass_action.colors[0].value.g = 1.0f;
     pass_action.colors[0].value.b = 1.0f;
     pass_action.colors[0].value.a = 0.2f;
-    pass_action.depth.action = SG_ACTION_DONTCARE;
-    pass_action.stencil.action = SG_ACTION_DONTCARE;
     sg_begin_pass(fb_pass, &pass_action);
     sgp_flush();
     sgp_end();
     sg_end_pass();
 }
 
-static void draw(void) {
-    int height = app.height, width = app.width;
-    float time = SDL_GetTicks() / 1000.0f;
+static void frame(void) {
+    // begin draw commands queue
+    int width = sapp_width(), height = sapp_height();
+    sgp_begin(width, height);
+
+    // draw background
+    sgp_set_color(0.05f, 0.05f, 0.05f, 1.0f);
+    sgp_clear();
+    sgp_reset_color();
+
+    float time = sapp_frame_count() / 60.0f;
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
     for(int y=0;y<height;y+=192) {
@@ -61,9 +78,35 @@ static void draw(void) {
             sgp_pop_transform();
         }
     }
+
+    // dispatch draw commands
+    sg_pass_action pass_action = {0};
+    sg_begin_default_pass(&pass_action, width, height);
+    sgp_flush();
+    sgp_end();
+    sg_end_pass();
+    sg_commit();
 }
 
-static bool init(void) {
+static void init(void) {
+    // initialize Sokol GFX
+    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE;
+    sg_setup(&sgdesc);
+    if(!sg_isvalid()) {
+        fprintf(stderr, "Failed to create Sokol GFX context!\n");
+        exit(-1);
+    }
+
+    // initialize Sokol GP
+    sgp_desc sgpdesc = {0};
+    sgp_setup(&sgpdesc);
+    if(!sgp_is_valid()) {
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
+        exit(-1);
+    }
+
+    // create frame buffer image
     sg_image_desc fb_image_desc;
     memset(&fb_image_desc, 0, sizeof(sg_image_desc));
     fb_image_desc.render_target = true;
@@ -74,29 +117,36 @@ static bool init(void) {
     fb_image_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
     fb_image_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
     fb_image = sg_make_image(&fb_image_desc);
-    if(sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID)
-        return false;
+    if(sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "Failed to create frame buffer image\n");
+        exit(-1);
+    }
+
+    // create frame buffer pass
     sg_pass_desc pass_desc;
     memset(&pass_desc, 0, sizeof(sg_pass_desc));
     pass_desc.color_attachments[0].image = fb_image;
     fb_pass = sg_make_pass(&pass_desc);
-    if(sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID)
-        return false;
-    return true;
+    if(sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "Failed to create frame buffer pass\n");
+        exit(-1);
+    }
 }
 
-static void terminate(void) {
+static void cleanup(void) {
     sg_destroy_image(fb_image);
     sg_destroy_pass(fb_pass);
+    sgp_shutdown();
+    sg_shutdown();
 }
 
-int main(int argc, char *argv[]) {
-    sample_app_desc app_desc;
-    memset(&app_desc, 0, sizeof(app_desc));
-    app_desc.init = init;
-    app_desc.terminate = terminate;
-    app_desc.draw = draw;
-    app_desc.argc = argc;
-    app_desc.argv = argv;
-    return sample_app_main(&app_desc);
+sapp_desc sokol_main(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+    return (sapp_desc){
+        .init_cb = init,
+        .frame_cb = frame,
+        .cleanup_cb = cleanup,
+        .window_title = "Frame buffer (Sokol GP)",
+    };
 }

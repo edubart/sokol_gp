@@ -1,4 +1,18 @@
-#include "sample_app.h"
+/*
+This sample tests all blending modes that Sokol GP provides.
+*/
+
+#define SOKOL_IMPL
+#include "sokol_gfx.h"
+#include "sokol_gp.h"
+#include "sokol_app.h"
+#include "sokol_glue.h"
+
+#define SOKOL_SHDC_IMPL
+#include "sample-sdf.glsl.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 
 static void draw_3rects(float brightness, float alpha) {
     sgp_set_color(brightness, 0.0f, 0.0f, alpha);
@@ -61,25 +75,54 @@ static void draw_checkboard(int width, int height) {
 
 }
 
-static void draw(void) {
-    draw_checkboard(app.width, app.height);
-    draw_rects(app.width/(float)app.height);
+static void frame(void) {
+    // begin draw commands queue
+    int width = sapp_width(), height = sapp_height();
+    sgp_begin(width, height);
+
+    draw_checkboard(width, height);
+    draw_rects(width/(float)height);
+
+    // dispatch draw commands
+    sg_pass_action pass_action = {0};
+    sg_begin_default_pass(&pass_action, width, height);
+    sgp_flush();
+    sgp_end();
+    sg_end_pass();
+    sg_commit();
 }
 
-static bool init(void) {
-    return true;
+static void init(void) {
+    // initialize Sokol GFX
+    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE;
+    sg_setup(&sgdesc);
+    if(!sg_isvalid()) {
+        fprintf(stderr, "Failed to create Sokol GFX context!\n");
+        exit(-1);
+    }
+
+    // initialize Sokol GP
+    sgp_desc sgpdesc = {0};
+    sgp_setup(&sgpdesc);
+    if(!sgp_is_valid()) {
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
+        exit(-1);
+    }
 }
 
-static void terminate(void) {
+static void cleanup(void) {
+    sgp_shutdown();
+    sg_shutdown();
 }
 
-int main(int argc, char *argv[]) {
-    sample_app_desc app_desc;
-    memset(&app_desc, 0, sizeof(app_desc));
-    app_desc.init = init;
-    app_desc.terminate = terminate;
-    app_desc.draw = draw;
-    app_desc.argc = argc;
-    app_desc.argv = argv;
-    return sample_app_main(&app_desc);
+sapp_desc sokol_main(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+    return (sapp_desc){
+        .init_cb = init,
+        .frame_cb = frame,
+        .cleanup_cb = cleanup,
+        .window_title = "Blend (Sokol GP)",
+    };
 }
