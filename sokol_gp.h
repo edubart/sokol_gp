@@ -14,14 +14,21 @@ https://github.com/edubart/sokol_gp
 #error "Please include sokol_gfx.h before sokol_gp.h"
 #endif
 
+/* Number of draw commands that the batch optimizer looks back at.
+8 is a fair default value, but could be tuned per application.
+1 makes the batch optimizer try to merge only the very last draw call.
+0 disables the batch optimizer
+*/
 #ifndef SGP_BATCH_OPTIMIZER_DEPTH
 #define SGP_BATCH_OPTIMIZER_DEPTH 8
 #endif
 
+/* Number of draw commands that the batch optimizer looks back. */
 #ifndef SGP_UNIFORM_CONTENT_SLOTS
 #define SGP_UNIFORM_CONTENT_SLOTS 4
 #endif
 
+/* Number of texture slots that can be bound in a pipeline. */
 #ifndef SGP_TEXTURE_SLOTS
 #define SGP_TEXTURE_SLOTS 4
 #endif
@@ -46,6 +53,7 @@ https://github.com/edubart/sokol_gp
 extern "C" {
 #endif
 
+/* List of possible error codes. */
 typedef enum sgp_error {
     SGP_NO_ERROR = 0,
     SGP_ERROR_SOKOL_INVALID,
@@ -64,19 +72,20 @@ typedef enum sgp_error {
     SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED,
 } sgp_error;
 
+/* Blend modes. */
 typedef enum sgp_blend_mode {
-    SGP_BLENDMODE_NONE = 0, /* no blending
+    SGP_BLENDMODE_NONE = 0, /* No blending.
                                dstRGBA = srcRGBA */
-    SGP_BLENDMODE_BLEND,    /* alpha blending
+    SGP_BLENDMODE_BLEND,    /* Alpha blending.
                                dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))
                                dstA = srcA + (dstA * (1-srcA)) */
-    SGP_BLENDMODE_ADD,      /* additive blending
+    SGP_BLENDMODE_ADD,      /* Color add.
                                dstRGB = (srcRGB * srcA) + dstRGB
                                dstA = dstA */
-    SGP_BLENDMODE_MOD,      /* color modulate
+    SGP_BLENDMODE_MOD,      /* Color modulate.
                                dstRGB = srcRGB * dstRGB
                                dstA = dstA */
-    SGP_BLENDMODE_MUL,      /* color multiply
+    SGP_BLENDMODE_MUL,      /* Color multiply.
                                dstRGB = (srcRGB * dstRGB) + (dstRGB * (1-srcA))
                                dstA = (srcA * dstA) + (dstA * (1-srcA)) */
     _SGP_BLENDMODE_NUM
@@ -121,11 +130,6 @@ typedef struct sgp_color {
     float r, g, b, a;
 } sgp_color;
 
-typedef struct sgp_desc {
-    uint32_t max_vertices;
-    uint32_t max_commands;
-} sgp_desc;
-
 typedef struct sgp_uniform {
     uint32_t size;
     float content[SGP_UNIFORM_CONTENT_SLOTS];
@@ -136,6 +140,7 @@ typedef struct sgp_images_uniform {
     sg_image images[SGP_TEXTURE_SLOTS];
 } sgp_images_uniform;
 
+/* SGP draw state. */
 typedef struct sgp_state {
     sgp_isize frame_size;
     sgp_irect viewport;
@@ -153,84 +158,92 @@ typedef struct sgp_state {
     uint32_t _base_command;
 } sgp_state;
 
+/* Structure that defines SGP setup parameters. */
+typedef struct sgp_desc {
+    uint32_t max_vertices;
+    uint32_t max_commands;
+} sgp_desc;
+
+/* Structure that defines SGP custom pipeline creation parameters. */
 typedef struct sgp_pipeline_desc {
-    sg_shader_desc shader;
-    sg_primitive_type primitive_type;
-    sgp_blend_mode blend_mode;
-    int image_count;
+    sg_shader_desc shader;              /* Sokol shader description. */
+    sg_primitive_type primitive_type;   /* Draw primitive type (triangles, lines, points, etc). Default is triangles. */
+    sgp_blend_mode blend_mode;          /* Color blend mode. Default is no blend. */
 } sgp_pipeline_desc;
 
-// setup functions
-SOKOL_GP_API_DECL void sgp_setup(const sgp_desc* desc);
-SOKOL_GP_API_DECL void sgp_shutdown(void);
-SOKOL_GP_API_DECL bool sgp_is_valid(void);
-SOKOL_GP_API_DECL sgp_error sgp_get_last_error(void);
-SOKOL_GP_API_DECL const char* sgp_get_error_message(sgp_error error_code);
+/* Initialization and de-initialization. */
+SOKOL_GP_API_DECL void sgp_setup(const sgp_desc* desc);                 /* Initializes the SGP context, and should be called after `sg_setup`. */
+SOKOL_GP_API_DECL void sgp_shutdown(void);                              /* Destroys the SGP context. */
+SOKOL_GP_API_DECL bool sgp_is_valid(void);                              /* Checks if SGP context is valid, should be checked after `sgp_setup`. */
 
-// custom pipeline creation
-SOKOL_GP_API_DECL sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc);
+/* Error handling. */
+SOKOL_GP_API_DECL sgp_error sgp_get_last_error(void);                   /* Returns last SGP error. */
+SOKOL_GP_API_DECL const char* sgp_get_error_message(sgp_error error);   /* Returns a message with SGP error description. */
 
-// rendering functions
-SOKOL_GP_API_DECL void sgp_begin(int width, int height);
-SOKOL_GP_API_DECL void sgp_flush(void);
-SOKOL_GP_API_DECL void sgp_end(void);
+/* Custom pipeline creation. */
+SOKOL_GP_API_DECL sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc); /* Creates a custom shader pipeline to be used with SGP. */
 
-// state projection functions
-SOKOL_GP_API_DECL void sgp_ortho(float left, float right, float top, float bottom);
-SOKOL_GP_API_DECL void sgp_reset_proj(void);
+/* Draw command queue management. */
+SOKOL_GP_API_DECL void sgp_begin(int width, int height);    /* Begins a new SGP draw command queue. */
+SOKOL_GP_API_DECL void sgp_flush(void);                     /* Dispatch current Sokol GFX draw commands. */
+SOKOL_GP_API_DECL void sgp_end(void);                       /* End current draw command queue, discarding it. */
 
-// state transform functions
-SOKOL_GP_API_DECL void sgp_push_transform(void);
-SOKOL_GP_API_DECL void sgp_pop_transform(void);
-SOKOL_GP_API_DECL void sgp_reset_transform(void);
-SOKOL_GP_API_DECL void sgp_translate(float x, float y);
-SOKOL_GP_API_DECL void sgp_rotate(float theta);
-SOKOL_GP_API_DECL void sgp_rotate_at(float theta, float x, float y);
-SOKOL_GP_API_DECL void sgp_scale(float sx, float sy);
-SOKOL_GP_API_DECL void sgp_scale_at(float sx, float sy, float x, float y);
+/* 2D coordinate space projection */
+SOKOL_GP_API_DECL void sgp_project(float left, float right, float top, float bottom); /* Set the coordinate space boundary in the current viewport. */
+SOKOL_GP_API_DECL void sgp_reset_project(void);                                       /* Resets the coordinate space to default (coordinate of the viewport). */
 
-// state change for custom pipelines
-SOKOL_GP_API_DECL void sgp_set_pipeline(sg_pipeline pipeline);
-SOKOL_GP_API_DECL void sgp_reset_pipeline(void);
-SOKOL_GP_API_DECL void sgp_set_uniform(const void* data, uint32_t size);
-SOKOL_GP_API_DECL void sgp_reset_uniform(void);
+/* 2D coordinate space transformation. */
+SOKOL_GP_API_DECL void sgp_push_transform(void);                            /* Saves current transform matrix, to be restored later with a pop. */
+SOKOL_GP_API_DECL void sgp_pop_transform(void);                             /* Restore transform matrix to the same value of the last push. */
+SOKOL_GP_API_DECL void sgp_reset_transform(void);                           /* Resets the transform matrix to identity (no transform). */
+SOKOL_GP_API_DECL void sgp_translate(float x, float y);                     /* Translates the 2D coordinate space. */
+SOKOL_GP_API_DECL void sgp_rotate(float theta);                             /* Rotates the 2D coordinate space around the origin. */
+SOKOL_GP_API_DECL void sgp_rotate_at(float theta, float x, float y);        /* Rotates the 2D coordinate space around a point. */
+SOKOL_GP_API_DECL void sgp_scale(float sx, float sy);                       /* Scales the 2D coordinate space around the origin. */
+SOKOL_GP_API_DECL void sgp_scale_at(float sx, float sy, float x, float y);  /* Scales the 2D coordinate space around a point. */
 
-// state change functions for the common pipelines
-SOKOL_GP_API_DECL void sgp_set_blend_mode(sgp_blend_mode blend_mode);
-SOKOL_GP_API_DECL void sgp_reset_blend_mode(void);
-SOKOL_GP_API_DECL void sgp_set_color(float r, float g, float b, float a);
-SOKOL_GP_API_DECL void sgp_reset_color(void);
-SOKOL_GP_API_DECL void sgp_set_image(int channel, sg_image image);
-SOKOL_GP_API_DECL void sgp_unset_image(int channel);
-SOKOL_GP_API_DECL void sgp_reset_image(int channel);
+/* State change for custom pipelines. */
+SOKOL_GP_API_DECL void sgp_set_pipeline(sg_pipeline pipeline);              /* Sets current draw pipeline. */
+SOKOL_GP_API_DECL void sgp_reset_pipeline(void);                            /* Resets to the current draw pipeline to default (builtin pipelines). */
+SOKOL_GP_API_DECL void sgp_set_uniform(const void* data, uint32_t size);    /* Sets uniform buffer for a custom pipeline. */
+SOKOL_GP_API_DECL void sgp_reset_uniform(void);                             /* Resets uniform buffer to default (current state color). */
 
-// state change functions
-SOKOL_GP_API_DECL void sgp_viewport(int x, int y, int w, int h);
-SOKOL_GP_API_DECL void sgp_reset_viewport(void);
-SOKOL_GP_API_DECL void sgp_scissor(int x, int y, int w, int h);
-SOKOL_GP_API_DECL void sgp_reset_scissor(void);
-SOKOL_GP_API_DECL void sgp_reset_state(void);
+/* State change functions for the common pipelines. */
+SOKOL_GP_API_DECL void sgp_set_blend_mode(sgp_blend_mode blend_mode);       /* Sets current blend mode. */
+SOKOL_GP_API_DECL void sgp_reset_blend_mode(void);                          /* Resets current blend mode to default (no blending). */
+SOKOL_GP_API_DECL void sgp_set_color(float r, float g, float b, float a);   /* Sets current color modulation. */
+SOKOL_GP_API_DECL void sgp_reset_color(void);                               /* Resets current color modulation to default (white). */
+SOKOL_GP_API_DECL void sgp_set_image(int channel, sg_image image);          /* Sets current bound texture in a texture channel. */
+SOKOL_GP_API_DECL void sgp_unset_image(int channel);                        /* Remove current bound texture in a texture channel (no texture). */
+SOKOL_GP_API_DECL void sgp_reset_image(int channel);                        /* Resets current bound texture in a channel to default (white texture). */
 
-// drawing functions
-SOKOL_GP_API_DECL void sgp_clear(void);
-SOKOL_GP_API_DECL void sgp_draw_points(const sgp_point* points, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_point(float x, float y);
-SOKOL_GP_API_DECL void sgp_draw_lines(const sgp_line* lines, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_line(float ax, float ay, float bx, float by);
-SOKOL_GP_API_DECL void sgp_draw_line_strip(const sgp_point* points, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy);
-SOKOL_GP_API_DECL void sgp_draw_filled_triangle_strip(const sgp_point* points, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);
-SOKOL_GP_API_DECL void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_textured_rect(float x, float y, float w, float h);
-SOKOL_GP_API_DECL void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count);
-SOKOL_GP_API_DECL void sgp_draw_textured_rect_ex(int channel, sgp_rect dest_rect, sgp_rect src_rect);
+/* State change functions for all pipelines. */
+SOKOL_GP_API_DECL void sgp_viewport(int x, int y, int w, int h);            /* Sets the screen area to draw into. */
+SOKOL_GP_API_DECL void sgp_reset_viewport(void);                            /* Reset viewport to default values (0, 0, width, height). */
+SOKOL_GP_API_DECL void sgp_scissor(int x, int y, int w, int h);             /* Set clip rectangle in the viewport. */
+SOKOL_GP_API_DECL void sgp_reset_scissor(void);                             /* Resets clip rectangle to default (viewport bounds). */
+SOKOL_GP_API_DECL void sgp_reset_state(void);                               /* Reset all state to default values. */
 
-// querying functions
-SOKOL_GP_API_DECL sgp_state* sgp_query_state(void);
-SOKOL_GP_API_DECL sgp_desc sgp_query_desc(void);
+/* Drawing functions. */
+SOKOL_GP_API_DECL void sgp_clear(void);                                                                         /* Clears the current viewport using the current state color. */
+SOKOL_GP_API_DECL void sgp_draw_points(const sgp_point* points, uint32_t count);                                /* Draws points in a batch. */
+SOKOL_GP_API_DECL void sgp_draw_point(float x, float y);                                                        /* Draws a single point. */
+SOKOL_GP_API_DECL void sgp_draw_lines(const sgp_line* lines, uint32_t count);                                   /* Draws lines in a batch. */
+SOKOL_GP_API_DECL void sgp_draw_line(float ax, float ay, float bx, float by);                                   /* Draws a single line. */
+SOKOL_GP_API_DECL void sgp_draw_lines_strip(const sgp_point* points, uint32_t count);                           /* Draws a strip of lines. */
+SOKOL_GP_API_DECL void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count);                /* Draws triangles in a batch. */
+SOKOL_GP_API_DECL void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy);    /* Draws a single triangle. */
+SOKOL_GP_API_DECL void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count);                /* Draws strip of triangles. */
+SOKOL_GP_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count);                            /* Draws a batch of rectangles. */
+SOKOL_GP_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);                                /* Draws a single rectangle. */
+SOKOL_GP_API_DECL void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count);                          /* Draws a batch of textured rectangles. */
+SOKOL_GP_API_DECL void sgp_draw_textured_rect(float x, float y, float w, float h);                              /* Draws a single textured rectangle. */
+SOKOL_GP_API_DECL void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count); /* Draws a batch textured rectangle, each from a source region. */
+SOKOL_GP_API_DECL void sgp_draw_textured_rect_ex(int channel, sgp_rect dest_rect, sgp_rect src_rect);           /* Draws a single textured rectangle from a source region. */
+
+/* Querying functions. */
+SOKOL_GP_API_DECL sgp_state* sgp_query_state(void); /* Returns the current draw state. */
+SOKOL_GP_API_DECL sgp_desc sgp_query_desc(void);    /* Returns description of the current SGP context. */
 
 #ifdef __cplusplus
 } // extern "C"
@@ -305,7 +318,7 @@ typedef struct _sgp_command {
 
 typedef struct _sgp_context {
     uint32_t init_cookie;
-    sgp_error last_error_code;
+    sgp_error last_error;
     sgp_desc desc;
 
     // resources
@@ -344,9 +357,9 @@ static const sgp_mat2x3 _sgp_mat3_identity = {{
 
 static const sgp_color _sgp_white_color = {1.0f, 1.0f, 1.0f, 1.0f};
 
-static void _sgp_set_error(sgp_error error_code) {
-    _sgp.last_error_code = error_code;
-    SOKOL_LOG(sgp_get_error_message(error_code));
+static void _sgp_set_error(sgp_error error) {
+    _sgp.last_error = error;
+    SOKOL_LOG(sgp_get_error_message(error));
 }
 
 #if defined(SOKOL_GLCORE33)
@@ -748,7 +761,7 @@ void sgp_setup(const sgp_desc* desc) {
 
     // init
     _sgp.init_cookie = _SGP_INIT_COOKIE;
-    _sgp.last_error_code = SGP_NO_ERROR;
+    _sgp.last_error = SGP_NO_ERROR;
 
     // set desc default values
     _sgp.desc = *desc;
@@ -863,7 +876,7 @@ bool sgp_is_valid(void) {
 }
 
 sgp_error sgp_get_last_error(void) {
-    return _sgp.last_error_code;
+    return _sgp.last_error;
 }
 
 const char* sgp_get_error_message(sgp_error error_code) {
@@ -931,7 +944,7 @@ void sgp_begin(int width, int height) {
     }
 
     // begin reset last error
-    _sgp.last_error_code = SGP_NO_ERROR;
+    _sgp.last_error = SGP_NO_ERROR;
 
     // save current state
     _sgp.state_stack[_sgp.cur_state++] = _sgp.state;
@@ -985,7 +998,7 @@ void sgp_flush(void) {
     _sgp.cur_command = _sgp.state._base_command;
 
     // draw nothing on errors
-    if(_sgp.last_error_code != SGP_NO_ERROR)
+    if(_sgp.last_error != SGP_NO_ERROR)
         return;
 
     // nothing to be drawn
@@ -1103,7 +1116,7 @@ static inline sgp_mat2x3 _sgp_mul_proj_transform(sgp_mat2x3* proj, sgp_mat2x3* t
     return m;
 }
 
-void sgp_ortho(float left, float right, float top, float bottom) {
+void sgp_project(float left, float right, float top, float bottom) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     float w = right - left;
@@ -1116,7 +1129,7 @@ void sgp_ortho(float left, float right, float top, float bottom) {
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
 
-void sgp_reset_proj(void) {
+void sgp_reset_project(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     _sgp.state.proj = _sgp_default_proj(_sgp.state.viewport.w, _sgp.state.viewport.h);
@@ -1446,7 +1459,7 @@ void sgp_reset_state(void) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_reset_viewport();
     sgp_reset_scissor();
-    sgp_reset_proj();
+    sgp_reset_project();
     sgp_reset_transform();
     sgp_reset_blend_mode();
     sgp_reset_color();
@@ -1724,7 +1737,7 @@ void sgp_draw_line(float ax, float ay, float bx, float by) {
     sgp_draw_lines(&line, 1);
 }
 
-void sgp_draw_line_strip(const sgp_point* points, uint32_t count) {
+void sgp_draw_lines_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
@@ -1747,7 +1760,7 @@ void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, 
     sgp_draw_filled_triangles(&triangle, 1);
 }
 
-void sgp_draw_filled_triangle_strip(const sgp_point* points, uint32_t count) {
+void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;

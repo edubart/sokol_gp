@@ -34,12 +34,12 @@ static void draw_triangles(void) {
         }
     }
     sgp_set_color(1.0f, 0.0f, 1.0f, 1.0f);
-    sgp_draw_filled_triangle_strip(points_buffer, count);
+    sgp_draw_filled_triangles_strip(points_buffer, count);
 }
 
 static void draw_fbo(void) {
     sgp_begin(128, 128);
-    sgp_ortho(0, 128, 128, 0);
+    sgp_project(0, 128, 128, 0);
     draw_triangles();
 
     sg_pass_action pass_action;

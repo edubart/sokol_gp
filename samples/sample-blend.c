@@ -24,7 +24,7 @@ static void draw_3rects(float brightness, float alpha) {
 }
 
 static void draw_rects(float ratio) {
-    sgp_ortho(0, 100*ratio, 0, 100);
+    sgp_project(0, 100*ratio, 0, 100);
     sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
 
     // none

@@ -11,7 +11,7 @@ This is an example on how to setup and use Sokol GP to draw a filled rectangle.
 
 #include <stdio.h> /* for fprintf() */
 #include <stdlib.h> /* for exit() */
-#include <math.h> /* for sinf() */
+#include <math.h> /* for sinf() and cosf() */
 
 /* Called on every frame of the application. */
 static void frame(void) {
@@ -24,15 +24,15 @@ static void frame(void) {
     /* Set frame buffer drawing region to (0,0,width,height). */
     sgp_viewport(0, 0, width, height);
     /* Set drawing coordinate space to (left=-ratio, right=ratio, top=1, bottom=-1). */
-    sgp_ortho(-ratio, ratio, 1.0f, -1.0f);
+    sgp_project(-ratio, ratio, 1.0f, -1.0f);
 
     /* Clear the frame buffer. */
     sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
     sgp_clear();
 
-    /* Draw an rectangle animated rectangle that rotates and changes its colors. */
+    /* Draw an animated rectangle that rotates and changes its colors. */
     float time = sapp_frame_count() * sapp_frame_duration();
-    float r = sin(time)*0.5+0.5, g = cos(time)*0.5+0.5;
+    float r = sinf(time)*0.5+0.5, g = cosf(time)*0.5+0.5;
     sgp_set_color(r, g, 0.3f, 1.0f);
     sgp_rotate_at(time, 0.0f, 0.0f);
     sgp_draw_filled_rect(-0.5f, -0.5f, 1.0f, 1.0f);
@@ -54,7 +54,7 @@ static void frame(void) {
 static void init(void) {
     /* Initialize Sokol GFX. */
     sg_desc sgdesc = {.context = sapp_sgcontext()};
-    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE; /* We don't need depth frame buffer for 2D. */
+    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE; /* We don't need a depth frame buffer for 2D. */
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -62,10 +62,7 @@ static void init(void) {
     }
 
     /* Initialize Sokol GP, adjust the size of command buffers for your own use. */
-    sgp_desc sgpdesc = {
-        .max_vertices = 262144,
-        .max_commands = 32768
-    };
+    sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
     if(!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
@@ -73,7 +70,7 @@ static void init(void) {
     }
 }
 
-/* Called when application is shutting down. */
+/* Called when the application is shutting down. */
 static void cleanup(void) {
     /* Cleanup Sokol GP and Sokol GFX resources. */
     sgp_shutdown();

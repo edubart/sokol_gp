@@ -7,7 +7,7 @@ OUTDIR=build
 SHDC=sokol-shdc
 SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos:wgpu
 SAMPLES=\
-	sample-triangle\
+	sample-rectangle\
 	sample-primitives\
 	sample-blend\
 	sample-fb\
@@ -27,7 +27,7 @@ ifeq ($(platform), windows)
 	CC=x86_64-w64-mingw32-gcc
 	LIBS+=-lkernel32 -luser32 -lshell32 -lgdi32 -ld3d11 -ldxgi
 	OUTEXT=.exe
-else ifeq($(platform), linux)
+else ifeq ($(platform), linux)
 	CC=gcc
 	DEFS+=-D_GNU_SOURCE
 	CFLAGS+=-pthread

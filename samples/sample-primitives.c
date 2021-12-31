@@ -72,7 +72,7 @@ static void draw_lines(void) {
         sgp_vec2 v = {c.x + r*cosf(theta), c.y + r*sinf(theta)};
         points_buffer[count++] = v;
     }
-    sgp_draw_line_strip(points_buffer, count);
+    sgp_draw_lines_strip(points_buffer, count);
 }
 
 static void draw_triangles(void) {
@@ -100,7 +100,7 @@ static void draw_triangles(void) {
         }
     }
     sgp_set_color(0.0f, 1.0f, 1.0f, 1.0f);
-    sgp_draw_filled_triangle_strip(points_buffer, count);
+    sgp_draw_filled_triangles_strip(points_buffer, count);
     sgp_pop_transform();
 }
 
