@@ -5,27 +5,7 @@ using modern graphics API through Sokol GFX.
 
 Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
 
-## Screenshots
-
-Here are some screenshots of all samples in `samples` directory.
-
-Primitives sample:
-#![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)
-
-Blending modes samples:
-#![sample-blend](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-blend.png)
-
-Frame buffer sample:
-#![sample-framebuffer](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-framebuffer.png)
-
-Rectangle sample:
-#![sample-rectangle](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-rectangle.png)
-
-Effect sample:
-#![sample-effect](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-effect.gif)
-
-SDF sample:
-#![sample-sdf](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-sdf.gif)
+![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)
 
 ## Features
 
@@ -467,6 +447,34 @@ These are features I would like to implement someday in the future
 * Draw textured triangles
 * Support drawing primitives with colored vertices
 * Seamless automatic texture atlas packer (to allow more batching)
+
+## Screenshots
+
+Here are some screenshots of all samples in `samples` directory.
+
+Primitives sample:
+
+![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)
+
+Blending modes samples:
+
+![sample-blend](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-blend.png)
+
+Frame buffer sample:
+
+![sample-framebuffer](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-framebuffer.png)
+
+Rectangle sample:
+
+![sample-rectangle](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-rectangle.png)
+
+Effect sample:
+
+![sample-effect](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-effect.gif)
+
+SDF sample:
+
+![sample-sdf](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-sdf.gif)
 
 ## Donation
 
