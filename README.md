@@ -1,7 +1,7 @@
 # Sokol GP
 
 Minimal efficient cross platform 2D graphics painter in pure C
-using modern graphics API through Sokol GFX.
+using modern graphics API through the excellent [Sokol GFX](https://github.com/floooh/sokol) library.
 
 Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
 
@@ -18,7 +18,7 @@ Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
 * **Batch optimizer** (rearranges the ordering of draw calls to batch more).
 * Uses preallocated memory (no allocations at runtime).
 * Supports drawing basic 2D primitives (rectangles, triangles, lines and points).
-* Supports the classic 2D color blending modes (color blend, add, modulate, multiple).
+* Supports the classic 2D color blending modes (color blend, add, modulate, multiply).
 * Supports 2D space transformations and changing 2D space coordinate systems.
 * Supports drawing the basic primitives (rectangles, triangles, lines and points).
 * Supports multiple texture bindings.
@@ -53,7 +53,7 @@ draw command *that overlaps* in-between them.
 
 By doing this the batch optimizer is able for example to merge textured draw calls,
 even if they were drawn with other intermediary different textures draws between them.
-The effect is more performance when drawing, because less draw calls will be dispatched
+The effect is more efficiency when drawing, because less draw calls will be dispatched
 to the GPU,
 
 This library can avoid a lot of work of making an efficient 2D drawing batching system,
@@ -90,7 +90,7 @@ draw command queue buffer and the vertices buffer.
 All the 2D space transformation (functions like `sgp_rotate`) are done by the CPU and not by the GPU,
 this is intentionally to avoid adding extra overhead in the GPU, because typically the number
 of vertices of 2D applications are not that large, and it is more efficient to perform
-all the transformation with the CPU right away rather than pushing extra vertex buffers to the GPU
+all the transformation with the CPU right away rather than pushing extra buffers to the GPU
 that ends up using more bandwidth of the CPU<->GPU bus.
 In contrast 3D applications usually dispatches vertex transformations to the GPU using a vertex shader,
 they do this because the amount of vertices of 3D objects can be very large
@@ -430,7 +430,13 @@ and has proved to be working well.
 
 ## Sponsorships
 
-This library has been originally sponsored by the MMORPG game [Medivia Online](https://medivia.online/).
+This library has been originally sponsored by the MMORPG game [Medivia Online](https://medivia.online/),
+I would like to thank them in supporting my work.
+
+## Related projects
+
+Make sure to checkout the excellent [Sokol](https://github.com/floooh/sokol) project by @floooh,
+it features many useful single header C libraries made with quality that can be used for game development.
 
 ## Updates
 
