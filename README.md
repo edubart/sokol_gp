@@ -112,14 +112,14 @@ other details, read `sokol_gfx.h` documentation for more on that.
 
 ## Usage
 
-Copy `sokol_gp.h` along with other Sokol headers to the same folder. Setup you Sokol GFX
+Copy `sokol_gp.h` along with other Sokol headers to the same folder. Setup Sokol GFX
 as you usually would, then add call to `sgp_setup(desc)` just after `sg_setup(desc)`, and
 call to `sgp_shutdown()` just before `sg_shutdown()`. Note that you should usually check if
 SGP is valid after its creation with `sg_is_valid()` and exit gracefully with an error if not.
 
 In your frame draw function add `sgp_begin(width, height)` before calling any SGP
 draw function, then draw your primitives. At the end of the frame (or framebuffer) you
-should **ALWAYS call** `sgp_flush()` between a Sokol GFX  being/end render pass,
+should **ALWAYS call** `sgp_flush()` between a Sokol GFX begin/end render pass,
 the `sgp_flush()` will dispatch all draw commands to Sokol GFX. Then call `sgp_end()` immediately
 to discard the draw command queue.
 
@@ -227,8 +227,6 @@ to the same folder, then compile with any C compiler using the proper linking fl
 ## Complete Examples
 
 In folder `samples` you can find the following complete examples covering all APIs of the library:
-
-https://github.com/edubart/minicoro/blob/main/minicoro.h
 
 * [sample-primitives.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-primitives.c): This is an example showing all drawing primitives and transformations APIs.
 * [sample-blend.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-blend.c): This is an example showing all blend modes between 3 rectangles.
