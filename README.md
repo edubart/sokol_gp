@@ -312,7 +312,7 @@ because it can generate shaders for multiple backends from a single `.glsl` file
 and this usually works well.
 
 By default the library uniform buffer per draw call has just 4 float uniforms
-(`SGP_BATCH_OPTIMIZER_DEPTH` configuration), and that may be too low to use with custom shaders.
+(`SGP_UNIFORM_CONTENT_SLOTS` configuration), and that may be too low to use with custom shaders.
 This is the default because typically newcomers may not want to use custom 2D shaders,
 and increasing a larger value means more overhead.
 If you are using custom shaders please increase this value to be large enough to hold
