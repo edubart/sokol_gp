@@ -232,7 +232,7 @@ https://github.com/edubart/minicoro/blob/main/minicoro.h
 
 * [sample-primitives.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-primitives.c): This is an example showing all drawing primitives and transformations APIs.
 * [sample-blend.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-blend.c): This is an example showing all blend modes between 3 rectangles.
-* [sample-fb.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-fb.c): This is an example showing how to use multiple `sgp_begin()` with frame buffers.
+* [sample-framebuffer.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-framebuffer.c): This is an example showing how to use multiple `sgp_begin()` with frame buffers.
 * [sample-sdf.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-sdf.c): This is an example on how to create custom shaders.
 * [sample-effect.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-effect.c): This is an example on how to use custom shaders for 2D drawing.
 * [sample-bench.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-bench.c): This is a heavy example used for benchmarking purposes.
@@ -249,7 +249,7 @@ cases the issue can be fixed by increasing the prefixed command queue buffer and
 when calling `sgp_setup()`.
 
 Making invalid number of push/pops of `sgp_push_transform()` and `sgp_pop_transform()`,
-or nesting too many `sgp_begin()` and `sgp_end()` may also lead to errors, that that
+or nesting too many `sgp_begin()` and `sgp_end()` may also lead to errors, that
 is a usage mistake.
 
 You can enable the `SOKOL_DEBUG` macro in such cases to debug, or handle
@@ -431,12 +431,17 @@ and has proved to be working well.
 ## Sponsorships
 
 This library has been originally sponsored by the MMORPG game [Medivia Online](https://medivia.online/),
-I would like to thank them in supporting my work.
+I would like to thank them for supporting my work.
 
 ## Related projects
 
 Make sure to checkout the excellent [Sokol](https://github.com/floooh/sokol) project by @floooh,
 it features many useful single header C libraries made with quality that can be used for game development.
+
+You may also want to check my other single header C library
+[Minicoro](https://github.com/edubart/minicoro),
+it brings stackful coroutines for C,
+very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
