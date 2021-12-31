@@ -1,6 +1,338 @@
 /*
-sokol_gp.h - minimal efficient cross platform 2D graphics painter
+Minimal efficient cross platform 2D graphics painter for Sokol GFX.
+sokol_gp - v0.1.0 - 31/Dec/2021
+Eduardo Bart - edub4rt@gmail.com
 https://github.com/edubart/sokol_gp
+
+# Sokol GP
+
+Minimal efficient cross platform 2D graphics painter in pure C
+using modern graphics API through Sokol GFX.
+
+Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
+
+## Features
+
+* Made and optimized only for **2D rendering only**, no 3D support.
+* Minimal, in a pure single C header.
+* Use modern unfixed pipeline graphics APIs for more efficiency.
+* Cross platform (backed by Sokol GFX).
+* D3D11/OpenGL 3.3/Metal/WebGPU graphics backends (through Sokol GFX).
+* **Automatic batching** (merge recent draw calls into batches automatically).
+* **Batch optimizer** (rearranges the ordering of draw calls to batch more).
+* Uses preallocated memory (no allocations at runtime).
+* Supports drawing basic 2D primitives (rectangles, triangles, lines and points).
+* Supports the classic 2D color blending modes (color blend, add, modulate, multiple).
+* Supports 2D space transformations and changing 2D space coordinate systems.
+* Supports drawing the basic primitives (rectangles, triangles, lines and points).
+* Supports multiple texture bindings.
+* Supports custom fragment shaders with 2D primitives.
+* Can be mixed with projects that are already using Sokol GFX.
+
+## Why?
+
+Sokol GFX is an excellent library for rendering using unfixed pipelines
+of modern graphics cards, but it is too complex to use for simple 2D drawing,
+and it's API is too generic and specialized for 3D rendering. To draw 2D stuff, the programmer
+usually needs to setup custom shaders when using Sokol GFX, or use its Sokol GL
+extra library, but Sokol GL also has an API with 3D design in mind, which
+incurs some costs and limitations.
+
+This library was created to draw 2D primitives through Sokol GFX with ease,
+and by not considering 3D usage it is optimized for 2D rendering only,
+furthermore it features an **automatic batch optimizer**, more details of it will be described below.
+
+## Automatic batch optimizer
+
+When drawing the library creates a draw command queue of all primitives yet to be drawn,
+every time a new draw command is added the batch optimizer looks back up to the last
+8 recent draw commands (this is adjustable), and try to rearrange and merge drawing commands
+if it finds a previous draw command that meets the following criteria:
+
+* The new draw command and previous command uses the *same primitive pipeline*
+* The new draw command and previous command uses the *same shader uniforms*
+* The new draw command and previous command uses the *same texture bindings*
+* The new draw command and previous command does not have another intermediary
+draw command *that overlaps* in-between them.
+
+By doing this the batch optimizer is able for example to merge textured draw calls,
+even if they were drawn with other intermediary different textures draws between them.
+The effect is more performance when drawing, because less draw calls will be dispatched
+to the GPU,
+
+This library can avoid a lot of work of making an efficient 2D drawing batching system,
+by automatically merging draw calls behind the scenes at runtime,
+thus the programmer does not need to manage batched draw calls manually,
+nor he needs to sort batched texture draw calls,
+the library will do this seamlessly behind the scenes.
+
+The batching algorithm is fast, but it has `O(n)` CPU complexity for every new draw command added,
+where `n` is the `SGP_BATCH_OPTIMIZER_DEPTH` configuration.
+In experiments using `8` as the default is a good default,
+but you may want to try out different values depending on your case.
+Using values that are too high is not recommended, because the algorithm may take too long
+scanning previous draw commands, and that may consume more CPU resources.
+
+The batch optimizer can be disabled by setting `SGP_BATCH_OPTIMIZER_DEPTH` to 0,
+you can use that to measure its impact.
+
+In the samples directory of this repository there is a
+benchmark example that tests drawing with the bath optimizer enabled/disabled.
+On my machine that benchmark was able to increase performance in a 2.2x factor when it is enabled.
+In some private game projects the gains of the batch optimizer proved to increase FPS performance
+above 1.5x by just replacing the graphics backend with this library, with no internal
+changes to the game itself.
+
+## Design choices
+
+The library has some design choices with performance in mind that will be discussed briefly here.
+
+Like Sokol GFX, Sokol GP will never do any allocation in the draw loop,
+so when initializing you must configure beforehand the maximum size of the
+draw command queue buffer and the vertices buffer.
+
+All the 2D space transformation (functions like `sgp_rotate`) are done by the CPU and not by the GPU,
+this is intentionally to avoid adding extra overhead in the GPU, because typically the number
+of vertices of 2D applications are not that large, and it is more efficient to perform
+all the transformation with the CPU right away rather than pushing extra vertex buffers to the GPU
+that ends up using more bandwidth of the CPU<->GPU bus.
+In contrast 3D applications usually dispatches vertex transformations to the GPU using a vertex shader,
+they do this because the amount of vertices of 3D objects can be very large
+and it is usually the best choice, but this is not true for 2D rendering.
+
+Many APIs to transform the 2D space before drawing a primitive are available, such as
+translate, rotate and scale. They can be used as similarly as the ones available in 3D graphics APIs,
+but they are crafted for 2D only, for example when using 2D we don't need to use a 4x4 or 3x3 matrix
+to perform vertex transformation, instead the code is specialized for 2D and can use a 2x3 matrix,
+saving extra CPU float computations.
+
+All pipelines always use a texture associated with it, even when drawing non textured primitives,
+because this minimizes graphics pipeline changes when mixing textured calls and non textured calls,
+improving efficiency.
+
+The library is coded in the style of Sokol GFX headers, reusing many macros from there,
+you can change some of its semantics such as custom allocator, custom log function, and some
+other details, read `sokol_gfx.h` documentation for more on that.
+
+## Usage
+
+Copy `sokol_gp.h` along with other Sokol headers to the same folder. Setup you Sokol GFX
+as you usually would, then add call to `sgp_setup(desc)` just after `sg_setup(desc)`, and
+call to `sgp_shutdown()` just before `sg_shutdown()`. Note that you should usually check if
+SGP is valid after its creation with `sg_is_valid()` and exit gracefully with an error if not.
+
+In your frame draw function add `sgp_begin(width, height)` before calling any SGP
+draw function, then draw your primitives. At the end of the frame (or framebuffer) you
+should **ALWAYS call** `sgp_flush()` between a Sokol GFX  being/end render pass,
+the `sgp_flush()` will dispatch all draw commands to Sokol GFX. Then call `sgp_end()` immediately
+to discard the draw command queue.
+
+An actual example of this setup will be shown below.
+
+## Quick usage example
+
+The following is a quick example on how to this library with Sokol GFX and Sokol APP:
+
+```c
+// This is an example on how to set up and use Sokol GP to draw a filled rectangle.
+
+// Includes Sokol GFX, Sokol GP and Sokol APP, doing all implementations.
+#define SOKOL_IMPL
+#include "sokol_gfx.h"
+#include "sokol_gp.h"
+#include "sokol_app.h"
+#include "sokol_glue.h"
+
+#include <stdio.h> // for fprintf()
+#include <stdlib.h> // for exit()
+#include <math.h> // for sinf() and cosf()
+
+// Called on every frame of the application.
+static void frame(void) {
+    // Get current window size.
+    int width = sapp_width(), height = sapp_height();
+    float ratio = width/(float)height;
+
+    // Begin recording draw commands for a frame buffer of size (width, height).
+    sgp_begin(width, height);
+    // Set frame buffer drawing region to (0,0,width,height).
+    sgp_viewport(0, 0, width, height);
+    // Set drawing coordinate space to (left=-ratio, right=ratio, top=1, bottom=-1).
+    sgp_project(-ratio, ratio, 1.0f, -1.0f);
+
+    // Clear the frame buffer.
+    sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
+    sgp_clear();
+
+    // Draw an animated rectangle that rotates and changes its colors.
+    float time = sapp_frame_count() * sapp_frame_duration();
+    float r = sinf(time)*0.5+0.5, g = cosf(time)*0.5+0.5;
+    sgp_set_color(r, g, 0.3f, 1.0f);
+    sgp_rotate_at(time, 0.0f, 0.0f);
+    sgp_draw_filled_rect(-0.5f, -0.5f, 1.0f, 1.0f);
+
+    // Begin a render pass.
+    sg_pass_action pass_action = {0};
+    sg_begin_default_pass(&pass_action, width, height);
+    // Dispatch all draw commands to Sokol GFX.
+    sgp_flush();
+    // Finish a draw command queue, clearing it.
+    sgp_end();
+    // End render pass.
+    sg_end_pass();
+    // Commit Sokol render.
+    sg_commit();
+}
+
+// Called when the application is initializing.
+static void init(void) {
+    // Initialize Sokol GFX.
+    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE; // We don't need a depth frame buffer for 2D.
+    sg_setup(&sgdesc);
+    if(!sg_isvalid()) {
+        fprintf(stderr, "Failed to create Sokol GFX context!\n");
+        exit(-1);
+    }
+
+    // Initialize Sokol GP, adjust the size of command buffers for your own use.
+    sgp_desc sgpdesc = {0};
+    sgp_setup(&sgpdesc);
+    if(!sgp_is_valid()) {
+        fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
+        exit(-1);
+    }
+}
+
+// Called when the application is shutting down.
+static void cleanup(void) {
+    // Cleanup Sokol GP and Sokol GFX resources.
+    sgp_shutdown();
+    sg_shutdown();
+}
+
+// Implement application main through Sokol APP.
+sapp_desc sokol_main(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+    return (sapp_desc){
+        .init_cb = init,
+        .frame_cb = frame,
+        .cleanup_cb = cleanup,
+        .window_title = "Triangle (Sokol GP)",
+        .sample_count = 4, // Enable anti aliasing.
+    };
+}
+```
+
+To run this example, first copy the `sokol_gp.h` header alongside with other Sokol headers
+to the same folder, then compile with any C compiler using the proper linking flags (read `sokol_gfx.h`).
+
+## Complete Examples
+
+In folder `samples` you can find the following complete examples covering all APIs of the library:
+
+https://github.com/edubart/minicoro/blob/main/minicoro.h
+
+* [sample-primitives.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-primitives.c): This is an example showing all drawing primitives and transformations APIs.
+* [sample-blend.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-blend.c): This is an example showing all blend modes between 3 rectangles.
+* [sample-fb.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-fb.c): This is an example showing how to use multiple `sgp_begin()` with frame buffers.
+* [sample-sdf.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-sdf.c): This is an example on how to create custom shaders.
+* [sample-effect.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-effect.c): This is an example on how to use custom shaders for 2D drawing.
+* [sample-bench.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-bench.c): This is a heavy example used for benchmarking purposes.
+
+These examples are used as the test suite for the library, you can build them by typing `make`.
+
+## Error handling
+
+It is possible that after many draw calls the command or vertex buffer may overflow,
+in that case the library will set an error error state and will continue to operate normally,
+but when flushing the drawing command queue with `sgp_flush()` no draw command will be dispatched.
+This can happen because the library uses pre allocated buffers, in such
+cases the issue can be fixed by increasing the prefixed command queue buffer and the vertices buffer
+when calling `sgp_setup()`.
+
+Making invalid number of push/pops of `sgp_push_transform()` and `sgp_pop_transform()`,
+or nesting too many `sgp_begin()` and `sgp_end()` may also lead to errors, that that
+is a usage mistake.
+
+You can enable the `SOKOL_DEBUG` macro in such cases to debug, or handle
+the error programmatically by reading `sgp_get_last_error()` after calling `sgp_end()`.
+It is also advised to leave `SOKOL_DEBUG` enabled when developing with Sokol, so you can
+catch mistakes early.
+
+## Blend modes
+
+The library supports the most usual blend modes used in 2D, which are the following:
+
+- `SGP_BLENDMODE_NONE` - No blending (`dstRGBA = srcRGBA`).
+- `SGP_BLENDMODE_BLEND` - Alpha blending (`dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))` and `dstA = srcA + (dstA * (1-srcA))`)
+- `SGP_BLENDMODE_ADD` - Color add (`dstRGB = (srcRGB * srcA) + dstRGB` and `dstA = dstA`)
+- `SGP_BLENDMODE_MOD` - Color modulate (`dstRGB = srcRGB * dstRGB` and `dstA = dstA`)
+- `SGP_BLENDMODE_MUL` - Color multiply (`dstRGB = (srcRGB * dstRGB) + (dstRGB * (1-srcA))` and `dstA = (srcA * dstA) + (dstA * (1-srcA))`)
+
+## Changing 2D coordinate system
+
+You can change the screen area to draw by calling `sgp_viewport(x, y, width, height)`.
+You can change the coordinate system of the 2D space by calling `sgp_project(left, right, top, bottom)`,
+with it.
+
+## Transforming 2D space
+
+You can translate, rotate or scale the 2D space before a draw call, by using the transformation
+functions the library provides, such as `sgp_translate(x, y)`, `sgp_rotate(theta)`, etc.
+Check the cheat sheet or the header for more.
+
+To save and restore the transformation state you should call `sgp_push_transform()` and
+later `sgp_pop_transform()`.
+
+## Drawing primitives
+
+The library provides drawing functions for all the basic primitives, that is,
+for points, lines, triangles and rectangles, such as `sgp_draw_line()` and `sgp_draw_filled_rect()`.
+Check the cheat sheet or the header for more.
+All of them have batched variations.
+
+## Color modulation
+
+All common pipelines have color modulation, and you can modulate
+a color before a draw by setting the current state color with `sgp_set_color(r,g,b,a)`,
+later you should reset the color to default (white) with `sgp_reset_color()`.
+
+## Custom shaders
+
+When using a custom shader, you must create a pipeline for it with `sg_make_pipeline(desc)`,
+using shader, blend mode and a draw primitive associated with it. Then you should
+call `sgp_set_pipeline()` before the shader draw call. You are responsible for using
+the same blend mode and drawing primitive as the created pipeline.
+
+Custom uniforms can be passed to the shader with `sgp_set_uniform(data, size)`,
+where you should always pass a pointer to a struct with exactly the same schema and size
+as the one defined in the shader.
+
+Although you can create custom shaders for each graphics backend manually,
+it is advised should use the Sokol shader compiler [SHDC](https://github.com/floooh/sokol-tools/blob/master/docs/sokol-shdc.md),
+because it can generate shaders for multiple backends from a single `.glsl` file,
+and this usually works well.
+
+By default the library uniform buffer per draw call has just 4 float uniforms
+(`SGP_BATCH_OPTIMIZER_DEPTH` configuration), and that may be too low to use with custom shaders.
+This is the default because typically newcomers may not want to use custom 2D shaders,
+and increasing a larger value means more overhead.
+If you are using custom shaders please increase this value to be large enough to hold
+the number of uniforms of your largest shader.
+
+## Library configuration
+
+The following macros can be defined before including to change the library behavior:
+
+- `SGP_BATCH_OPTIMIZER_DEPTH` - Number of draw commands that the batch optimizer looks back at. Default is 8.
+- `SGP_UNIFORM_CONTENT_SLOTS` - Maximum number of floats that can be stored in each draw call uniform buffer. Default is 4.
+- `SGP_TEXTURE_SLOTS` - Maximum number of textures that can be bound per draw call. Default is 4.
+
+## License
+
+MIT, see LICENSE file or the end of `sokol_gp.h` file.
 */
 
 #if defined(SOKOL_IMPL) && !defined(SOKOL_GP_IMPL)
@@ -1983,3 +2315,22 @@ sgp_state* sgp_query_state(void) {
 
 #endif // SOKOL_GP_IMPL_INCLUDED
 #endif // SOKOL_GP_IMPL
+
+/*
+Copyright (c) 2021 Eduardo Bart (https://github.com/edubart/sokol_gp)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/

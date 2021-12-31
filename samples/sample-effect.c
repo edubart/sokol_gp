@@ -93,7 +93,7 @@ static void init(void) {
     }
 
     // initialize Sokol GP
-    sgp_desc sgpdesc;
+    sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
     if(!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));

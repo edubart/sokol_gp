@@ -1,16 +1,17 @@
 CFLAGS=-std=c11
 CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-function
 DEFS=
-LIBS=-lSDL2 -lm
+CC=gcc
 INCS=-I. -Ithirdparty -Ishaders
 OUTDIR=build
+OUTEXT=
 SHDC=sokol-shdc
 SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos:wgpu
 SAMPLES=\
 	sample-rectangle\
 	sample-primitives\
 	sample-blend\
-	sample-fb\
+	sample-framebuffer\
 	sample-bench\
 	sample-sdf\
 	sample-effect
@@ -28,11 +29,11 @@ ifeq ($(platform), windows)
 	LIBS+=-lkernel32 -luser32 -lshell32 -lgdi32 -ld3d11 -ldxgi
 	OUTEXT=.exe
 else ifeq ($(platform), linux)
-	CC=gcc
 	DEFS+=-D_GNU_SOURCE
 	CFLAGS+=-pthread
 	LIBS+=-lX11 -lXi -lXcursor -lGL -ldl -lm
-	OUTEXT=
+else ifeq ($(platform), macos)
+	LIBS+=-lCocoa -lQuartzCore -lMetal -lMetalKit
 endif
 
 # build type
@@ -50,6 +51,8 @@ endif
 ifndef backend
 	ifeq ($(platform), windows)
 		backend=d3d11
+	else ifeq ($(platform), macos)
+		backend=metal
 	else
 		backend=glcore33
 	endif

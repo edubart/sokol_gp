@@ -270,6 +270,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .init_cb = init,
         .frame_cb = frame,
         .cleanup_cb = cleanup,
-        .window_title = "Bench (Sokol GP)"
+        .window_title = "Bench (Sokol GP)",
+        .width = 1280,
+        .height = 1280,
     };
 }

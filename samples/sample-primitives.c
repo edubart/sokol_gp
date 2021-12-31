@@ -189,5 +189,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .window_title = "Primitives (Sokol GP)",
+        .sample_count = 4,
     };
 }

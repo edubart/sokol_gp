@@ -148,5 +148,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .window_title = "Frame buffer (Sokol GP)",
+        .sample_count = 4,
     };
 }
