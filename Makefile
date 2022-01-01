@@ -1,4 +1,4 @@
-CFLAGS=-std=c11
+CFLAGS=-std=c99
 CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-function
 DEFS=
 CC=gcc

@@ -7,9 +7,11 @@ https://github.com/edubart/sokol_gp
 # Sokol GP
 
 Minimal efficient cross platform 2D graphics painter in pure C
-using modern graphics API through Sokol GFX.
+using modern graphics API through the excellent [Sokol GFX](https://github.com/floooh/sokol) library.
 
 Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
+
+![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)
 
 ## Features
 
@@ -22,7 +24,7 @@ Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
 * **Batch optimizer** (rearranges the ordering of draw calls to batch more).
 * Uses preallocated memory (no allocations at runtime).
 * Supports drawing basic 2D primitives (rectangles, triangles, lines and points).
-* Supports the classic 2D color blending modes (color blend, add, modulate, multiple).
+* Supports the classic 2D color blending modes (color blend, add, modulate, multiply).
 * Supports 2D space transformations and changing 2D space coordinate systems.
 * Supports drawing the basic primitives (rectangles, triangles, lines and points).
 * Supports multiple texture bindings.
@@ -57,7 +59,7 @@ draw command *that overlaps* in-between them.
 
 By doing this the batch optimizer is able for example to merge textured draw calls,
 even if they were drawn with other intermediary different textures draws between them.
-The effect is more performance when drawing, because less draw calls will be dispatched
+The effect is more efficiency when drawing, because less draw calls will be dispatched
 to the GPU,
 
 This library can avoid a lot of work of making an efficient 2D drawing batching system,
@@ -94,7 +96,7 @@ draw command queue buffer and the vertices buffer.
 All the 2D space transformation (functions like `sgp_rotate`) are done by the CPU and not by the GPU,
 this is intentionally to avoid adding extra overhead in the GPU, because typically the number
 of vertices of 2D applications are not that large, and it is more efficient to perform
-all the transformation with the CPU right away rather than pushing extra vertex buffers to the GPU
+all the transformation with the CPU right away rather than pushing extra buffers to the GPU
 that ends up using more bandwidth of the CPU<->GPU bus.
 In contrast 3D applications usually dispatches vertex transformations to the GPU using a vertex shader,
 they do this because the amount of vertices of 3D objects can be very large
@@ -116,14 +118,14 @@ other details, read `sokol_gfx.h` documentation for more on that.
 
 ## Usage
 
-Copy `sokol_gp.h` along with other Sokol headers to the same folder. Setup you Sokol GFX
+Copy `sokol_gp.h` along with other Sokol headers to the same folder. Setup Sokol GFX
 as you usually would, then add call to `sgp_setup(desc)` just after `sg_setup(desc)`, and
 call to `sgp_shutdown()` just before `sg_shutdown()`. Note that you should usually check if
 SGP is valid after its creation with `sg_is_valid()` and exit gracefully with an error if not.
 
 In your frame draw function add `sgp_begin(width, height)` before calling any SGP
 draw function, then draw your primitives. At the end of the frame (or framebuffer) you
-should **ALWAYS call** `sgp_flush()` between a Sokol GFX  being/end render pass,
+should **ALWAYS call** `sgp_flush()` between a Sokol GFX begin/end render pass,
 the `sgp_flush()` will dispatch all draw commands to Sokol GFX. Then call `sgp_end()` immediately
 to discard the draw command queue.
 
@@ -232,11 +234,9 @@ to the same folder, then compile with any C compiler using the proper linking fl
 
 In folder `samples` you can find the following complete examples covering all APIs of the library:
 
-https://github.com/edubart/minicoro/blob/main/minicoro.h
-
 * [sample-primitives.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-primitives.c): This is an example showing all drawing primitives and transformations APIs.
 * [sample-blend.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-blend.c): This is an example showing all blend modes between 3 rectangles.
-* [sample-fb.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-fb.c): This is an example showing how to use multiple `sgp_begin()` with frame buffers.
+* [sample-framebuffer.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-framebuffer.c): This is an example showing how to use multiple `sgp_begin()` with frame buffers.
 * [sample-sdf.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-sdf.c): This is an example on how to create custom shaders.
 * [sample-effect.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-effect.c): This is an example on how to use custom shaders for 2D drawing.
 * [sample-bench.c](https://github.com/edubart/sokol_gp/blob/master/samples/sample-bench.c): This is a heavy example used for benchmarking purposes.
@@ -253,7 +253,7 @@ cases the issue can be fixed by increasing the prefixed command queue buffer and
 when calling `sgp_setup()`.
 
 Making invalid number of push/pops of `sgp_push_transform()` and `sgp_pop_transform()`,
-or nesting too many `sgp_begin()` and `sgp_end()` may also lead to errors, that that
+or nesting too many `sgp_begin()` and `sgp_end()` may also lead to errors, that
 is a usage mistake.
 
 You can enable the `SOKOL_DEBUG` macro in such cases to debug, or handle
@@ -316,7 +316,7 @@ because it can generate shaders for multiple backends from a single `.glsl` file
 and this usually works well.
 
 By default the library uniform buffer per draw call has just 4 float uniforms
-(`SGP_BATCH_OPTIMIZER_DEPTH` configuration), and that may be too low to use with custom shaders.
+(`SGP_UNIFORM_CONTENT_SLOTS` configuration), and that may be too low to use with custom shaders.
 This is the default because typically newcomers may not want to use custom 2D shaders,
 and increasing a larger value means more overhead.
 If you are using custom shaders please increase this value to be large enough to hold
@@ -2317,7 +2317,7 @@ sgp_state* sgp_query_state(void) {
 #endif // SOKOL_GP_IMPL
 
 /*
-Copyright (c) 2021 Eduardo Bart (https://github.com/edubart/sokol_gp)
+Copyright (c) 2020-2022 Eduardo Bart (https://github.com/edubart/sokol_gp)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in

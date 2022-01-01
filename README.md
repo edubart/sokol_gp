@@ -424,7 +424,7 @@ sgp_desc sgp_query_desc(void);    /* Returns description of the current SGP cont
 ## Robustness
 
 This library has been tested since 2020 in private projects,
-and has proved to be working well.
+and has proved to be stable.
 
 ## Sponsorships
 
@@ -443,7 +443,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
-* **30-Dec-2021**: The library was open sourced.
+* **31-Dec-2021**: The library was open sourced.
 * **05-Aug-2020**: Added support for custom shaders.
 * **03-Jun-2020**: Added the batch optimizer.
 * **29-May-2020**: The library was created.
