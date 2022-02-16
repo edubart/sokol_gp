@@ -91,7 +91,6 @@ static void frame(void) {
 static void init(void) {
     // initialize Sokol GFX
     sg_desc sgdesc = {.context = sapp_sgcontext()};
-    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE;
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");

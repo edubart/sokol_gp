@@ -52,7 +52,6 @@ static void frame(void) {
 static void init(void) {
     // Initialize Sokol GFX.
     sg_desc sgdesc = {.context = sapp_sgcontext()};
-    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE; // We don't need a depth frame buffer for 2D.
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");

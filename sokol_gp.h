@@ -190,7 +190,6 @@ static void frame(void) {
 static void init(void) {
     // Initialize Sokol GFX.
     sg_desc sgdesc = {.context = sapp_sgcontext()};
-    sgdesc.context.depth_format = SG_PIXELFORMAT_NONE; // We don't need a depth frame buffer for 2D.
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -301,7 +300,7 @@ later you should reset the color to default (white) with `sgp_reset_color()`.
 
 ## Custom shaders
 
-When using a custom shader, you must create a pipeline for it with `sg_make_pipeline(desc)`,
+When using a custom shader, you must create a pipeline for it with `sgp_make_pipeline(desc)`,
 using shader, blend mode and a draw primitive associated with it. Then you should
 call `sgp_set_pipeline()` before the shader draw call. You are responsible for using
 the same blend mode and drawing primitive as the created pipeline.
