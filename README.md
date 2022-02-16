@@ -115,7 +115,7 @@ other details, read `sokol_gfx.h` documentation for more on that.
 Copy `sokol_gp.h` along with other Sokol headers to the same folder. Setup Sokol GFX
 as you usually would, then add call to `sgp_setup(desc)` just after `sg_setup(desc)`, and
 call to `sgp_shutdown()` just before `sg_shutdown()`. Note that you should usually check if
-SGP is valid after its creation with `sg_is_valid()` and exit gracefully with an error if not.
+SGP is valid after its creation with `sgp_is_valid()` and exit gracefully with an error if not.
 
 In your frame draw function add `sgp_begin(width, height)` before calling any SGP
 draw function, then draw your primitives. At the end of the frame (or framebuffer) you
