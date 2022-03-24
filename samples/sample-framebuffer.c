@@ -12,6 +12,7 @@ This sample showcases how to use Sokol GP to draw inside frame buffers (render t
 #include <stdlib.h>
 
 static sg_image fb_image;
+static sg_image fb_depth_image;
 static sg_pass fb_pass;
 
 static void draw_triangles(void) {
@@ -121,10 +122,24 @@ static void init(void) {
         exit(-1);
     }
 
+    // create frame buffer depth stencil
+    sg_image_desc fb_depth_image_desc;
+    memset(&fb_depth_image_desc, 0, sizeof(sg_image_desc));
+    fb_depth_image_desc.render_target = true;
+    fb_depth_image_desc.width = 128;
+    fb_depth_image_desc.height = 128;
+    fb_depth_image_desc.pixel_format = sapp_depth_format();
+    fb_depth_image = sg_make_image(&fb_depth_image_desc);
+    if(sg_query_image_state(fb_depth_image) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "Failed to create frame buffer depth image\n");
+        exit(-1);
+    }
+
     // create frame buffer pass
     sg_pass_desc pass_desc;
     memset(&pass_desc, 0, sizeof(sg_pass_desc));
     pass_desc.color_attachments[0].image = fb_image;
+    pass_desc.depth_stencil_attachment.image = fb_depth_image;
     fb_pass = sg_make_pass(&pass_desc);
     if(sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer pass\n");
@@ -134,6 +149,7 @@ static void init(void) {
 
 static void cleanup(void) {
     sg_destroy_image(fb_image);
+    sg_destroy_image(fb_depth_image);
     sg_destroy_pass(fb_pass);
     sgp_shutdown();
     sg_shutdown();
