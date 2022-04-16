@@ -34,6 +34,11 @@ else ifeq ($(platform), linux)
 	LIBS+=-lX11 -lXi -lXcursor -lGL -ldl -lm
 else ifeq ($(platform), macos)
 	LIBS+=-lCocoa -lQuartzCore -lMetal -lMetalKit
+else ifeq ($(platform), web)
+	LIBS+=-sUSE_WEBGL2=1
+	CC=emcc
+	OUTEXT=.html
+	CFLAGS+=--shell-file=samples/sample-shell.html
 endif
 
 # build type
@@ -41,7 +46,11 @@ ifndef build
 	build=debug
 endif
 ifeq ($(build), debug)
-	CFLAGS+=-Og -g
+	ifeq ($(platform), web)
+		CFLAGS+=-O0
+	else
+		CFLAGS+=-Og -g
+	endif
 else ifeq ($(build), release)
 	CFLAGS+=-O3 -g -ffast-math -fno-plt -flto
 	DEFS+=-DNDEBUG
@@ -53,6 +62,8 @@ ifndef backend
 		backend=d3d11
 	else ifeq ($(platform), macos)
 		backend=metal
+	else ifeq ($(platform), web)
+		backend=gles3
 	else
 		backend=glcore33
 	endif
