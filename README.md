@@ -459,30 +459,31 @@ These are features I would like to implement someday in the future
 ## Screenshots
 
 Here are some screenshots of all samples in `samples` directory.
+Click on any of the images to view it in your browser.
 
 Primitives sample:
 
-![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)
+[![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)](https://edubart.github.io/sokol_gp/sample-primitives.html)
 
 Blending modes samples:
 
-![sample-blend](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-blend.png)
+[![sample-blend](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-blend.png)](https://edubart.github.io/sokol_gp/sample-blend.html)
 
 Frame buffer sample:
 
-![sample-framebuffer](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-framebuffer.png)
+[![sample-framebuffer](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-framebuffer.png)](https://edubart.github.io/sokol_gp/sample-framebuffer.html)
 
 Rectangle sample:
 
-![sample-rectangle](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-rectangle.png)
+[![sample-rectangle](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-rectangle.png)](https://edubart.github.io/sokol_gp/sample-rectangle.html)
 
 Effect sample:
 
-![sample-effect](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-effect.gif)
+[![sample-effect](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-effect.gif)](https://edubart.github.io/sokol_gp/sample-effect.html)
 
 SDF sample:
 
-![sample-sdf](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-sdf.gif)
+[![sample-sdf](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-sdf.gif)](https://edubart.github.io/sokol_gp/sample-sdf.html)
 
 ## Donation
 
