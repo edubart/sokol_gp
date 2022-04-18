@@ -1,5 +1,5 @@
 CFLAGS=-std=c99
-CFLAGS+=-Wall -Wextra -Wshadow -Wstrict-prototypes -Wno-unused-function
+CFLAGS+=-Wall -Wextra -Wshadow -Wno-unused-function
 DEFS=
 CC=gcc
 INCS=-I. -Ithirdparty -Ishaders
@@ -38,7 +38,7 @@ else ifeq ($(platform), web)
 	LIBS+=-sUSE_WEBGL2=1
 	CC=emcc
 	OUTEXT=.html
-	CFLAGS+=--shell-file=samples/sample-shell.html
+	CFLAGS+=--shell-file=samples/sample-shell.html --embed-file images
 endif
 
 # build type
