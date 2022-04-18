@@ -1,5 +1,5 @@
 CFLAGS=-std=c99
-CFLAGS+=-Wall -Wextra -Wshadow -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-function
+CFLAGS+=-Wall -Wextra -Wshadow -Wstrict-prototypes -Wno-unused-function
 DEFS=
 CC=gcc
 INCS=-I. -Ithirdparty -Ishaders
@@ -45,12 +45,15 @@ endif
 ifndef build
 	build=debug
 endif
-ifeq ($(build), debug)
-	ifeq ($(platform), web)
-		CFLAGS+=-O0
+ifeq ($(platform), web)
+	ifeq ($(build), debug)
+		CFLAGS+=-O1 -fno-inline -g
 	else
-		CFLAGS+=-Og -g
+		CFLAGS+=-Oz -g0 -flto
+		CFLAGS+=-Wl,--strip-all,--gc-sections,--lto-O3
 	endif
+else ifeq ($(build), debug)
+	CFLAGS+=-Og -g
 else ifeq ($(build), release)
 	CFLAGS+=-O3 -g -ffast-math -fno-plt -flto
 	DEFS+=-DNDEBUG
