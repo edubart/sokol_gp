@@ -33,7 +33,8 @@ else ifeq ($(platform), linux)
 	CFLAGS+=-pthread
 	LIBS+=-lX11 -lXi -lXcursor -lGL -ldl -lm
 else ifeq ($(platform), macos)
-	LIBS+=-lCocoa -lQuartzCore -lMetal -lMetalKit
+        LIBS+=-framework Cocoa -framework QuartzCore -framework Metal -framework MetalKit
+        CFLAGS+=-ObjC -x objective-c
 else ifeq ($(platform), web)
 	LIBS+=-sUSE_WEBGL2=1
 	CC=emcc
