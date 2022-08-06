@@ -1103,9 +1103,9 @@ void sgp_setup(const sgp_desc* desc) {
     _sgp.num_vertices = _sgp.desc.max_vertices;
     _sgp.num_commands = _sgp.desc.max_commands;
     _sgp.num_uniforms = _sgp.desc.max_commands;
-    _sgp.vertices = (_sgp_vertex*) SOKOL_MALLOC(_sgp.num_vertices * sizeof(_sgp_vertex));
-    _sgp.uniforms = (sgp_uniform*) SOKOL_MALLOC(_sgp.num_uniforms * sizeof(sgp_uniform));
-    _sgp.commands = (_sgp_command*) SOKOL_MALLOC(_sgp.num_commands * sizeof(_sgp_command));
+    _sgp.vertices = (_sgp_vertex*) _sg_malloc(_sgp.num_vertices * sizeof(_sgp_vertex));
+    _sgp.uniforms = (sgp_uniform*) _sg_malloc(_sgp.num_uniforms * sizeof(sgp_uniform));
+    _sgp.commands = (_sgp_command*) _sg_malloc(_sgp.num_commands * sizeof(_sgp_command));
     if(!_sgp.commands || !_sgp.uniforms || !_sgp.commands) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_ALLOC_FAILED);
@@ -1183,11 +1183,11 @@ void sgp_shutdown(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state == 0);
     if(_sgp.vertices)
-        SOKOL_FREE(_sgp.vertices);
+        _sg_free(_sgp.vertices);
     if(_sgp.uniforms)
-        SOKOL_FREE(_sgp.uniforms);
+        _sg_free(_sgp.uniforms);
     if(_sgp.commands)
-        SOKOL_FREE(_sgp.commands);
+        _sg_free(_sgp.commands);
     for(uint32_t i=0;i<_SG_PRIMITIVETYPE_NUM*_SGP_BLENDMODE_NUM;++i) {
         sg_pipeline pip = _sgp.pipelines[i];
         if(pip.id != SG_INVALID_ID)
