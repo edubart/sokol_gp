@@ -1940,8 +1940,17 @@ static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex
     if(_sgp.state.pipeline.id != SG_INVALID_ID)
         pip = _sgp.state.pipeline;
 
-    if(pip.id == SG_INVALID_ID)
+    // invalid pipeline
+    if(pip.id == SG_INVALID_ID) {
+        _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
         return;
+    }
+
+    // region is out of screen bounds
+    if(region.x1 > 1.0f || region.y1 > 1.0f || region.x2 < -1.0f || region.y2 < -1.0f) {
+        _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
+        return;
+    }
 
     // try to merge on previous command to draw in a batch
     if(_sgp_merge_batch_command(pip, _sgp.state.images, _sgp.state.uniform, region, vertex_index, num_vertices))
@@ -1953,14 +1962,20 @@ static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex
     if(!reuse_uniform) {
         // append new uniform
         sgp_uniform *next_uniform = _sgp_next_uniform();
-        if(SOKOL_UNLIKELY(!next_uniform)) return;
+        if(SOKOL_UNLIKELY(!next_uniform)) {
+            _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
+            return;
+        }
         *next_uniform = _sgp.state.uniform;
     }
     uint32_t uniform_index = _sgp.cur_uniform - 1;
 
     // append new draw command
     _sgp_command* cmd = _sgp_next_command();
-    if(SOKOL_UNLIKELY(!cmd)) return;
+    if(SOKOL_UNLIKELY(!cmd)) {
+        _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
+        return;
+    }
     cmd->cmd = SGP_COMMAND_DRAW;
     cmd->args.draw.pip = pip;
     cmd->args.draw.images = _sgp.state.images;
@@ -1990,7 +2005,7 @@ static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint3
     if(SOKOL_UNLIKELY(!vertices)) return;
 
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    _sgp_region region = {1.0f, 1.0f, -1.0f, -1.0f};
+    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for(uint32_t i=0;i<num_vertices;++i) {
         sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
         region.x1 = _sg_min(region.x1, p.x);
@@ -2114,7 +2129,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     _sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    _sgp_region region = {1.0f, 1.0f, -1.0f, -1.0f};
+    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for(uint32_t i=0;i<count;v+=6, rect++, i++) {
         sgp_vec2 quad[4] = {
             {rect->x,           rect->y + rect->h}, // bottom left
@@ -2171,7 +2186,7 @@ void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count) {
 
     // compute vertices
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    _sgp_region region = {1.0f, 1.0f, -1.0f, -1.0f};
+    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
             {rects[i].x,              rects[i].y + rects[i].h}, // bottom left
@@ -2243,7 +2258,7 @@ void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uin
 
     // compute vertices
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    _sgp_region region = {1.0f, 1.0f, -1.0f, -1.0f};
+    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for(uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
             {rects[i].dst.x,                  rects[i].dst.y + rects[i].dst.h}, // bottom left
