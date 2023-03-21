@@ -251,8 +251,7 @@ static void init(void) {
 
     image1 = create_image(128, 128);
     image2 = create_image(128, 128);
-    sg_image_info imginfo = sg_query_image_info(image1);
-    image_ratio = imginfo.width / (float)imginfo.height;
+    image_ratio = 1.0f;
 }
 
 static void cleanup(void) {

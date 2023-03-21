@@ -28,9 +28,9 @@ static void frame(void) {
     sgp_begin(window_width, window_height);
 
     float secs = sapp_frame_count() * sapp_frame_duration();
-    sg_image_info image_info = sg_query_image_info(image);
+    sg_image_desc image_desc = sg_query_image_desc(image);
     float window_ratio = window_width / (float)window_height;
-    float image_ratio = image_info.width / (float)image_info.height;
+    float image_ratio = image_desc.width / (float)image_desc.height;
     effect_uniforms_t uniforms;
     memset(&uniforms, 0, sizeof(effect_uniforms_t));
     uniforms.iVelocity.x = 0.02f;

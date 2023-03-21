@@ -377,6 +377,15 @@ MIT, see LICENSE file or the end of `sokol_gp.h` file.
 #endif
 #endif
 
+#ifndef SOKOL_LOG
+    #ifdef SOKOL_DEBUG
+        #include <stdio.h>
+        #define SOKOL_LOG(s) { SOKOL_ASSERT(s); puts(s); }
+    #else
+        #define SOKOL_LOG(s)
+    #endif
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 
