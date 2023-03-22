@@ -488,6 +488,7 @@ typedef struct sgp_state {
     sgp_mat2x3 proj;
     sgp_mat2x3 transform;
     sgp_mat2x3 mvp;
+    float thickness;
     sgp_color color;
     sgp_images_uniform images;
     sgp_uniform uniform;
@@ -1298,6 +1299,7 @@ void sgp_begin(int width, int height) {
     _sgp.state.proj = _sgp_default_proj(width, height);
     _sgp.state.transform = _sgp_mat3_identity;
     _sgp.state.mvp = _sgp.state.proj;
+    _sgp.state.thickness = _sg_max(1.0f / width, 1.0f / height);
     _sgp.state.color = _sgp_white_color;
     memset(&_sgp.state.uniform, 0, sizeof(sgp_uniform));
     _sgp.state.uniform.size = sizeof(sgp_color);
@@ -1746,6 +1748,7 @@ void sgp_viewport(int x, int y, int w, int h) {
     }
 
     _sgp.state.viewport = viewport;
+    _sgp.state.thickness = _sg_max(1.0f / w, 1.0f / h);
     _sgp.state.proj = _sgp_default_proj(w, h);
     _sgp.state.mvp = _sgp_mul_proj_transform(&_sgp.state.proj, &_sgp.state.transform);
 }
@@ -2008,7 +2011,7 @@ static void _sgp_transform_vec2(sgp_mat2x3* matrix, sgp_vec2* dst, const sgp_vec
     }
 }
 
-static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t num_vertices) {
+static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t num_vertices, float thickness) {
     uint32_t vertex_index = _sgp.cur_vertex;
     _sgp_vertex* transformed_vertices = _sgp_next_vertices(num_vertices);
     if(SOKOL_UNLIKELY(!vertices)) return;
@@ -2017,10 +2020,10 @@ static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint3
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for(uint32_t i=0;i<num_vertices;++i) {
         sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
-        region.x1 = _sg_min(region.x1, p.x);
-        region.y1 = _sg_min(region.y1, p.y);
-        region.x2 = _sg_max(region.x2, p.x);
-        region.y2 = _sg_max(region.y2, p.y);
+        region.x1 = _sg_min(region.x1, p.x - thickness);
+        region.y1 = _sg_min(region.y1, p.y - thickness);
+        region.x2 = _sg_max(region.x2, p.x + thickness);
+        region.y2 = _sg_max(region.y2, p.y + thickness);
         transformed_vertices[i].position = p;
         transformed_vertices[i].texcoord.x = 0.0f;
         transformed_vertices[i].texcoord.y = 0.0f;
@@ -2067,7 +2070,7 @@ void sgp_draw_points(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, points, count);
+    _sgp_draw_solid_pip(pip, points, count, _sgp.state.thickness);
 }
 
 void sgp_draw_point(float x, float y) {
@@ -2082,7 +2085,7 @@ void sgp_draw_lines(const sgp_line* lines, uint32_t count) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, (const sgp_point*)lines, count*2);
+    _sgp_draw_solid_pip(pip, (const sgp_point*)lines, count*2, _sgp.state.thickness);
 }
 
 void sgp_draw_line(float ax, float ay, float bx, float by) {
@@ -2097,7 +2100,7 @@ void sgp_draw_lines_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, points, count);
+    _sgp_draw_solid_pip(pip, points, count, _sgp.state.thickness);
 }
 
 void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count) {
@@ -2105,7 +2108,7 @@ void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, (const sgp_point*)triangles, count*3);
+    _sgp_draw_solid_pip(pip, (const sgp_point*)triangles, count*3, 0.0f);
 }
 
 void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
@@ -2120,7 +2123,7 @@ void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if(SOKOL_UNLIKELY(count == 0)) return;
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, points, count);
+    _sgp_draw_solid_pip(pip, points, count, 0.0f);
 }
 
 void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
