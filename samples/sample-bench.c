@@ -32,7 +32,7 @@ static void bench_repeated_textured(void) {
     sgp_set_image(0, image1);
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
-            sgp_draw_textured_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+            sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
     sgp_reset_image(0);
@@ -43,7 +43,7 @@ static void bench_multiple_textured(void) {
     for(int y=0;y<count;++y) {
         for(int x=0;x<count;++x) {
             sgp_set_image(0, x % 2 == 0 ? image1 : image2);
-            sgp_draw_textured_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+            sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
     sgp_reset_image(0);
@@ -60,7 +60,7 @@ static void bench_colored_textured(void) {
                 sgp_set_color(0, 255, 0, 255);
             else
                 sgp_set_color(0, 0, 255, 255);
-            sgp_draw_textured_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+            sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
     sgp_reset_image(0);
@@ -91,7 +91,6 @@ static void bench_colored_filled(void) {
 }
 
 static void bench_mixed(void) {
-    sgp_set_image(0, image1);
     for(int diagonal = 0; diagonal < 2*count - 1; ++diagonal) {
         int advance = _sg_max(diagonal - count + 1, 0);
         for(int y = diagonal - advance, x = advance; y >= 0 && x < count; --y, ++x) {
@@ -101,13 +100,15 @@ static void bench_mixed(void) {
                 sgp_set_color(0, 255, 0, 255);
             else
                 sgp_set_color(0, 0, 255, 255);
-            if((x+y) % 2 == 0)
+            if((x+y) % 2 == 0) {
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
-            else
-                sgp_draw_textured_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+            } else {
+                sgp_set_image(0, image1);
+                sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+                sgp_reset_image(0);
+            }
         }
     }
-    sgp_reset_image(0);
 }
 
 static void bench_sync_mixed(void) {
@@ -120,7 +121,7 @@ static void bench_sync_mixed(void) {
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
             } else {
                 sgp_set_color(0, 255, 0, 255);
-                sgp_draw_textured_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
+                sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
             }
         }
     }
@@ -130,7 +131,7 @@ static void bench_sync_mixed(void) {
 static void draw_cat(void) {
     sgp_reset_color();
     sgp_set_image(0, image1);
-    sgp_draw_textured_rect(0, 0, rect_count*count*2, rect_count*count*2);
+    sgp_draw_filled_rect(0, 0, rect_count*count*2, rect_count*count*2);
     sgp_reset_image(0);
 }
 

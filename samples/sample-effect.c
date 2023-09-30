@@ -48,7 +48,7 @@ static void frame(void) {
     sgp_set_image(SLOT_effect_iTexChannel1, perlin_image);
     float width = (window_ratio >= image_ratio) ? window_width : image_ratio*window_height;
     float height = (window_ratio >= image_ratio) ? window_width/image_ratio : window_height;
-    sgp_draw_textured_rect(0, 0, width, height);
+    sgp_draw_filled_rect(0, 0, width, height);
     sgp_reset_image(SLOT_effect_iTexChannel0);
     sgp_reset_image(SLOT_effect_iTexChannel1);
     sgp_reset_pipeline();

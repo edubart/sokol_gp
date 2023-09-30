@@ -410,10 +410,8 @@ void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, 
 void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count);                /* Draws strip of triangles. */
 void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count);                            /* Draws a batch of rectangles. */
 void sgp_draw_filled_rect(float x, float y, float w, float h);                                /* Draws a single rectangle. */
-void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count);                          /* Draws a batch of textured rectangles. */
-void sgp_draw_textured_rect(float x, float y, float w, float h);                              /* Draws a single textured rectangle. */
-void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count); /* Draws a batch textured rectangle, each from a source region. */
-void sgp_draw_textured_rect_ex(int channel, sgp_rect dest_rect, sgp_rect src_rect);           /* Draws a single textured rectangle from a source region. */
+void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32_t count);    /* Draws a batch textured rectangle, each from a source region. */
+void sgp_draw_textured_rect(int channel, sgp_rect dest_rect, sgp_rect src_rect);              /* Draws a single textured rectangle from a source region. */
 
 /* Querying functions. */
 sgp_state* sgp_query_state(void); /* Returns the current draw state. */
@@ -455,7 +453,6 @@ These are features I would like to implement someday in the future
 
 * Draw textured triangles
 * Support drawing primitives with colored vertices
-* Seamless automatic texture atlas packer (to allow more batching)
 
 ## Screenshots
 

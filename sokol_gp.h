@@ -578,10 +578,8 @@ SOKOL_GP_API_DECL void sgp_draw_filled_triangle(float ax, float ay, float bx, fl
 SOKOL_GP_API_DECL void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count);                /* Draws strip of triangles. */
 SOKOL_GP_API_DECL void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count);                            /* Draws a batch of rectangles. */
 SOKOL_GP_API_DECL void sgp_draw_filled_rect(float x, float y, float w, float h);                                /* Draws a single rectangle. */
-SOKOL_GP_API_DECL void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count);                          /* Draws a batch of textured rectangles. */
-SOKOL_GP_API_DECL void sgp_draw_textured_rect(float x, float y, float w, float h);                              /* Draws a single textured rectangle. */
-SOKOL_GP_API_DECL void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count); /* Draws a batch textured rectangle, each from a source region. */
-SOKOL_GP_API_DECL void sgp_draw_textured_rect_ex(int channel, sgp_rect dest_rect, sgp_rect src_rect);           /* Draws a single textured rectangle from a source region. */
+SOKOL_GP_API_DECL void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32_t count);    /* Draws a batch textured rectangle, each from a source region. */
+SOKOL_GP_API_DECL void sgp_draw_textured_rect(int channel, sgp_rect dest_rect, sgp_rect src_rect);              /* Draws a single textured rectangle from a source region. */
 
 /* Querying functions. */
 SOKOL_GP_API_DECL sgp_state* sgp_query_state(void); /* Returns the current draw state. */
@@ -2655,64 +2653,6 @@ void sgp_draw_filled_rect(float x, float y, float w, float h) {
     sgp_draw_filled_rects(&rect, 1);
 }
 
-void sgp_draw_textured_rects(const sgp_rect* rects, uint32_t count) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(count == 0)) return;
-
-    // setup vertices
-    uint32_t num_vertices = count * 6;
-    uint32_t vertex_index = _sgp.cur_vertex;
-    _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
-    if(SOKOL_UNLIKELY(!vertices)) return;
-
-    // compute vertices
-    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
-    for(uint32_t i=0;i<count;i++) {
-        sgp_vec2 quad[4] = {
-            {rects[i].x,              rects[i].y + rects[i].h}, // bottom left
-            {rects[i].x + rects[i].w, rects[i].y + rects[i].h}, // bottom right
-            {rects[i].x + rects[i].w, rects[i].y}, // top right
-            {rects[i].x,  rects[i].y}, // top left
-        };
-        _sgp_transform_vec2(&mvp, quad, quad, 4);
-
-        for(uint32_t j=0;j<4;++j) {
-            region.x1 = _sg_min(region.x1, quad[j].x);
-            region.y1 = _sg_min(region.y1, quad[j].y);
-            region.x2 = _sg_max(region.x2, quad[j].x);
-            region.y2 = _sg_max(region.y2, quad[j].y);
-        }
-
-        const sgp_vec2 vtexquad[4] = {
-            {0.0f, 1.0f}, // bottom left
-            {1.0f, 1.0f}, // bottom right
-            {1.0f, 0.0f}, // top right
-            {0.0f, 0.0f}, // top left
-        };
-
-        // make a quad composed of 2 triangles
-        _sgp_vertex* v = &vertices[i*6];
-        v[0].position = quad[0]; v[0].texcoord = vtexquad[0];
-        v[1].position = quad[1]; v[1].texcoord = vtexquad[1];
-        v[2].position = quad[2]; v[2].texcoord = vtexquad[2];
-        v[3].position = quad[3]; v[3].texcoord = vtexquad[3];
-        v[4].position = quad[0]; v[4].texcoord = vtexquad[0];
-        v[5].position = quad[2]; v[5].texcoord = vtexquad[2];
-    }
-
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, region, vertex_index, num_vertices);
-}
-
-void sgp_draw_textured_rect(float x, float y, float w, float h) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
-    sgp_rect rect = {x, y, w, h};
-    sgp_draw_textured_rects(&rect, 1);
-}
-
 static sgp_isize _sgp_query_image_size(sg_image img_id) {
     const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
     SOKOL_ASSERT(img);
@@ -2720,7 +2660,7 @@ static sgp_isize _sgp_query_image_size(sg_image img_id) {
     return size;
 }
 
-void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uint32_t count) {
+void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
@@ -2794,11 +2734,11 @@ void sgp_draw_textured_rects_ex(int channel, const sgp_textured_rect* rects, uin
     _sgp_queue_draw(pip, region, vertex_index, num_vertices);
 }
 
-void sgp_draw_textured_rect_ex(int channel, sgp_rect dest_rect, sgp_rect src_rect) {
+void sgp_draw_textured_rect(int channel, sgp_rect dest_rect, sgp_rect src_rect) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_textured_rect rect = {dest_rect, src_rect};
-    sgp_draw_textured_rects_ex(channel, &rect, 1);
+    sgp_draw_textured_rects(channel, &rect, 1);
 }
 
 sgp_desc sgp_query_desc(void) {
