@@ -31,7 +31,7 @@ else ifeq ($(platform), macos)
         LIBS+=-framework Cocoa -framework QuartzCore -framework Metal -framework MetalKit
         CFLAGS+=-ObjC -x objective-c
 else ifeq ($(platform), web)
-	LIBS+=-sUSE_WEBGL2=1
+	LIBS+=-sFULL_ES3
 	CC=emcc
 	OUTEXT=.html
 	CFLAGS+=--shell-file=samples/sample-shell.html --embed-file images
@@ -43,10 +43,9 @@ ifndef build
 endif
 ifeq ($(platform), web)
 	ifeq ($(build), debug)
-		CFLAGS+=-O1 -fno-inline -g
+		CFLAGS+=-Og -g
 	else
-		CFLAGS+=-Oz -g0 -flto
-		CFLAGS+=-Wl,--strip-all,--gc-sections,--lto-O3
+		CFLAGS+=-O3 -g0 -s
 	endif
 else ifeq ($(build), debug)
 	CFLAGS+=-Og -g

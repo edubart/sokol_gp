@@ -87,7 +87,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .window_title = "Triangle (Sokol GP)",
-        .sample_count = 4, // Enable anti aliasing.
         .logger.func = slog_func,
     };
 }
