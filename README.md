@@ -286,6 +286,20 @@ for points, lines, triangles and rectangles, such as `sgp_draw_line()` and `sgp_
 Check the cheat sheet or the header for more.
 All of them have batched variations.
 
+## Drawing textured primitives
+
+To draw textured rectangles you can use `sgp_set_image(0, img)` and then sgp_draw_filled_rect()`,
+this will draw an entire texture into a rectangle.
+You should later reset the image with `sgp_reset_image(0)` to restore the bound image to default white image,
+otherwise you will have glitches when drawing a solid color.
+
+In case you want to draw a specific source from the texture,
+you should use `sgp_draw_textured_rect()` instead.
+
+By default textures are drawn using a simple nearest filter sampler,
+you can change the sampler with `sgp_set_sampler(0, smp)` before drawing a texture,
+it's recommended to restore the default sampler using `sgp_reset_sampler(0)`.
+
 ## Color modulation
 
 All common pipelines have color modulation, and you can modulate
@@ -387,9 +401,12 @@ void sgp_set_blend_mode(sgp_blend_mode blend_mode);       /* Sets current blend 
 void sgp_reset_blend_mode(void);                          /* Resets current blend mode to default (no blending). */
 void sgp_set_color(float r, float g, float b, float a);   /* Sets current color modulation. */
 void sgp_reset_color(void);                               /* Resets current color modulation to default (white). */
-void sgp_set_image(int channel, sg_image image);          /* Sets current bound texture in a texture channel. */
-void sgp_unset_image(int channel);                        /* Remove current bound texture in a texture channel (no texture). */
-void sgp_reset_image(int channel);                        /* Resets current bound texture in a channel to default (white texture). */
+void sgp_set_image(int channel, sg_image image);          /* Sets current bound image in a texture channel. */
+void sgp_unset_image(int channel);                        /* Remove current bound image in a texture channel (no texture). */
+void sgp_reset_image(int channel);                        /* Resets current bound image in a texture channel to default (white texture). */
+void sgp_set_sampler(int channel, sg_sampler sampler);    /* Sets current bound sampler in a texture channel. */
+void sgp_unset_sampler(int channel);                      /* Remove current bound sampler in a texture channel (no sampler). */
+void sgp_reset_sampler(int channel);                      /* Resets current bound sampler in a texture channel to default (nearest sampler). */
 
 /* State change functions for all pipelines. */
 void sgp_viewport(int x, int y, int w, int h);            /* Sets the screen area to draw into. */
@@ -440,7 +457,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
-* **30-Sep-2023**: Update to latest Sokol, deprecating GLES2 backend and use image samplers.
+* **30-Sep-2023**: Update to latest Sokol, deprecated GLES2 backend, add image sampler APIs, changes in draw textured APIs.
 * **31-Dec-2021**: The library was open sourced.
 * **05-Aug-2020**: Added support for custom shaders.
 * **03-Jun-2020**: Added the batch optimizer.

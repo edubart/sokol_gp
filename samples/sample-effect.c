@@ -21,6 +21,7 @@ This sample showcases how to create 2D shader effects using multiple textures.
 
 static sg_pipeline pip;
 static sg_image image;
+static sg_sampler linear_sampler;
 static sg_image perlin_image;
 
 static void frame(void) {
@@ -46,11 +47,15 @@ static void frame(void) {
     sgp_set_uniform(&uniforms, sizeof(effect_uniforms_t));
     sgp_set_image(SLOT_effect_iTexChannel0, image);
     sgp_set_image(SLOT_effect_iTexChannel1, perlin_image);
+    sgp_set_sampler(SLOT_effect_iTexChannel0, linear_sampler);
+    sgp_set_sampler(SLOT_effect_iTexChannel1, linear_sampler);
     float width = (window_ratio >= image_ratio) ? window_width : image_ratio*window_height;
     float height = (window_ratio >= image_ratio) ? window_width/image_ratio : window_height;
     sgp_draw_filled_rect(0, 0, width, height);
     sgp_reset_image(SLOT_effect_iTexChannel0);
     sgp_reset_image(SLOT_effect_iTexChannel1);
+    sgp_reset_sampler(SLOT_effect_iTexChannel1);
+    sgp_reset_sampler(SLOT_effect_iTexChannel0);
     sgp_reset_pipeline();
 
     // dispatch draw commands
@@ -72,11 +77,6 @@ static sg_image load_image(const char *filename) {
     memset(&image_desc, 0, sizeof(sg_image_desc));
     image_desc.width = width;
     image_desc.height = height;
-    // TODO: set sampler
-    // image_desc.min_filter = SG_FILTER_LINEAR;
-    // image_desc.mag_filter = SG_FILTER_LINEAR;
-    // image_desc.wrap_u = SG_WRAP_REPEAT;
-    // image_desc.wrap_v = SG_WRAP_REPEAT;
     image_desc.data.subimage[0][0].ptr = data;
     image_desc.data.subimage[0][0].size = (size_t)(width * height * 4);
     img = sg_make_image(&image_desc);
@@ -109,6 +109,19 @@ static void init(void) {
     perlin_image = load_image("images/perlin.png");
     if(sg_query_image_state(image) != SG_RESOURCESTATE_VALID || sg_query_image_state(perlin_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to load images");
+        exit(-1);
+    }
+
+    // create linear sampler
+    sg_sampler_desc linear_sampler_desc = {
+        .min_filter = SG_FILTER_LINEAR,
+        .mag_filter = SG_FILTER_LINEAR,
+        .wrap_u = SG_WRAP_REPEAT,
+        .wrap_v = SG_WRAP_REPEAT,
+    };
+    linear_sampler = sg_make_sampler(&linear_sampler_desc);
+    if(sg_query_sampler_state(linear_sampler) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "failed to create linear sampler");
         exit(-1);
     }
 

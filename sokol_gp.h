@@ -292,6 +292,20 @@ for points, lines, triangles and rectangles, such as `sgp_draw_line()` and `sgp_
 Check the cheat sheet or the header for more.
 All of them have batched variations.
 
+## Drawing textured primitives
+
+To draw textured rectangles you can use `sgp_set_image(0, img)` and then sgp_draw_filled_rect()`,
+this will draw an entire texture into a rectangle.
+You should later reset the image with `sgp_reset_image(0)` to restore the bound image to default white image,
+otherwise you will have glitches when drawing a solid color.
+
+In case you want to draw a specific source from the texture,
+you should use `sgp_draw_textured_rect()` instead.
+
+By default textures are drawn using a simple nearest filter sampler,
+you can change the sampler with `sgp_set_sampler(0, smp)` before drawing a texture,
+it's recommended to restore the default sampler using `sgp_reset_sampler(0)`.
+
 ## Color modulation
 
 All common pipelines have color modulation, and you can modulate
@@ -408,7 +422,7 @@ typedef enum sgp_error {
     SGP_ERROR_ALLOC_FAILED,
     SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED,
     SGP_ERROR_MAKE_WHITE_IMAGE_FAILED,
-    SGP_ERROR_MAKE_COMMON_SAMPLER_FAILED,
+    SGP_ERROR_MAKE_NEAREST_SAMPLER_FAILED,
     SGP_ERROR_MAKE_COMMON_SHADER_FAILED,
     SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED,
 } sgp_error;
@@ -476,10 +490,11 @@ typedef struct sgp_uniform {
     float content[SGP_UNIFORM_CONTENT_SLOTS];
 } sgp_uniform;
 
-typedef struct sgp_images_uniform {
+typedef struct sgp_textures_uniform {
     uint32_t count;
     sg_image images[SGP_TEXTURE_SLOTS];
-} sgp_images_uniform;
+    sg_sampler samplers[SGP_TEXTURE_SLOTS];
+} sgp_textures_uniform;
 
 /* SGP draw state. */
 typedef struct sgp_state {
@@ -491,7 +506,7 @@ typedef struct sgp_state {
     sgp_mat2x3 mvp;
     float thickness;
     sgp_color color;
-    sgp_images_uniform images;
+    sgp_textures_uniform textures;
     sgp_uniform uniform;
     sgp_blend_mode blend_mode;
     sg_pipeline pipeline;
@@ -555,9 +570,11 @@ SOKOL_GP_API_DECL void sgp_set_blend_mode(sgp_blend_mode blend_mode);       /* S
 SOKOL_GP_API_DECL void sgp_reset_blend_mode(void);                          /* Resets current blend mode to default (no blending). */
 SOKOL_GP_API_DECL void sgp_set_color(float r, float g, float b, float a);   /* Sets current color modulation. */
 SOKOL_GP_API_DECL void sgp_reset_color(void);                               /* Resets current color modulation to default (white). */
-SOKOL_GP_API_DECL void sgp_set_image(int channel, sg_image image);          /* Sets current bound texture in a texture channel. */
-SOKOL_GP_API_DECL void sgp_unset_image(int channel);                        /* Remove current bound texture in a texture channel (no texture). */
-SOKOL_GP_API_DECL void sgp_reset_image(int channel);                        /* Resets current bound texture in a channel to default (white texture). */
+SOKOL_GP_API_DECL void sgp_set_image(int channel, sg_image image);          /* Sets current bound image in a texture channel. */
+SOKOL_GP_API_DECL void sgp_unset_image(int channel);                        /* Remove current bound image in a texture channel (no texture). */
+SOKOL_GP_API_DECL void sgp_reset_image(int channel);                        /* Resets current bound image in a texture channel to default (white texture). */
+SOKOL_GP_API_DECL void sgp_set_sampler(int channel, sg_sampler sampler);    /* Sets current bound sampler in a texture channel. */
+SOKOL_GP_API_DECL void sgp_reset_sampler(int channel);                      /* Resets current bound sampler in a texture channel to default (nearest sampler). */
 
 /* State change functions for all pipelines. */
 SOKOL_GP_API_DECL void sgp_viewport(int x, int y, int w, int h);            /* Sets the screen area to draw into. */
@@ -631,7 +648,7 @@ typedef struct _sgp_region {
 
 typedef struct _sgp_draw_args {
     sg_pipeline pip;
-    sgp_images_uniform images;
+    sgp_textures_uniform textures;
     _sgp_region region;
     uint32_t uniform_index;
     uint32_t vertex_index;
@@ -1616,7 +1633,7 @@ void sgp_setup(const sgp_desc* desc) {
     _sgp.nearest_smp = sg_make_sampler(&nearest_smp_desc);
     if(sg_query_sampler_state(_sgp.nearest_smp) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
-        _sgp_set_error(SGP_ERROR_MAKE_COMMON_SAMPLER_FAILED);
+        _sgp_set_error(SGP_ERROR_MAKE_NEAREST_SAMPLER_FAILED);
         return;
     }
 
@@ -1709,8 +1726,8 @@ const char* sgp_get_error_message(sgp_error error_code) {
             return "SGP failed to create vertex buffer";
         case SGP_ERROR_MAKE_WHITE_IMAGE_FAILED:
             return "SGP failed to create white image";
-        case SGP_ERROR_MAKE_COMMON_SAMPLER_FAILED:
-            return "SGP failed to create common sampler";
+        case SGP_ERROR_MAKE_NEAREST_SAMPLER_FAILED:
+            return "SGP failed to create nearest sampler";
         case SGP_ERROR_MAKE_COMMON_SHADER_FAILED:
             return "SGP failed to create the common shader";
         case SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED:
@@ -1775,11 +1792,13 @@ void sgp_begin(int width, int height) {
     _sgp.state._base_uniform = _sgp.cur_uniform;
     _sgp.state._base_command = _sgp.cur_command;
 
-    _sgp.state.images.count = 1;
-    _sgp.state.images.images[0] = _sgp.white_img;
+    _sgp.state.textures.count = 1;
+    _sgp.state.textures.images[0] = _sgp.white_img;
+    _sgp.state.textures.samplers[0] = _sgp.nearest_smp;
     sg_image img = {SG_INVALID_ID};
     for(int i=1;i<SGP_TEXTURE_SLOTS;++i) {
-        _sgp.state.images.images[i] = img;
+        _sgp.state.textures.images[i] = img;
+        _sgp.state.textures.samplers[i] = _sgp.nearest_smp;
     }
 }
 
@@ -1862,16 +1881,18 @@ void sgp_flush(void) {
                 }
                 // bindings
                 for(uint32_t j=0;j<SGP_TEXTURE_SLOTS;++j) {
-                    uint32_t img_id = j < args->images.count ? args->images.images[j].id : (uint32_t)SG_INVALID_ID;
+                    uint32_t img_id = SG_INVALID_ID;
+                    uint32_t smp_id = SG_INVALID_ID;
+                    if (j < args->textures.count) {
+                        img_id = args->textures.images[j].id;
+                        if (img_id != SG_INVALID_ID)
+                            smp_id = args->textures.samplers[j].id;
+                    }
                     if(cur_imgs_id[j] != img_id) {
                         // when an image binding change we need to re-apply bindings
                         cur_imgs_id[j] = img_id;
                         bind.fs.images[j].id = img_id;
-                        if (img_id != SG_INVALID_ID) {
-                            bind.fs.samplers[j] = _sgp.nearest_smp;
-                        } else {
-                            bind.fs.samplers[j].id = SG_INVALID_ID;
-                        }
+                        bind.fs.samplers[j].id = smp_id;
                         apply_bindings = true;
                     }
                 }
@@ -2110,20 +2131,20 @@ void sgp_set_image(int channel, sg_image image) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
-    if(_sgp.state.images.images[channel].id == image.id)
+    if(_sgp.state.textures.images[channel].id == image.id)
         return;
 
-    _sgp.state.images.images[channel] = image;
+    _sgp.state.textures.images[channel] = image;
 
-    // recalculate images count
-    int images_count = (int)_sgp.state.images.count;
-    for(int i=_sg_max(channel, images_count-1);i>=0;--i) {
-        if(_sgp.state.images.images[i].id != SG_INVALID_ID) {
-            images_count = i + 1;
+    // recalculate textures count
+    int textures_count = (int)_sgp.state.textures.count;
+    for(int i=_sg_max(channel, textures_count-1);i>=0;--i) {
+        if(_sgp.state.textures.images[i].id != SG_INVALID_ID) {
+            textures_count = i + 1;
             break;
         }
     }
-    _sgp.state.images.count = (uint32_t)images_count;
+    _sgp.state.textures.count = (uint32_t)textures_count;
 }
 
 void sgp_unset_image(int channel) {
@@ -2141,6 +2162,18 @@ void sgp_reset_image(int channel) {
         sg_image img = {SG_INVALID_ID};
         sgp_set_image(channel, img);
     }
+}
+
+void sgp_set_sampler(int channel, sg_sampler sampler) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
+    SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
+    _sgp.state.textures.samplers[channel] = sampler;
+}
+
+void sgp_reset_sampler(int channel) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    sgp_set_sampler(channel, _sgp.nearest_smp);
 }
 
 static _sgp_vertex* _sgp_next_vertices(uint32_t count) {
@@ -2286,7 +2319,7 @@ static inline bool _sgp_region_overlaps(_sgp_region a, _sgp_region b) {
     return !(a.x2 <= b.x1 || b.x2 <= a.x1  || a.y2 <= b.y1 || b.y2 <= a.y1);
 }
 
-static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_images_uniform images, sgp_uniform uniform, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
+static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textures, sgp_uniform uniform, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
 #if SGP_BATCH_OPTIMIZER_DEPTH > 0
     _sgp_command* prev_cmd = NULL;
     _sgp_command* inter_cmds[SGP_BATCH_OPTIMIZER_DEPTH];
@@ -2312,7 +2345,7 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_images_uniform images,
 
         // can only batch commands with the same bindings and uniforms
         if(cmd->args.draw.pip.id == pip.id &&
-            memcmp(&images, &cmd->args.draw.images, sizeof(sgp_images_uniform)) == 0 &&
+            memcmp(&textures, &cmd->args.draw.textures, sizeof(sgp_textures_uniform)) == 0 &&
             memcmp(&uniform, &_sgp.uniforms[cmd->args.draw.uniform_index], sizeof(sgp_uniform)) == 0) {
             prev_cmd = cmd;
             break;
@@ -2394,7 +2427,7 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_images_uniform images,
         // configure the draw command
         cmd->cmd = SGP_COMMAND_DRAW;
         cmd->args.draw.pip = pip;
-        cmd->args.draw.images = images;
+        cmd->args.draw.textures = textures;
         cmd->args.draw.region = prev_region;
         cmd->args.draw.uniform_index = prev_cmd->args.draw.uniform_index;
         cmd->args.draw.vertex_index = vertex_index;
@@ -2406,7 +2439,7 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_images_uniform images,
     return true;
 #else
     _SOKOL_UNUSED(pip);
-    _SOKOL_UNUSED(images);
+    _SOKOL_UNUSED(textures);
     _SOKOL_UNUSED(uniform);
     _SOKOL_UNUSED(region);
     _SOKOL_UNUSED(vertex_index);
@@ -2433,7 +2466,7 @@ static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex
     }
 
     // try to merge on previous command to draw in a batch
-    if(_sgp_merge_batch_command(pip, _sgp.state.images, _sgp.state.uniform, region, vertex_index, num_vertices))
+    if(_sgp_merge_batch_command(pip, _sgp.state.textures, _sgp.state.uniform, region, vertex_index, num_vertices))
         return;
 
     // setup uniform, try to reuse previous uniform when possible
@@ -2458,7 +2491,7 @@ static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex
     }
     cmd->cmd = SGP_COMMAND_DRAW;
     cmd->args.draw.pip = pip;
-    cmd->args.draw.images = _sgp.state.images;
+    cmd->args.draw.textures = _sgp.state.textures;
     cmd->args.draw.region = region;
     cmd->args.draw.uniform_index = uniform_index;
     cmd->args.draw.vertex_index = vertex_index;
@@ -2664,7 +2697,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
-    sg_image image = _sgp.state.images.images[channel];
+    sg_image image = _sgp.state.textures.images[channel];
     if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
 
     // setup vertices
