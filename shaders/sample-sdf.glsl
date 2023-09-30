@@ -18,7 +18,8 @@ void main() {
 @end
 
 @fs fs
-uniform sampler2D iChannel0;
+uniform texture2D iTexChannel0;
+uniform sampler iSmpChannel0;
 uniform uniforms {
     vec2 iResolution;
     float iTime;

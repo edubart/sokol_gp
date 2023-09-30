@@ -12,8 +12,10 @@ void main() {
 @end
 
 @fs fs
-layout(binding=0) uniform sampler2D iChannel0;
-layout(binding=1) uniform sampler2D iChannel1;
+uniform texture2D iTexChannel0;
+uniform texture2D iTexChannel1;
+uniform sampler iSmpChannel0;
+uniform sampler iSmpChannel1;
 uniform uniforms {
     vec2 iVelocity;
     float iPressure;
@@ -26,10 +28,10 @@ uniform uniforms {
 in vec2 texUV;
 out vec4 fragColor;
 float noise(vec2 p) {
-    return texture(iChannel1, p).r;
+    return texture(sampler2D(iTexChannel1, iSmpChannel1), p).r;
 }
 void main() {
-    vec3 tex_col = texture(iChannel0, texUV).rgb;
+    vec3 tex_col = texture(sampler2D(iTexChannel0, iSmpChannel0), texUV).rgb;
     vec2 fog_uv = (texUV * vec2(iRatio, 1.0)) * iZoom;
     float f = noise(fog_uv - iVelocity*iTime);
     f = noise(fog_uv + f*iWarpiness);

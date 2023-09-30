@@ -11,14 +11,15 @@ void main() {
 @end
 
 @fs fs
-uniform sampler2D iChannel0;
+uniform texture2D iTexChannel0;
+uniform sampler iSmpChannel0;
 uniform fs_params {
     vec4 iColor;
 };
 in vec2 texUV;
 out vec4 fragColor;
 void main() {
-    fragColor = texture(iChannel0, texUV) * iColor;
+    fragColor = texture(sampler2D(iTexChannel0, iSmpChannel0), texUV) * iColor;
 }
 @end
 

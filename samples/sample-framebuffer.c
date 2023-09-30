@@ -7,6 +7,7 @@ This sample showcases how to use Sokol GP to draw inside frame buffers (render t
 #include "sokol_gp.h"
 #include "sokol_app.h"
 #include "sokol_glue.h"
+#include "sokol_log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,11 +46,11 @@ static void draw_fbo(void) {
 
     sg_pass_action pass_action;
     memset(&pass_action, 0, sizeof(sg_pass_action));
-    pass_action.colors[0].action = SG_ACTION_CLEAR;
-    pass_action.colors[0].value.r = 1.0f;
-    pass_action.colors[0].value.g = 1.0f;
-    pass_action.colors[0].value.b = 1.0f;
-    pass_action.colors[0].value.a = 0.2f;
+    pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    pass_action.colors[0].clear_value.r = 1.0f;
+    pass_action.colors[0].clear_value.g = 1.0f;
+    pass_action.colors[0].clear_value.b = 1.0f;
+    pass_action.colors[0].clear_value.a = 0.2f;
     sg_begin_pass(fb_pass, &pass_action);
     sgp_flush();
     sgp_end();
@@ -91,7 +92,10 @@ static void frame(void) {
 
 static void init(void) {
     // initialize Sokol GFX
-    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sg_desc sgdesc = {
+        .context = sapp_sgcontext(),
+        .logger.func = slog_func
+    };
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -112,10 +116,11 @@ static void init(void) {
     fb_image_desc.render_target = true;
     fb_image_desc.width = 128;
     fb_image_desc.height = 128;
-    fb_image_desc.min_filter = SG_FILTER_LINEAR;
-    fb_image_desc.mag_filter = SG_FILTER_LINEAR;
-    fb_image_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
-    fb_image_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    // TODO: set sampler
+    // fb_image_desc.min_filter = SG_FILTER_LINEAR;
+    // fb_image_desc.mag_filter = SG_FILTER_LINEAR;
+    // fb_image_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    // fb_image_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
     fb_image = sg_make_image(&fb_image_desc);
     if(sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer image\n");
@@ -163,6 +168,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .window_title = "Frame buffer (Sokol GP)",
-        .sample_count = 4,
+        .sample_count = 1,
+        .logger.func = slog_func,
     };
 }

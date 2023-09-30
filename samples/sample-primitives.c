@@ -7,6 +7,7 @@ This examples shows all primitives shapes and transformation functions.
 #include "sokol_gp.h"
 #include "sokol_app.h"
 #include "sokol_glue.h"
+#include "sokol_log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -159,7 +160,10 @@ static void frame(void) {
 
 static void init(void) {
     // initialize Sokol GFX
-    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sg_desc sgdesc = {
+        .context = sapp_sgcontext(),
+        .logger.func = slog_func
+    };
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -189,5 +193,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .cleanup_cb = cleanup,
         .window_title = "Primitives (Sokol GP)",
         .sample_count = 4,
+        .logger.func = slog_func,
     };
 }

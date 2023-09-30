@@ -15,6 +15,7 @@ there is a 2.2x in FPS gains.
 #include "sokol_app.h"
 #include "sokol_glue.h"
 #include "sokol_time.h"
+#include "sokol_log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -212,8 +213,6 @@ static sg_image create_image(int width, int height) {
     memset(&image_desc, 0, sizeof(sg_image_desc));
     image_desc.width = width;
     image_desc.height = height;
-    image_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
-    image_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
     image_desc.data.subimage[0][0].ptr = data;
     image_desc.data.subimage[0][0].size = num_pixels;
     sg_image image = sg_make_image(&image_desc);
@@ -226,7 +225,10 @@ static void init(void) {
     stm_setup();
 
     // initialize Sokol GFX
-    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sg_desc sgdesc = {
+        .context = sapp_sgcontext(),
+        .logger.func = slog_func
+    };
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -244,7 +246,7 @@ static void init(void) {
         exit(-1);
     }
 
-#ifdef _SAPP_LINUX
+#if defined(_SAPP_LINUX) && defined(SOKOL_GLCORE33)
     /* Disable swap interval */
     _sapp_glx_swapinterval(0);
 #endif
@@ -271,5 +273,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .window_title = "Bench (Sokol GP)",
         .width = 1280,
         .height = 1280,
+        .logger.func = slog_func,
     };
 }

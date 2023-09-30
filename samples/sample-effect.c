@@ -8,6 +8,7 @@ This sample showcases how to create 2D shader effects using multiple textures.
 #include "sokol_gp.h"
 #include "sokol_app.h"
 #include "sokol_glue.h"
+#include "sokol_log.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
@@ -43,13 +44,13 @@ static void frame(void) {
     uniforms.iLevel = 1.0f;
     sgp_set_pipeline(pip);
     sgp_set_uniform(&uniforms, sizeof(effect_uniforms_t));
-    sgp_set_image(SLOT_effect_iChannel0, image);
-    sgp_set_image(SLOT_effect_iChannel1, perlin_image);
+    sgp_set_image(SLOT_effect_iTexChannel0, image);
+    sgp_set_image(SLOT_effect_iTexChannel1, perlin_image);
     float width = (window_ratio >= image_ratio) ? window_width : image_ratio*window_height;
     float height = (window_ratio >= image_ratio) ? window_width/image_ratio : window_height;
     sgp_draw_textured_rect(0, 0, width, height);
-    sgp_reset_image(SLOT_effect_iChannel0);
-    sgp_reset_image(SLOT_effect_iChannel1);
+    sgp_reset_image(SLOT_effect_iTexChannel0);
+    sgp_reset_image(SLOT_effect_iTexChannel1);
     sgp_reset_pipeline();
 
     // dispatch draw commands
@@ -71,10 +72,11 @@ static sg_image load_image(const char *filename) {
     memset(&image_desc, 0, sizeof(sg_image_desc));
     image_desc.width = width;
     image_desc.height = height;
-    image_desc.min_filter = SG_FILTER_LINEAR;
-    image_desc.mag_filter = SG_FILTER_LINEAR;
-    image_desc.wrap_u = SG_WRAP_REPEAT;
-    image_desc.wrap_v = SG_WRAP_REPEAT;
+    // TODO: set sampler
+    // image_desc.min_filter = SG_FILTER_LINEAR;
+    // image_desc.mag_filter = SG_FILTER_LINEAR;
+    // image_desc.wrap_u = SG_WRAP_REPEAT;
+    // image_desc.wrap_v = SG_WRAP_REPEAT;
     image_desc.data.subimage[0][0].ptr = data;
     image_desc.data.subimage[0][0].size = (size_t)(width * height * 4);
     img = sg_make_image(&image_desc);
@@ -84,7 +86,10 @@ static sg_image load_image(const char *filename) {
 
 static void init(void) {
     // initialize Sokol GFX
-    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sg_desc sgdesc = {
+        .context = sapp_sgcontext(),
+        .logger.func = slog_func
+    };
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -134,5 +139,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .window_title = "SDF (Sokol GP)",
+        .logger.func = slog_func,
     };
 }

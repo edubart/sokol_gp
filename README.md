@@ -442,6 +442,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
+* **30-Sep-2023**: Update to latest Sokol, deprecating GLES2 backend and use image samplers.
 * **31-Dec-2021**: The library was open sourced.
 * **05-Aug-2020**: Added support for custom shaders.
 * **03-Jun-2020**: Added the batch optimizer.

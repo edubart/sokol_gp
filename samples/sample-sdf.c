@@ -8,6 +8,7 @@ in this case the shader is a SDF (signed distance field) animation.
 #include "sokol_gp.h"
 #include "sokol_app.h"
 #include "sokol_glue.h"
+#include "sokol_log.h"
 
 #define SOKOL_SHDC_IMPL
 #include "sample-sdf.glsl.h"
@@ -46,7 +47,10 @@ static void frame(void) {
 
 static void init(void) {
     // initialize Sokol GFX
-    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sg_desc sgdesc = {
+        .context = sapp_sgcontext(),
+        .logger.func = slog_func
+    };
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -86,5 +90,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .window_title = "SDF (Sokol GP)",
+        .logger.func = slog_func,
     };
 }

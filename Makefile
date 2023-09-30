@@ -6,18 +6,10 @@ INCS=-I. -Ithirdparty -Ishaders
 OUTDIR=build
 OUTEXT=
 SHDC=sokol-shdc
-SHDCFLAGS=--format sokol_impl --slang glsl330:glsl100:glsl300es:hlsl4:metal_macos:wgpu
-SAMPLES=\
-	sample-rectangle\
-	sample-primitives\
-	sample-blend\
-	sample-framebuffer\
-	sample-bench\
-	sample-sdf\
-	sample-effect
+SHDCFLAGS=--format sokol_impl --slang glsl330:glsl300es:hlsl4:metal_macos:metal_ios:wgsl
 SHADERS=\
-	shaders/sample-effect.glsl.h\
-	shaders/sample-sdf.glsl.h\
+	shaders/sample-effect.glsl.h \
+	shaders/sample-sdf.glsl.h \
 	shaders/sokol_gp.glsl.h
 
 # platform
@@ -32,6 +24,9 @@ else ifeq ($(platform), linux)
 	DEFS+=-D_GNU_SOURCE
 	CFLAGS+=-pthread
 	LIBS+=-lX11 -lXi -lXcursor -lGL -ldl -lm
+	ifeq ($(backend), gles3)
+		LIBS+=-lEGL
+	endif
 else ifeq ($(platform), macos)
         LIBS+=-framework Cocoa -framework QuartzCore -framework Metal -framework MetalKit
         CFLAGS+=-ObjC -x objective-c
@@ -60,6 +55,10 @@ else ifeq ($(build), release)
 	DEFS+=-DNDEBUG
 endif
 
+ifeq ($(build), debug)
+	DEFS+=-DSOKOL_DEBUG
+endif
+
 # backend
 ifndef backend
 	ifeq ($(platform), windows)
@@ -74,8 +73,6 @@ ifndef backend
 endif
 ifeq ($(backend), glcore33)
 	DEFS+=-DSOKOL_GLCORE33
-else ifeq ($(backend), gles2)
-	DEFS+=-DSOKOL_GLES2
 else ifeq ($(backend), gles3)
 	DEFS+=-DSOKOL_GLES3
 else ifeq ($(backend), d3d11)
@@ -86,8 +83,14 @@ else ifeq ($(backend), dummy)
 	DEFS+=-DSOKOL_DUMMY_BACKEND
 endif
 
-.PHONY: all clean shaders
-
+SAMPLES=\
+	build/sample-rectangle$(OUTEXT) \
+	build/sample-primitives$(OUTEXT) \
+	build/sample-blend$(OUTEXT) \
+	build/sample-framebuffer$(OUTEXT) \
+	build/sample-bench$(OUTEXT) \
+	build/sample-sdf$(OUTEXT) \
+	build/sample-effect$(OUTEXT)
 
 all: $(SAMPLES)
 
@@ -96,9 +99,25 @@ shaders: $(SHADERS)
 clean:
 	rm -rf $(OUTDIR)
 
-$(SAMPLES): %:
+clean-shaders:
+	rm -f $(SHADERS)
+
+$(OUTDIR)/%$(OUTEXT): samples/%.c shaders/*.h thirdparty/*.h sokol_gp.h
 	@mkdir -p $(OUTDIR)
-	$(CC) -o $(OUTDIR)/$@$(OUTEXT) samples/$@.c $(INCS) $(DEFS) $(CFLAGS) $(LIBS)
+	$(CC) -o $@ $< $(INCS) $(DEFS) $(CFLAGS) $(LIBS)
 
 shaders/%.glsl.h: shaders/%.glsl
 	$(SHDC) $(SHDCFLAGS) -i $^ -o $@
+
+lint:
+	clang-tidy sokol_gp.h -- $(INCS) $(DEFS) $(CFLAGS) -DSOKOL_IMPL -include sokol_gfx.h
+
+update-thirdparty:
+	wget -O thirdparty/sokol_app.h https://raw.githubusercontent.com/floooh/sokol/master/sokol_app.h
+	wget -O thirdparty/sokol_gfx.h https://raw.githubusercontent.com/floooh/sokol/master/sokol_gfx.h
+	wget -O thirdparty/sokol_glue.h https://raw.githubusercontent.com/floooh/sokol/master/sokol_glue.h
+	wget -O thirdparty/sokol_time.h https://raw.githubusercontent.com/floooh/sokol/master/sokol_time.h
+	wget -O thirdparty/sokol_log.h https://raw.githubusercontent.com/floooh/sokol/master/sokol_log.h
+	wget -O thirdparty/stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+
+.PHONY: all shaders clean clean-shaders lint update-thirdparty
