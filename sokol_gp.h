@@ -519,6 +519,7 @@ typedef struct sgp_state {
 typedef struct sgp_desc {
     uint32_t max_vertices;
     uint32_t max_commands;
+    sg_pixel_format pixel_format; /* Pixel format for creating pipelines, defaults to the same as the Sokol GFX context. */
 } sgp_desc;
 
 /* Structure that defines SGP custom pipeline creation parameters. */
@@ -526,6 +527,7 @@ typedef struct sgp_pipeline_desc {
     sg_shader_desc shader;              /* Sokol shader description. */
     sg_primitive_type primitive_type;   /* Draw primitive type (triangles, lines, points, etc). Default is triangles. */
     sgp_blend_mode blend_mode;          /* Color blend mode. Default is no blend. */
+    sg_pixel_format pixel_format;       /* Pixel format, defaults to the value used when creating Sokol GP context. */
 } sgp_pipeline_desc;
 
 /* Initialization and de-initialization. */
@@ -1442,7 +1444,7 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
     return blend;
 }
 
-static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blend_mode blend_mode, sg_shader shader) {
+static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blend_mode blend_mode, sg_pixel_format pixel_format, sg_shader shader) {
     sg_blend_state blend = _sgp_blend_state(blend_mode);
 
     if(primitive_type == _SG_PRIMITIVETYPE_DEFAULT)
@@ -1454,7 +1456,7 @@ static sg_pipeline _sgp_make_pipeline(sg_primitive_type primitive_type, sgp_blen
     pip_desc.shader = shader;
     pip_desc.layout.buffers[0].stride = sizeof(_sgp_vertex);
     pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT4;
-    pip_desc.colors[0].pixel_format = _sg.desc.context.color_format;
+    pip_desc.colors[0].pixel_format = pixel_format;
     pip_desc.colors[0].blend = blend;
     pip_desc.primitive_type = primitive_type;
 
@@ -1471,7 +1473,7 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type primitive_type, sgp_bl
     if(_sgp.pipelines[pip_index].id != SG_INVALID_ID)
         return _sgp.pipelines[pip_index];
 
-    sg_pipeline pip = _sgp_make_pipeline(primitive_type, blend_mode, _sgp.shader);
+    sg_pipeline pip = _sgp_make_pipeline(primitive_type, blend_mode, _sgp.desc.pixel_format, _sgp.shader);
     if(pip.id != SG_INVALID_ID)
         _sgp.pipelines[pip_index] = pip;
     return pip;
@@ -1576,6 +1578,7 @@ void sgp_setup(const sgp_desc* desc) {
     _sgp.desc = *desc;
     _sgp.desc.max_vertices = _sg_def(desc->max_vertices, _SGP_DEFAULT_MAX_VERTICES);
     _sgp.desc.max_commands = _sg_def(desc->max_commands, _SGP_DEFAULT_MAX_COMMANDS);
+    _sgp.desc.pixel_format = _sg_def(desc->pixel_format, _sg.desc.context.color_format);
 
     // allocate buffers
     _sgp.num_vertices = _sgp.desc.max_vertices;
@@ -1740,8 +1743,9 @@ const char* sgp_get_error_message(sgp_error error_code) {
 sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
     sg_pipeline pip = {SG_INVALID_ID};
     sg_shader shader = sg_make_shader(&desc->shader);
+    sg_pixel_format pixel_format = _sg_def(desc->pixel_format, _sgp.desc.pixel_format);
     if(sg_query_shader_state(shader) == SG_RESOURCESTATE_VALID)
-        pip = _sgp_make_pipeline(desc->primitive_type, desc->blend_mode, shader);
+        pip = _sgp_make_pipeline(desc->primitive_type, desc->blend_mode, pixel_format, shader);
     else if(shader.id != SG_INVALID_ID)
         sg_destroy_shader(shader);
     return pip;
