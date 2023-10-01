@@ -1503,7 +1503,7 @@ static sg_shader _sgp_make_common_shader(void) {
     desc.fs.uniform_blocks[0].uniforms[0].array_count = 1;
 
     // D3D11 only
-    desc.attrs[0].sem_name = "POSITION";
+    desc.attrs[0].sem_name = "TEXCOORD";
     desc.attrs[0].sem_index = 0;
     desc.vs.d3d11_target = "vs_4_0";
     desc.fs.d3d11_target = "ps_4_0";
