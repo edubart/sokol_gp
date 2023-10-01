@@ -138,6 +138,7 @@ The following is a quick example on how to this library with Sokol GFX and Sokol
 #include "sokol_gp.h"
 #include "sokol_app.h"
 #include "sokol_glue.h"
+#include "sokol_log.h"
 
 #include <stdio.h> // for fprintf()
 #include <stdlib.h> // for exit()
@@ -183,7 +184,10 @@ static void frame(void) {
 // Called when the application is initializing.
 static void init(void) {
     // Initialize Sokol GFX.
-    sg_desc sgdesc = {.context = sapp_sgcontext()};
+    sg_desc sgdesc = {
+        .context = sapp_sgcontext(),
+        .logger.func = slog_func
+    };
     sg_setup(&sgdesc);
     if(!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
@@ -214,8 +218,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .init_cb = init,
         .frame_cb = frame,
         .cleanup_cb = cleanup,
-        .window_title = "Triangle (Sokol GP)",
-        .sample_count = 4, // Enable anti aliasing.
+        .window_title = "Rectangle (Sokol GP)",
+        .logger.func = slog_func,
     };
 }
 ```

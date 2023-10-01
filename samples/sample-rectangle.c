@@ -86,7 +86,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .init_cb = init,
         .frame_cb = frame,
         .cleanup_cb = cleanup,
-        .window_title = "Triangle (Sokol GP)",
+        .window_title = "Rectangle (Sokol GP)",
         .logger.func = slog_func,
     };
 }
