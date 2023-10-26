@@ -1494,7 +1494,7 @@ static sg_shader _sgp_make_common_shader(void) {
     desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
     desc.fs.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
     desc.fs.samplers[0].used = true;
-    desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_SAMPLE;
+    desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
     desc.fs.image_sampler_pairs[0].used = true;
     desc.fs.image_sampler_pairs[0].image_slot = 0;
     desc.fs.image_sampler_pairs[0].sampler_slot = 0;
