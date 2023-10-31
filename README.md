@@ -461,6 +461,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
+* **31-Oct-2023**: Update to latest Sokol, introduced new WebGPU backend.
 * **30-Sep-2023**: Update to latest Sokol, deprecated GLES2 backend, add image sampler APIs, changes in draw textured APIs.
 * **31-Dec-2021**: The library was open sourced.
 * **05-Aug-2020**: Added support for custom shaders.
