@@ -292,7 +292,7 @@ All of them have batched variations.
 
 ## Drawing textured primitives
 
-To draw textured rectangles you can use `sgp_set_image(0, img)` and then sgp_draw_filled_rect()`,
+To draw textured rectangles you can use `sgp_set_image(0, img)` and then `sgp_draw_filled_rect()`,
 this will draw an entire texture into a rectangle.
 You should later reset the image with `sgp_reset_image(0)` to restore the bound image to default white image,
 otherwise you will have glitches when drawing a solid color.
