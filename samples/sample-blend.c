@@ -68,10 +68,13 @@ static void draw_checkboard(int width, int height) {
     sgp_set_color(0.2f, 0.2f, 0.2f, 1.0f);
     sgp_clear();
     sgp_set_color(0.4f, 0.4f, 0.4f, 1.0f);
-    for(int y=0;y<height/32+1;y++)
-        for(int x=0;x<width/32+1;x++)
-            if((x+y) % 2 == 0)
+    for (int y=0;y<height/32+1;y++) {
+        for (int x=0;x<width/32+1;x++) {
+            if ((x+y) % 2 == 0) {
                 sgp_draw_filled_rect(x*32,y*32,32,32);
+            }
+        }
+    }
     sgp_reset_color();
 
 }
@@ -100,7 +103,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -108,7 +111,7 @@ static void init(void) {
     // initialize Sokol GP
     sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }

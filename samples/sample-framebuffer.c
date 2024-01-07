@@ -28,10 +28,10 @@ static void draw_triangles(void) {
     float w = height*0.3f;
     unsigned int count = 0;
     float step = (2.0f*PI)/6.0f;
-    for(float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
+    for (float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
         sgp_vec2 v = {hw*1.33f + w*cosf(theta), hh*1.33f - w*sinf(theta)};
         points_buffer[count++] = v;
-        if(count % 3 == 1) {
+        if (count % 3 == 1) {
             sgp_vec2 u = {hw, hh};
             points_buffer[count++] = u;
         }
@@ -72,8 +72,8 @@ static void frame(void) {
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     draw_fbo();
     int i = 0;
-    for(int y=0;y<height;y+=192) {
-        for(int x=0;x<width;x+=192) {
+    for (int y=0;y<height;y+=192) {
+        for (int x=0;x<width;x+=192) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
             sgp_set_image(0, fb_image);
@@ -108,7 +108,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -116,7 +116,7 @@ static void init(void) {
     // initialize Sokol GP
     sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }
@@ -128,7 +128,7 @@ static void init(void) {
     fb_image_desc.width = 128;
     fb_image_desc.height = 128;
     fb_image = sg_make_image(&fb_image_desc);
-    if(sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer image\n");
         exit(-1);
     }
@@ -141,7 +141,7 @@ static void init(void) {
     fb_depth_image_desc.height = 128;
     fb_depth_image_desc.pixel_format = sapp_depth_format();
     fb_depth_image = sg_make_image(&fb_depth_image_desc);
-    if(sg_query_image_state(fb_depth_image) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_image_state(fb_depth_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer depth image\n");
         exit(-1);
     }
@@ -154,7 +154,7 @@ static void init(void) {
         .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
     };
     linear_sampler = sg_make_sampler(&linear_sampler_desc);
-    if(sg_query_sampler_state(linear_sampler) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_sampler_state(linear_sampler) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to create linear sampler");
         exit(-1);
     }
@@ -165,7 +165,7 @@ static void init(void) {
     pass_desc.color_attachments[0].image = fb_image;
     pass_desc.depth_stencil_attachment.image = fb_depth_image;
     fb_pass = sg_make_pass(&pass_desc);
-    if(sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer pass\n");
         exit(-1);
     }

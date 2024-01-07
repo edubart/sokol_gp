@@ -52,7 +52,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -60,7 +60,7 @@ static void init(void) {
     // initialize Sokol GP
     sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }
@@ -70,7 +70,7 @@ static void init(void) {
     memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
     pip_desc.shader = *sdf_program_shader_desc(sg_query_backend());
     pip = sgp_make_pipeline(&pip_desc);
-    if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to make custom pipeline\n");
         exit(-1);
     }

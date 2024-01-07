@@ -189,7 +189,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -197,7 +197,7 @@ static void init(void) {
     // Initialize Sokol GP, adjust the size of command buffers for your own use.
     sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }

@@ -71,8 +71,9 @@ static sg_image load_image(const char *filename) {
     int width, height, channels;
     uint8_t* data = stbi_load(filename, &width, &height, &channels, 4);
     sg_image img = {SG_INVALID_ID};
-    if(!data)
+    if (!data) {
         return img;
+    }
     sg_image_desc image_desc;
     memset(&image_desc, 0, sizeof(sg_image_desc));
     image_desc.width = width;
@@ -91,7 +92,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -99,7 +100,7 @@ static void init(void) {
     // initialize Sokol GP
     sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }
@@ -107,7 +108,7 @@ static void init(void) {
     // load image
     image = load_image("images/lpc_winter_preview.png");
     perlin_image = load_image("images/perlin.png");
-    if(sg_query_image_state(image) != SG_RESOURCESTATE_VALID || sg_query_image_state(perlin_image) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_image_state(image) != SG_RESOURCESTATE_VALID || sg_query_image_state(perlin_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to load images");
         exit(-1);
     }
@@ -120,7 +121,7 @@ static void init(void) {
         .wrap_v = SG_WRAP_REPEAT,
     };
     linear_sampler = sg_make_sampler(&linear_sampler_desc);
-    if(sg_query_sampler_state(linear_sampler) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_sampler_state(linear_sampler) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to create linear sampler");
         exit(-1);
     }
@@ -130,7 +131,7 @@ static void init(void) {
     memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
     pip_desc.shader = *effect_program_shader_desc(sg_query_backend());
     pip = sgp_make_pipeline(&pip_desc);
-    if(sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to make custom pipeline\n");
         exit(-1);
     }

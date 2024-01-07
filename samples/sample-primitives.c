@@ -53,8 +53,8 @@ static void draw_points(void) {
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
     unsigned int count = 0;
-    for(int y=64;y<height-64 && count < 4096;y+=8) {
-        for(int x=64;x<width-64 && count < 4096;x+=8) {
+    for (int y=64;y<height-64 && count < 4096;y+=8) {
+        for (int x=64;x<width-64 && count < 4096;x+=8) {
             sgp_vec2 v = {(float)x,(float)y};
             points_buffer[count++] = v;
         }
@@ -68,7 +68,7 @@ static void draw_lines(void) {
     sgp_irect viewport = sgp_query_state()->viewport;
     sgp_vec2 c = {viewport.w / 2.0f, viewport.h / 2.0f};
     points_buffer[count++] = c;
-    for(float theta = 0.0f; theta <= PI*8.0f; theta+=PI/16.0f) {
+    for (float theta = 0.0f; theta <= PI*8.0f; theta+=PI/16.0f) {
         float r = 10.0f*theta;
         sgp_vec2 v = {c.x + r*cosf(theta), c.y + r*sinf(theta)};
         points_buffer[count++] = v;
@@ -92,10 +92,10 @@ static void draw_triangles(void) {
     sgp_translate(w*3.0f, 0.0f);
     unsigned int count = 0;
     float step = (2.0f*PI)/6.0f;
-    for(float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
+    for (float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
         sgp_vec2 v = {hw + w*cosf(theta), hh - w*sinf(theta)};
         points_buffer[count++] = v;
-        if(count % 3 == 1) {
+        if (count % 3 == 1) {
             sgp_vec2 u = {hw, hh};
             points_buffer[count++] = u;
         }
@@ -165,7 +165,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -173,7 +173,7 @@ static void init(void) {
     // initialize Sokol GP
     sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }

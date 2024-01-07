@@ -30,8 +30,8 @@ static const int rect_count = 4;
 static void bench_repeated_textured(void) {
     sgp_reset_color();
     sgp_set_image(0, image1);
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
+    for (int y=0;y<count;++y) {
+        for (int x=0;x<count;++x) {
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
@@ -40,8 +40,8 @@ static void bench_repeated_textured(void) {
 
 static void bench_multiple_textured(void) {
     sgp_reset_color();
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
+    for (int y=0;y<count;++y) {
+        for (int x=0;x<count;++x) {
             sgp_set_image(0, x % 2 == 0 ? image1 : image2);
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
@@ -52,14 +52,15 @@ static void bench_multiple_textured(void) {
 static void bench_colored_textured(void) {
     sgp_reset_color();
     sgp_set_image(0, image1);
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
-            if(x % 3 == 0)
-                sgp_set_color(255, 0, 0, 255);
-            else if(x % 3 == 1)
-                sgp_set_color(0, 255, 0, 255);
-            else
-                sgp_set_color(0, 0, 255, 255);
+    for (int y=0;y<count;++y) {
+        for (int x=0;x<count;++x) {
+            if (x % 3 == 0) {
+                sgp_set_color(1.0f, 0, 0, 1.0f);
+            } else if (x % 3 == 1) {
+                sgp_set_color(0, 1.0f, 0, 1.0f);
+            } else {
+                sgp_set_color(0, 0, 1.0f, 1.0f);
+            }
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
@@ -68,8 +69,8 @@ static void bench_colored_textured(void) {
 
 static void bench_repeated_filled(void) {
     sgp_reset_color();
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
+    for (int y=0;y<count;++y) {
+        for (int x=0;x<count;++x) {
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
@@ -77,30 +78,32 @@ static void bench_repeated_filled(void) {
 
 static void bench_colored_filled(void) {
     sgp_reset_color();
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
-            if(x % 3 == 0)
-                sgp_set_color(255, 0, 0, 255);
-            else if(x % 3 == 1)
-                sgp_set_color(0, 255, 0, 255);
-            else
-                sgp_set_color(0, 0, 255, 255);
+    for (int y=0;y<count;++y) {
+        for (int x=0;x<count;++x) {
+            if (x % 3 == 0) {
+                sgp_set_color(1.0f, 0, 0, 1.0f);
+            } else if (x % 3 == 1) {
+                sgp_set_color(0, 1.0f, 0, 1.0f);
+            } else {
+                sgp_set_color(0, 0, 1.0f, 1.0f);
+            }
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
 }
 
 static void bench_mixed(void) {
-    for(int diagonal = 0; diagonal < 2*count - 1; ++diagonal) {
+    for (int diagonal = 0; diagonal < 2*count - 1; ++diagonal) {
         int advance = _sg_max(diagonal - count + 1, 0);
-        for(int y = diagonal - advance, x = advance; y >= 0 && x < count; --y, ++x) {
-            if(x % 3 == 0)
-                sgp_set_color(255, 0, 0, 255);
-            else if(x % 3 == 1)
-                sgp_set_color(0, 255, 0, 255);
-            else
-                sgp_set_color(0, 0, 255, 255);
-            if((x+y) % 2 == 0) {
+        for (int y = diagonal - advance, x = advance; y >= 0 && x < count; --y, ++x) {
+            if (x % 3 == 0) {
+                sgp_set_color(1.0f, 0, 0, 1.0f);
+            } else if (x % 3 == 1) {
+                sgp_set_color(0, 1.0f, 0, 1.0f);
+            } else {
+                sgp_set_color(0, 0, 1.0f, 1.0f);
+            }
+            if ((x+y) % 2 == 0) {
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
             } else {
                 sgp_set_image(0, image1);
@@ -114,13 +117,13 @@ static void bench_mixed(void) {
 static void bench_sync_mixed(void) {
     sgp_set_image(0, image1);
     sgp_reset_color();
-    for(int y=0;y<count;++y) {
-        for(int x=0;x<count;++x) {
-            if((x+y) % 2 == 0) {
-                sgp_set_color(255, 0, 0, 255);
+    for (int y=0;y<count;++y) {
+        for (int x=0;x<count;++x) {
+            if ((x+y) % 2 == 0) {
+                sgp_set_color(1.0f, 0, 0, 1.0f);
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
             } else {
-                sgp_set_color(0, 255, 0, 255);
+                sgp_set_color(0, 1.0f, 0, 1.0f);
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
             }
         }
@@ -191,7 +194,7 @@ static void frame(void) {
     static uint64_t last = 0;
     uint64_t now = stm_now();
     fps++;
-    if(stm_sec(now - last) >= 1.0) {
+    if (stm_sec(now - last) >= 1.0) {
         printf("FPS: %d\n", fps);
         last = now;
         fps = 0;
@@ -202,8 +205,8 @@ static sg_image create_image(int width, int height) {
     size_t num_pixels = (size_t)(width * height * 4);
     unsigned char* data = (unsigned char*)malloc(num_pixels);
     assert(data);
-    for(int y=0;y<height;++y) {
-        for(int x=0;x<width;++x) {
+    for (int y=0;y<height;++y) {
+        for (int x=0;x<width;++x) {
             data[y*width*4+x*4+0] = (x*255) / width;
             data[y*width*4+x*4+1] = (y*255) / height;
             data[y*width*4+x*4+2] = 255 - (x*y*255)/ (width*height);
@@ -231,7 +234,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -242,7 +245,7 @@ static void init(void) {
         .max_commands = 32768
     };
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }

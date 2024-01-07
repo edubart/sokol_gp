@@ -48,9 +48,9 @@ ifeq ($(platform), web)
 		CFLAGS+=-O3 -g0 -s
 	endif
 else ifeq ($(build), debug)
-	CFLAGS+=-Og -g
+	CFLAGS+=-Og -ffast-math -g
 else ifeq ($(build), release)
-	CFLAGS+=-O3 -g -ffast-math -fno-plt -flto
+	CFLAGS+=-Ofast -fno-plt -g
 	DEFS+=-DNDEBUG
 endif
 
@@ -120,3 +120,12 @@ update-thirdparty:
 	wget -O thirdparty/stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
 
 .PHONY: all shaders clean clean-shaders lint update-thirdparty
+
+test: all
+	./build/sample-rectangle
+	./build/sample-blend
+	./build/sample-primitives
+	./build/sample-effect
+	./build/sample-framebuffer
+	./build/sample-sdf
+	./build/sample-bench

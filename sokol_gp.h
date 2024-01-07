@@ -195,7 +195,7 @@ static void init(void) {
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         fprintf(stderr, "Failed to create Sokol GFX context!\n");
         exit(-1);
     }
@@ -203,7 +203,7 @@ static void init(void) {
     // Initialize Sokol GP, adjust the size of command buffers for your own use.
     sgp_desc sgpdesc = {0};
     sgp_setup(&sgpdesc);
-    if(!sgp_is_valid()) {
+    if (!sgp_is_valid()) {
         fprintf(stderr, "Failed to create Sokol GP context: %s\n", sgp_get_error_message(sgp_get_last_error()));
         exit(-1);
     }
@@ -695,7 +695,7 @@ typedef struct _sgp_context {
     sg_buffer vertex_buf;
     sg_image white_img;
     sg_sampler nearest_smp;
-    sg_pipeline pipelines[_SG_PRIMITIVETYPE_NUM*_SGP_BLENDMODE_NUM];
+    sg_pipeline pipelines[_SG_PRIMITIVETYPE_NUM * _SGP_BLENDMODE_NUM];
 
     // command queue
     uint32_t cur_vertex;
@@ -1405,7 +1405,7 @@ static void _sgp_set_error(sgp_error error) {
 static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
     sg_blend_state blend;
     memset(&blend, 0, sizeof(sg_blend_state));
-    switch(blend_mode) {
+    switch (blend_mode) {
         case SGP_BLENDMODE_NONE:
             blend.enabled = false;
             blend.src_factor_rgb = SG_BLENDFACTOR_ONE;
@@ -1480,7 +1480,7 @@ static sg_pipeline _sgp_make_pipeline(sg_shader shader, sg_primitive_type primit
     pip_desc.primitive_type = primitive_type;
 
     sg_pipeline pip = sg_make_pipeline(&pip_desc);
-    if(pip.id != SG_INVALID_ID && sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
+    if (pip.id != SG_INVALID_ID && sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         sg_destroy_pipeline(pip);
         pip.id = SG_INVALID_ID;
     }
@@ -1489,12 +1489,14 @@ static sg_pipeline _sgp_make_pipeline(sg_shader shader, sg_primitive_type primit
 
 static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type primitive_type, sgp_blend_mode blend_mode) {
     uint32_t pip_index = (primitive_type * _SGP_BLENDMODE_NUM) + blend_mode;
-    if(_sgp.pipelines[pip_index].id != SG_INVALID_ID)
+    if (_sgp.pipelines[pip_index].id != SG_INVALID_ID) {
         return _sgp.pipelines[pip_index];
+    }
 
     sg_pipeline pip = _sgp_make_pipeline(_sgp.shader, primitive_type, blend_mode, _sgp.desc.color_format, _sgp.desc.depth_format, _sgp.desc.sample_count);
-    if(pip.id != SG_INVALID_ID)
+    if (pip.id != SG_INVALID_ID) {
         _sgp.pipelines[pip_index] = pip;
+    }
     return pip;
 }
 
@@ -1528,7 +1530,7 @@ static sg_shader _sgp_make_common_shader(void) {
     desc.fs.d3d11_target = "ps_4_0";
 
     // entry
-    switch(backend) {
+    switch (backend) {
         case SG_BACKEND_METAL_MACOS:
         case SG_BACKEND_METAL_IOS:
             desc.vs.entry = "main0";
@@ -1541,7 +1543,7 @@ static sg_shader _sgp_make_common_shader(void) {
     }
 
     // source
-    switch(backend) {
+    switch (backend) {
         case SG_BACKEND_GLCORE33:
             desc.vs.source = sgp_vs_source_glsl330;
             desc.fs.source = sgp_fs_source_glsl330;
@@ -1584,7 +1586,7 @@ static sg_shader _sgp_make_common_shader(void) {
 void sgp_setup(const sgp_desc* desc) {
     SOKOL_ASSERT(_sgp.init_cookie == 0);
 
-    if(!sg_isvalid()) {
+    if (!sg_isvalid()) {
         _sgp_set_error(SGP_ERROR_SOKOL_INVALID);
         return;
     }
@@ -1608,7 +1610,7 @@ void sgp_setup(const sgp_desc* desc) {
     _sgp.vertices = (_sgp_vertex*) _sg_malloc(_sgp.num_vertices * sizeof(_sgp_vertex));
     _sgp.uniforms = (sgp_uniform*) _sg_malloc(_sgp.num_uniforms * sizeof(sgp_uniform));
     _sgp.commands = (_sgp_command*) _sg_malloc(_sgp.num_commands * sizeof(_sgp_command));
-    if(!_sgp.commands || !_sgp.uniforms || !_sgp.commands) {
+    if (!_sgp.commands || !_sgp.uniforms || !_sgp.commands) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_ALLOC_FAILED);
         return;
@@ -1625,7 +1627,7 @@ void sgp_setup(const sgp_desc* desc) {
     vertex_buf_desc.usage = SG_USAGE_STREAM;
 
     _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
-    if(sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED);
         return;
@@ -1644,7 +1646,7 @@ void sgp_setup(const sgp_desc* desc) {
     white_img_desc.data.subimage[0][0].size = sizeof(pixels);
     white_img_desc.label = "sgp-white-texture";
     _sgp.white_img = sg_make_image(&white_img_desc);
-    if(sg_query_image_state(_sgp.white_img) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_image_state(_sgp.white_img) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_WHITE_IMAGE_FAILED);
         return;
@@ -1655,7 +1657,7 @@ void sgp_setup(const sgp_desc* desc) {
     memset(&nearest_smp_desc, 0, sizeof(sg_sampler_desc));
     nearest_smp_desc.label = "sgp-nearest-sampler";
     _sgp.nearest_smp = sg_make_sampler(&nearest_smp_desc);
-    if(sg_query_sampler_state(_sgp.nearest_smp) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_sampler_state(_sgp.nearest_smp) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_NEAREST_SAMPLER_FAILED);
         return;
@@ -1663,7 +1665,7 @@ void sgp_setup(const sgp_desc* desc) {
 
     // create common shader
     _sgp.shader = _sgp_make_common_shader();
-    if(sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID) {
+    if (sg_query_shader_state(_sgp.shader) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_COMMON_SHADER_FAILED);
         return;
@@ -1681,7 +1683,7 @@ void sgp_setup(const sgp_desc* desc) {
     pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, SGP_BLENDMODE_BLEND).id != SG_INVALID_ID;
     pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_NONE).id != SG_INVALID_ID;
     pips_ok = pips_ok && _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, SGP_BLENDMODE_BLEND).id != SG_INVALID_ID;
-    if(!pips_ok) {
+    if (!pips_ok) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED);
         return;
@@ -1689,28 +1691,38 @@ void sgp_setup(const sgp_desc* desc) {
 }
 
 void sgp_shutdown(void) {
-    if(_sgp.init_cookie == 0) return; // not initialized
+    if (_sgp.init_cookie == 0) {
+        return; // not initialized
+    }
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state == 0);
-    if(_sgp.vertices)
+    if (_sgp.vertices) {
         _sg_free(_sgp.vertices);
-    if(_sgp.uniforms)
-        _sg_free(_sgp.uniforms);
-    if(_sgp.commands)
-        _sg_free(_sgp.commands);
-    for(uint32_t i=0;i<_SG_PRIMITIVETYPE_NUM*_SGP_BLENDMODE_NUM;++i) {
-        sg_pipeline pip = _sgp.pipelines[i];
-        if(pip.id != SG_INVALID_ID)
-            sg_destroy_pipeline(pip);
     }
-    if(_sgp.shader.id != SG_INVALID_ID)
+    if (_sgp.uniforms) {
+        _sg_free(_sgp.uniforms);
+    }
+    if (_sgp.commands) {
+        _sg_free(_sgp.commands);
+    }
+    for (uint32_t i=0;i<_SG_PRIMITIVETYPE_NUM*_SGP_BLENDMODE_NUM;++i) {
+        sg_pipeline pip = _sgp.pipelines[i];
+        if (pip.id != SG_INVALID_ID) {
+            sg_destroy_pipeline(pip);
+        }
+    }
+    if (_sgp.shader.id != SG_INVALID_ID) {
         sg_destroy_shader(_sgp.shader);
-    if(_sgp.vertex_buf.id != SG_INVALID_ID)
+    }
+    if (_sgp.vertex_buf.id != SG_INVALID_ID) {
         sg_destroy_buffer(_sgp.vertex_buf);
-    if(_sgp.white_img.id != SG_INVALID_ID)
+    }
+    if (_sgp.white_img.id != SG_INVALID_ID) {
         sg_destroy_image(_sgp.white_img);
-    if(_sgp.nearest_smp.id != SG_INVALID_ID)
+    }
+    if (_sgp.nearest_smp.id != SG_INVALID_ID) {
         sg_destroy_sampler(_sgp.nearest_smp);
+    }
     memset(&_sgp, 0, sizeof(_sgp_context));
 }
 
@@ -1723,7 +1735,7 @@ sgp_error sgp_get_last_error(void) {
 }
 
 const char* sgp_get_error_message(sgp_error error_code) {
-    switch(error_code) {
+    switch (error_code) {
         case SGP_NO_ERROR:
             return "No error";
         case SGP_ERROR_SOKOL_INVALID:
@@ -1769,10 +1781,11 @@ sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
     sg_pixel_format color_format = _sg_def(desc->color_format, _sgp.desc.color_format);
     sg_pixel_format depth_format = _sg_def(desc->depth_format, _sgp.desc.depth_format);
     int sample_count = _sg_def(desc->sample_count, _sgp.desc.sample_count);
-    if(sg_query_shader_state(shader) == SG_RESOURCESTATE_VALID)
+    if (sg_query_shader_state(shader) == SG_RESOURCESTATE_VALID) {
         pip = _sgp_make_pipeline(shader, primitive_type, blend_mode, color_format, depth_format, sample_count);
-    else if(shader.id != SG_INVALID_ID)
+    } else if (shader.id != SG_INVALID_ID) {
         sg_destroy_shader(shader);
+    }
     return pip;
 }
 
@@ -1788,7 +1801,7 @@ static inline sgp_mat2x3 _sgp_default_proj(int width, int height) {
 
 void sgp_begin(int width, int height) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(_sgp.cur_state >= _SGP_MAX_STACK_DEPTH)) {
+    if (SOKOL_UNLIKELY(_sgp.cur_state >= _SGP_MAX_STACK_DEPTH)) {
         _sgp_set_error(SGP_ERROR_STATE_STACK_OVERFLOW);
         return;
     }
@@ -1825,7 +1838,7 @@ void sgp_begin(int width, int height) {
     _sgp.state.textures.images[0] = _sgp.white_img;
     _sgp.state.textures.samplers[0] = _sgp.nearest_smp;
     sg_image img = {SG_INVALID_ID};
-    for(int i=1;i<SGP_TEXTURE_SLOTS;++i) {
+    for (int i=1;i<SGP_TEXTURE_SLOTS;++i) {
         _sgp.state.textures.images[i] = img;
         _sgp.state.textures.samplers[i] = _sgp.nearest_smp;
     }
@@ -1851,19 +1864,21 @@ void sgp_flush(void) {
     _sgp.cur_command = _sgp.state._base_command;
 
     // draw nothing on errors
-    if(_sgp.last_error != SGP_NO_ERROR)
+    if (_sgp.last_error != SGP_NO_ERROR) {
         return;
+    }
 
     // nothing to be drawn
-    if(end_command <= _sgp.state._base_command)
+    if (end_command <= _sgp.state._base_command) {
         return;
+    }
 
     // upload vertices
     uint32_t base_vertex = _sgp.state._base_vertex;
     uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(_sgp_vertex);
     sg_range vertex_range = {&_sgp.vertices[base_vertex], num_vertices};
     int offset = sg_append_buffer(_sgp.vertex_buf, &vertex_range);
-    if(sg_query_buffer_overflow(_sgp.vertex_buf)) {
+    if (sg_query_buffer_overflow(_sgp.vertex_buf)) {
         _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW);
         return;
     }
@@ -1872,8 +1887,9 @@ void sgp_flush(void) {
     uint32_t cur_pip_id = SG_IMPOSSIBLE_ID;
     uint32_t cur_uniform_index = SG_IMPOSSIBLE_ID;
     uint32_t cur_imgs_id[SGP_TEXTURE_SLOTS];
-    for(int i=0;i<SGP_TEXTURE_SLOTS;++i)
+    for (int i=0;i<SGP_TEXTURE_SLOTS;++i) {
         cur_imgs_id[i] = SG_IMPOSSIBLE_ID;
+    }
 
     // define the resource bindings
     sg_bindings bind;
@@ -1882,9 +1898,9 @@ void sgp_flush(void) {
     bind.vertex_buffer_offsets[0] = offset;
 
     // flush commands
-    for(uint32_t i = _sgp.state._base_command; i < end_command; ++i) {
+    for (uint32_t i = _sgp.state._base_command; i < end_command; ++i) {
         _sgp_command* cmd = &_sgp.commands[i];
-        switch(cmd->cmd) {
+        switch (cmd->cmd) {
             case SGP_COMMAND_VIEWPORT: {
                 sgp_irect* args = &cmd->args.viewport;
                 sg_apply_viewport(args->x, args->y, args->w, args->h, true);
@@ -1897,11 +1913,12 @@ void sgp_flush(void) {
             }
             case SGP_COMMAND_DRAW: {
                 _sgp_draw_args* args = &cmd->args.draw;
-                if(args->num_vertices == 0)
+                if (args->num_vertices == 0) {
                     break;
+                }
                 bool apply_bindings = false;
                 // pipeline
-                if(args->pip.id != cur_pip_id) {
+                if (args->pip.id != cur_pip_id) {
                     // when pipeline changes we need to re-apply uniforms and bindings
                     cur_uniform_index = SG_IMPOSSIBLE_ID;
                     apply_bindings = true;
@@ -1909,15 +1926,16 @@ void sgp_flush(void) {
                     sg_apply_pipeline(args->pip);
                 }
                 // bindings
-                for(uint32_t j=0;j<SGP_TEXTURE_SLOTS;++j) {
+                for (uint32_t j=0;j<SGP_TEXTURE_SLOTS;++j) {
                     uint32_t img_id = SG_INVALID_ID;
                     uint32_t smp_id = SG_INVALID_ID;
                     if (j < args->textures.count) {
                         img_id = args->textures.images[j].id;
-                        if (img_id != SG_INVALID_ID)
+                        if (img_id != SG_INVALID_ID) {
                             smp_id = args->textures.samplers[j].id;
+                        }
                     }
-                    if(cur_imgs_id[j] != img_id) {
+                    if (cur_imgs_id[j] != img_id) {
                         // when an image binding change we need to re-apply bindings
                         cur_imgs_id[j] = img_id;
                         bind.fs.images[j].id = img_id;
@@ -1925,22 +1943,25 @@ void sgp_flush(void) {
                         apply_bindings = true;
                     }
                 }
-                if(apply_bindings)
+                if (apply_bindings) {
                     sg_apply_bindings(&bind);
+                }
                 // uniforms
-                if(cur_uniform_index != args->uniform_index) {
+                if (cur_uniform_index != args->uniform_index) {
                     cur_uniform_index = args->uniform_index;
                     sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
-                    if(uniform->size > 0) {
+                    if (uniform->size > 0) {
                         sg_range uniform_range = {&uniform->content, uniform->size};
                         int vs_uniform_count, fs_uniform_count;
                         _sgp_get_pipeline_uniform_count(args->pip, &vs_uniform_count, &fs_uniform_count);
                         // apply uniforms on vertex shader only when needed
-                        if(vs_uniform_count > 0)
+                        if (vs_uniform_count > 0) {
                             sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniform_range);
+                        }
                         // apply uniforms on fragment shader
-                        if(fs_uniform_count > 0)
+                        if (fs_uniform_count > 0) {
                             sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &uniform_range);
+                        }
                     }
                 }
                 //  draw
@@ -1957,7 +1978,7 @@ void sgp_flush(void) {
 
 void sgp_end(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    if(SOKOL_UNLIKELY(_sgp.cur_state <= 0)) {
+    if (SOKOL_UNLIKELY(_sgp.cur_state <= 0)) {
         _sgp_set_error(SGP_ERROR_STATE_STACK_UNDERFLOW);
         return;
     }
@@ -1999,7 +2020,7 @@ void sgp_reset_project(void) {
 void sgp_push_transform(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
+    if (SOKOL_UNLIKELY(_sgp.cur_transform >= _SGP_MAX_STACK_DEPTH)) {
         _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_OVERFLOW);
         return;
     }
@@ -2009,7 +2030,7 @@ void sgp_push_transform(void) {
 void sgp_pop_transform(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(_sgp.cur_transform <= 0)) {
+    if (SOKOL_UNLIKELY(_sgp.cur_transform <= 0)) {
         _sgp_set_error(SGP_ERROR_TRANSFORM_STACK_UNDERFLOW);
         return;
     }
@@ -2088,7 +2109,7 @@ void sgp_set_pipeline(sg_pipeline pipeline) {
 
     // restore uniform for the default pipeline
     memset(&_sgp.state.uniform, 0, sizeof(sgp_uniform));
-    if(pipeline.id == SG_INVALID_ID) {
+    if (pipeline.id == SG_INVALID_ID) {
         _sgp.state.uniform.size = sizeof(sgp_color);
         _sgp.state.uniform.content[0] = _sgp.state.color.r;
         _sgp.state.uniform.content[1] = _sgp.state.color.g;
@@ -2107,11 +2128,11 @@ void sgp_set_uniform(const void* data, uint32_t size) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.state.pipeline.id != SG_INVALID_ID);
     SOKOL_ASSERT(size <= sizeof(float) * SGP_UNIFORM_CONTENT_SLOTS);
-    if(size > 0) {
+    if (size > 0) {
         SOKOL_ASSERT(data);
         memcpy(&_sgp.state.uniform.content, data, size);
     }
-    if(size < _sgp.state.uniform.size) {
+    if (size < _sgp.state.uniform.size) {
         // zero old uniform data
         memset((uint8_t*)(&_sgp.state.uniform) + size, 0, _sgp.state.uniform.size - size);
     }
@@ -2141,7 +2162,7 @@ void sgp_set_color(float r, float g, float b, float a) {
     _sgp.state.color = color;
 
     // update uniform for the default pipeline
-    if(_sgp.state.pipeline.id == SG_INVALID_ID) {
+    if (_sgp.state.pipeline.id == SG_INVALID_ID) {
         memset(&_sgp.state.uniform, 0, sizeof(sgp_uniform));
         _sgp.state.uniform.size = sizeof(sgp_color);
         _sgp.state.uniform.content[0] = color.r;
@@ -2160,15 +2181,16 @@ void sgp_set_image(int channel, sg_image image) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
-    if(_sgp.state.textures.images[channel].id == image.id)
+    if (_sgp.state.textures.images[channel].id == image.id) {
         return;
+    }
 
     _sgp.state.textures.images[channel] = image;
 
     // recalculate textures count
     int textures_count = (int)_sgp.state.textures.count;
-    for(int i=_sg_max(channel, textures_count-1);i>=0;--i) {
-        if(_sgp.state.textures.images[i].id != SG_INVALID_ID) {
+    for (int i=_sg_max(channel, textures_count-1);i>=0;--i) {
+        if (_sgp.state.textures.images[i].id != SG_INVALID_ID) {
             textures_count = i + 1;
             break;
         }
@@ -2184,7 +2206,7 @@ void sgp_unset_image(int channel) {
 
 void sgp_reset_image(int channel) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    if(channel == 0) {
+    if (channel == 0) {
         // channel 0 always use white image
         sgp_set_image(channel, _sgp.white_img);
     } else {
@@ -2206,7 +2228,7 @@ void sgp_reset_sampler(int channel) {
 }
 
 static _sgp_vertex* _sgp_next_vertices(uint32_t count) {
-    if(SOKOL_LIKELY(_sgp.cur_vertex + count <= _sgp.num_vertices)) {
+    if (SOKOL_LIKELY(_sgp.cur_vertex + count <= _sgp.num_vertices)) {
         _sgp_vertex *vertices = &_sgp.vertices[_sgp.cur_vertex];
         _sgp.cur_vertex += count;
         return vertices;
@@ -2217,7 +2239,7 @@ static _sgp_vertex* _sgp_next_vertices(uint32_t count) {
 }
 
 static sgp_uniform* _sgp_prev_uniform(void) {
-    if(SOKOL_LIKELY(_sgp.cur_uniform > 0)) {
+    if (SOKOL_LIKELY(_sgp.cur_uniform > 0)) {
         return &_sgp.uniforms[_sgp.cur_uniform-1];
     } else {
         return NULL;
@@ -2225,7 +2247,7 @@ static sgp_uniform* _sgp_prev_uniform(void) {
 }
 
 static sgp_uniform* _sgp_next_uniform(void) {
-    if(SOKOL_LIKELY(_sgp.cur_uniform < _sgp.num_uniforms)) {
+    if (SOKOL_LIKELY(_sgp.cur_uniform < _sgp.num_uniforms)) {
         return &_sgp.uniforms[_sgp.cur_uniform++];
     } else {
         _sgp_set_error(SGP_ERROR_UNIFORMS_FULL);
@@ -2234,7 +2256,7 @@ static sgp_uniform* _sgp_next_uniform(void) {
 }
 
 static _sgp_command* _sgp_prev_command(uint32_t count) {
-    if(SOKOL_LIKELY((_sgp.cur_command - _sgp.state._base_command) >= count)) {
+    if (SOKOL_LIKELY((_sgp.cur_command - _sgp.state._base_command) >= count)) {
         return &_sgp.commands[_sgp.cur_command-count];
     } else {
         return NULL;
@@ -2242,7 +2264,7 @@ static _sgp_command* _sgp_prev_command(uint32_t count) {
 }
 
 static _sgp_command* _sgp_next_command(void) {
-    if(SOKOL_LIKELY(_sgp.cur_command < _sgp.num_commands)) {
+    if (SOKOL_LIKELY(_sgp.cur_command < _sgp.num_commands)) {
         return &_sgp.commands[_sgp.cur_command++];
     } else {
         _sgp_set_error(SGP_ERROR_COMMANDS_FULL);
@@ -2255,15 +2277,19 @@ void sgp_viewport(int x, int y, int w, int h) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
 
     // skip in case of the same viewport
-    if(_sgp.state.viewport.x == x && _sgp.state.viewport.y == y &&
-       _sgp.state.viewport.w == w && _sgp.state.viewport.h == h)
+    if (_sgp.state.viewport.x == x && _sgp.state.viewport.y == y &&
+       _sgp.state.viewport.w == w && _sgp.state.viewport.h == h) {
         return;
+    }
 
     // try to reuse last command otherwise use the next one
     _sgp_command* cmd = _sgp_prev_command(1);
-    if(!cmd || cmd->cmd != SGP_COMMAND_VIEWPORT)
+    if (!cmd || cmd->cmd != SGP_COMMAND_VIEWPORT) {
         cmd = _sgp_next_command();
-    if(SOKOL_UNLIKELY(!cmd)) return;
+    }
+    if (SOKOL_UNLIKELY(!cmd)) {
+        return;
+    }
 
     sgp_irect viewport = {x, y, w, h};
 
@@ -2272,7 +2298,7 @@ void sgp_viewport(int x, int y, int w, int h) {
     cmd->args.viewport = viewport;
 
     // adjust current scissor relative offset
-    if(!(_sgp.state.scissor.w < 0 && _sgp.state.scissor.h < 0)) {
+    if (!(_sgp.state.scissor.w < 0 && _sgp.state.scissor.h < 0)) {
         _sgp.state.scissor.x += x - _sgp.state.viewport.x;
         _sgp.state.scissor.y += y - _sgp.state.viewport.y;
     }
@@ -2294,21 +2320,25 @@ void sgp_scissor(int x, int y, int w, int h) {
     SOKOL_ASSERT(_sgp.cur_state > 0);
 
     // skip in case of the same scissor
-    if(_sgp.state.scissor.x == x && _sgp.state.scissor.y == y &&
-       _sgp.state.scissor.w == w && _sgp.state.scissor.h == h)
+    if (_sgp.state.scissor.x == x && _sgp.state.scissor.y == y &&
+       _sgp.state.scissor.w == w && _sgp.state.scissor.h == h) {
         return;
+    }
 
     // try to reuse last command otherwise use the next one
     _sgp_command* cmd = _sgp_prev_command(1);
-    if(!cmd || cmd->cmd != SGP_COMMAND_SCISSOR)
+    if (!cmd || cmd->cmd != SGP_COMMAND_SCISSOR) {
         cmd = _sgp_next_command();
-    if(SOKOL_UNLIKELY(!cmd)) return;
+    }
+    if (SOKOL_UNLIKELY(!cmd)) {
+        return;
+    }
 
     // coordinate scissor in viewport subspace
     sgp_irect viewport_scissor = {_sgp.state.viewport.x + x, _sgp.state.viewport.y + y, w, h};
 
     // reset scissor
-    if(w < 0 && h  < 0) {
+    if (w < 0 && h  < 0) {
         viewport_scissor.x = 0; viewport_scissor.y = 0;
         viewport_scissor.w = _sgp.state.frame_size.w; viewport_scissor.h = _sgp.state.frame_size.h;
     }
@@ -2356,24 +2386,26 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
 
     // find a command that is a good candidate to batch
     uint32_t lookup_depth = SGP_BATCH_OPTIMIZER_DEPTH;
-    for(uint32_t depth=0;depth<lookup_depth;++depth) {
+    for (uint32_t depth=0;depth<lookup_depth;++depth) {
         _sgp_command* cmd = _sgp_prev_command(depth+1);
         // stop on nonexistent command
-        if(!cmd)
+        if (!cmd) {
             break;
+        }
 
         // command was optimized away, search deeper
-        if(cmd->cmd == SGP_COMMAND_NONE) {
+        if (cmd->cmd == SGP_COMMAND_NONE) {
             lookup_depth++;
             continue;
         }
 
         // stop on scissor/viewport
-        if(cmd->cmd != SGP_COMMAND_DRAW)
+        if (cmd->cmd != SGP_COMMAND_DRAW) {
             break;
+        }
 
         // can only batch commands with the same bindings and uniforms
-        if(cmd->args.draw.pip.id == pip.id &&
+        if (cmd->args.draw.pip.id == pip.id &&
             memcmp(&textures, &cmd->args.draw.textures, sizeof(sgp_textures_uniform)) == 0 &&
             memcmp(&uniform, &_sgp.uniforms[cmd->args.draw.uniform_index], sizeof(sgp_uniform)) == 0) {
             prev_cmd = cmd;
@@ -2383,31 +2415,37 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
             inter_cmd_count++;
         }
     }
-    if(!prev_cmd)
+    if (!prev_cmd) {
         return false;
+    }
 
     // allow batching only if the region of the current or previous draw
     // is not touched by intermediate commands
     bool overlaps_next = false;
     bool overlaps_prev = false;
     _sgp_region prev_region = prev_cmd->args.draw.region;
-    for(uint32_t i=0;i<inter_cmd_count;++i) {
+    for (uint32_t i=0;i<inter_cmd_count;++i) {
         _sgp_region inter_region = inter_cmds[i]->args.draw.region;
-        if(_sgp_region_overlaps(region, inter_region)) {
+        if (_sgp_region_overlaps(region, inter_region)) {
             overlaps_next = true;
-            if(overlaps_prev) return false;
+            if (overlaps_prev) {
+                return false;
+            }
         }
-        if(_sgp_region_overlaps(prev_region, inter_region)) {
+        if (_sgp_region_overlaps(prev_region, inter_region)) {
             overlaps_prev = true;
-            if(overlaps_next) return false;
+            if (overlaps_next) {
+                return false;
+            }
         }
     }
 
-    if(!overlaps_next) { // batch in the previous draw command
-        if(inter_cmd_count > 0) {
+    if (!overlaps_next) { // batch in the previous draw command
+        if (inter_cmd_count > 0) {
             // not enough vertices space, can't do this batch
-            if(SOKOL_UNLIKELY(_sgp.cur_vertex + num_vertices > _sgp.num_vertices))
+            if (SOKOL_UNLIKELY(_sgp.cur_vertex + num_vertices > _sgp.num_vertices)) {
                 return false;
+            }
 
             // rearrange vertices memory for the batch
             uint32_t prev_end_vertex = prev_cmd->args.draw.vertex_index + prev_cmd->args.draw.num_vertices;
@@ -2416,7 +2454,7 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
             memcpy(&_sgp.vertices[prev_end_vertex], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
 
             // offset vertices of intermediate draw commands
-            for(uint32_t i=0;i<inter_cmd_count;++i) {
+            for (uint32_t i=0;i<inter_cmd_count;++i) {
                 inter_cmds[i]->args.draw.vertex_index += num_vertices;
             }
         }
@@ -2433,13 +2471,15 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
 
         // append new draw command
         _sgp_command* cmd = _sgp_next_command();
-        if(SOKOL_UNLIKELY(!cmd))
+        if (SOKOL_UNLIKELY(!cmd)) {
             return false;
+        }
 
         uint32_t prev_num_vertices = prev_cmd->args.draw.num_vertices;
         // not enough vertices space, can't do this batch
-        if(SOKOL_UNLIKELY(_sgp.cur_vertex + prev_num_vertices > _sgp.num_vertices))
+        if (SOKOL_UNLIKELY(_sgp.cur_vertex + prev_num_vertices > _sgp.num_vertices)) {
             return false;
+        }
 
         // rearrange vertices memory for the batch
         memmove(&_sgp.vertices[vertex_index + prev_num_vertices], &_sgp.vertices[vertex_index], num_vertices * sizeof(_sgp_vertex));
@@ -2479,32 +2519,34 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
 
 static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
     // override pipeline
-    if(_sgp.state.pipeline.id != SG_INVALID_ID)
+    if (_sgp.state.pipeline.id != SG_INVALID_ID) {
         pip = _sgp.state.pipeline;
+    }
 
     // invalid pipeline
-    if(pip.id == SG_INVALID_ID) {
+    if (pip.id == SG_INVALID_ID) {
         _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
         return;
     }
 
     // region is out of screen bounds
-    if(region.x1 > 1.0f || region.y1 > 1.0f || region.x2 < -1.0f || region.y2 < -1.0f) {
+    if (region.x1 > 1.0f || region.y1 > 1.0f || region.x2 < -1.0f || region.y2 < -1.0f) {
         _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
         return;
     }
 
     // try to merge on previous command to draw in a batch
-    if(_sgp_merge_batch_command(pip, _sgp.state.textures, _sgp.state.uniform, region, vertex_index, num_vertices))
+    if (_sgp_merge_batch_command(pip, _sgp.state.textures, _sgp.state.uniform, region, vertex_index, num_vertices)) {
         return;
+    }
 
     // setup uniform, try to reuse previous uniform when possible
     sgp_uniform *prev_uniform = _sgp_prev_uniform();
     bool reuse_uniform = prev_uniform && (memcmp(prev_uniform, &_sgp.state.uniform, sizeof(sgp_uniform)) == 0);
-    if(!reuse_uniform) {
+    if (!reuse_uniform) {
         // append new uniform
         sgp_uniform *next_uniform = _sgp_next_uniform();
-        if(SOKOL_UNLIKELY(!next_uniform)) {
+        if (SOKOL_UNLIKELY(!next_uniform)) {
             _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
             return;
         }
@@ -2514,7 +2556,7 @@ static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex
 
     // append new draw command
     _sgp_command* cmd = _sgp_next_command();
-    if(SOKOL_UNLIKELY(!cmd)) {
+    if (SOKOL_UNLIKELY(!cmd)) {
         _sgp.cur_vertex -= num_vertices; // rollback allocated vertices
         return;
     }
@@ -2536,7 +2578,7 @@ static inline sgp_vec2 _sgp_mat3_vec2_mul(const sgp_mat2x3* m, const sgp_vec2* v
 }
 
 static void _sgp_transform_vec2(sgp_mat2x3* matrix, sgp_vec2* dst, const sgp_vec2 *src, uint32_t count) {
-    for(uint32_t i=0;i<count;++i) {
+    for (uint32_t i=0;i<count;++i) {
         dst[i] = _sgp_mat3_vec2_mul(matrix, &src[i]);
     }
 }
@@ -2544,11 +2586,13 @@ static void _sgp_transform_vec2(sgp_mat2x3* matrix, sgp_vec2* dst, const sgp_vec
 static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t num_vertices, float thickness) {
     uint32_t vertex_index = _sgp.cur_vertex;
     _sgp_vertex* transformed_vertices = _sgp_next_vertices(num_vertices);
-    if(SOKOL_UNLIKELY(!vertices)) return;
+    if (SOKOL_UNLIKELY(!vertices)) {
+        return;
+    }
 
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
-    for(uint32_t i=0;i<num_vertices;++i) {
+    for (uint32_t i=0;i<num_vertices;++i) {
         sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
         region.x1 = _sg_min(region.x1, p.x - thickness);
         region.y1 = _sg_min(region.y1, p.y - thickness);
@@ -2569,7 +2613,9 @@ void sgp_clear(void) {
     uint32_t num_vertices = 6;
     uint32_t vertex_index = _sgp.cur_vertex;
     _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
-    if(SOKOL_UNLIKELY(!vertices)) return;
+    if (SOKOL_UNLIKELY(!vertices)) {
+        return;
+    }
 
     // compute vertices
     _sgp_vertex* v = vertices;
@@ -2598,7 +2644,9 @@ void sgp_clear(void) {
 void sgp_draw_points(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(count == 0)) return;
+    if (SOKOL_UNLIKELY(count == 0)) {
+        return;
+    }
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, _sgp.state.blend_mode);
     _sgp_draw_solid_pip(pip, points, count, _sgp.state.thickness);
 }
@@ -2613,7 +2661,9 @@ void sgp_draw_point(float x, float y) {
 void sgp_draw_lines(const sgp_line* lines, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(count == 0)) return;
+    if (SOKOL_UNLIKELY(count == 0)) {
+        return;
+    }
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, _sgp.state.blend_mode);
     _sgp_draw_solid_pip(pip, (const sgp_point*)lines, count*2, _sgp.state.thickness);
 }
@@ -2628,7 +2678,9 @@ void sgp_draw_line(float ax, float ay, float bx, float by) {
 void sgp_draw_lines_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(count == 0)) return;
+    if (SOKOL_UNLIKELY(count == 0)) {
+        return;
+    }
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, _sgp.state.blend_mode);
     _sgp_draw_solid_pip(pip, points, count, _sgp.state.thickness);
 }
@@ -2636,7 +2688,9 @@ void sgp_draw_lines_strip(const sgp_point* points, uint32_t count) {
 void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(count == 0)) return;
+    if (SOKOL_UNLIKELY(count == 0)) {
+        return;
+    }
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
     _sgp_draw_solid_pip(pip, (const sgp_point*)triangles, count*3, 0.0f);
 }
@@ -2651,7 +2705,9 @@ void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, 
 void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(count == 0)) return;
+    if (SOKOL_UNLIKELY(count == 0)) {
+        return;
+    }
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, _sgp.state.blend_mode);
     _sgp_draw_solid_pip(pip, points, count, 0.0f);
 }
@@ -2659,20 +2715,24 @@ void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count) {
 void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    if(SOKOL_UNLIKELY(count == 0)) return;
+    if (SOKOL_UNLIKELY(count == 0)) {
+        return;
+    }
 
     // setup vertices
     uint32_t num_vertices = count * 6;
     uint32_t vertex_index = _sgp.cur_vertex;
     _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
-    if(SOKOL_UNLIKELY(!vertices)) return;
+    if (SOKOL_UNLIKELY(!vertices)) {
+        return;
+    }
 
     // compute vertices
     _sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
-    for(uint32_t i=0;i<count;v+=6, rect++, i++) {
+    for (uint32_t i=0;i<count;v+=6, rect++, i++) {
         sgp_vec2 quad[4] = {
             {rect->x,           rect->y + rect->h}, // bottom left
             {rect->x + rect->w, rect->y + rect->h}, // bottom right
@@ -2681,7 +2741,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
         };
         _sgp_transform_vec2(&mvp, quad, quad, 4);
 
-        for(uint32_t j=0;j<4;++j) {
+        for (uint32_t j=0;j<4;++j) {
             region.x1 = _sg_min(region.x1, quad[j].x);
             region.y1 = _sg_min(region.y1, quad[j].y);
             region.x2 = _sg_max(region.x2, quad[j].x);
@@ -2727,23 +2787,29 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
     SOKOL_ASSERT(_sgp.cur_state > 0);
     SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
     sg_image image = _sgp.state.textures.images[channel];
-    if(SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) return;
+    if (SOKOL_UNLIKELY(count == 0 || image.id == SG_INVALID_ID)) {
+        return;
+    }
 
     // setup vertices
     uint32_t num_vertices = count * 6;
     uint32_t vertex_index = _sgp.cur_vertex;
     _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
-    if(SOKOL_UNLIKELY(!vertices)) return;
+    if (SOKOL_UNLIKELY(!vertices)) {
+        return;
+    }
 
     // compute image values used for texture coords transform
     sgp_isize image_size = _sgp_query_image_size(image);
-    if(SOKOL_UNLIKELY(image_size.w == 0 || image_size.h == 0)) return;
+    if (SOKOL_UNLIKELY(image_size.w == 0 || image_size.h == 0)) {
+        return;
+    }
     float iw = 1.0f/(float)image_size.w, ih = 1.0f/(float)image_size.h;
 
     // compute vertices
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
-    for(uint32_t i=0;i<count;i++) {
+    for (uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
             {rects[i].dst.x,                  rects[i].dst.y + rects[i].dst.h}, // bottom left
             {rects[i].dst.x + rects[i].dst.w, rects[i].dst.y + rects[i].dst.h}, // bottom right
@@ -2752,7 +2818,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
         };
         _sgp_transform_vec2(&mvp, quad, quad, 4);
 
-        for(uint32_t j=0;j<4;++j) {
+        for (uint32_t j=0;j<4;++j) {
             region.x1 = _sg_min(region.x1, quad[j].x);
             region.y1 = _sg_min(region.y1, quad[j].y);
             region.x2 = _sg_max(region.x2, quad[j].x);
@@ -2769,7 +2835,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
     }
 
     // compute texture coords
-    for(uint32_t i=0;i<count;i++) {
+    for (uint32_t i=0;i<count;i++) {
         // compute source rect
         float tl = rects[i].src.x*iw;
         float tt = rects[i].src.y*ih;
