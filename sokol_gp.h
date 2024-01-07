@@ -1,6 +1,6 @@
 /*
 Minimal efficient cross platform 2D graphics painter for Sokol GFX.
-sokol_gp - v0.2.1 - 31/Oct/2023
+sokol_gp - v0.3.0 - 07/Jan/2024
 Eduardo Bart - edub4rt@gmail.com
 https://github.com/edubart/sokol_gp
 
@@ -2881,7 +2881,7 @@ sgp_state* sgp_query_state(void) {
 #endif // SOKOL_GP_IMPL
 
 /*
-Copyright (c) 2020-2022 Eduardo Bart (https://github.com/edubart/sokol_gp)
+Copyright (c) 2020-2024 Eduardo Bart (https://github.com/edubart/sokol_gp)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
