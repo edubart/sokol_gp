@@ -496,6 +496,10 @@ typedef struct sgp_color {
     float r, g, b, a;
 } sgp_color;
 
+typedef struct sgp_color_ub4 {
+    uint8_t r, g, b, a;
+} sgp_color_ub4;
+
 typedef struct sgp_uniform {
     uint32_t size;
     float content[SGP_UNIFORM_CONTENT_SLOTS];
@@ -516,7 +520,7 @@ typedef struct sgp_state {
     sgp_mat2x3 transform;
     sgp_mat2x3 mvp;
     float thickness;
-    sgp_color color;
+    sgp_color_ub4 color;
     sgp_textures_uniform textures;
     sgp_uniform uniform;
     sgp_blend_mode blend_mode;
@@ -653,14 +657,14 @@ enum {
     _SGP_INIT_COOKIE = 0xCAFED0D,
     _SGP_DEFAULT_MAX_VERTICES = 65536,
     _SGP_DEFAULT_MAX_COMMANDS = 16384,
-    _SGP_MAX_MOVE_VERTICES = 64,
+    _SGP_MAX_MOVE_VERTICES = 96,
     _SGP_MAX_STACK_DEPTH = 64
 };
 
 typedef struct _sgp_vertex {
     sgp_vec2 position;
     sgp_vec2 texcoord;
-    sgp_color color;
+    sgp_color_ub4 color;
 } _sgp_vertex;
 
 typedef struct _sgp_region {
@@ -734,7 +738,7 @@ static const sgp_mat2x3 _sgp_mat3_identity = {{
     {0.0f, 1.0f, 0.0f}
 }};
 
-static const sgp_color _sgp_white_color = {1.0f, 1.0f, 1.0f, 1.0f};
+static const sgp_color_ub4 _sgp_white_color = {255, 255, 255, 255};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shaders
@@ -1535,7 +1539,7 @@ static sg_pipeline _sgp_make_pipeline(sg_shader shader, sg_primitive_type primit
     pip_desc.layout.attrs[SGP_VS_ATTR_COORD].offset = offsetof(_sgp_vertex, position);
     pip_desc.layout.attrs[SGP_VS_ATTR_COORD].format = SG_VERTEXFORMAT_FLOAT4;
     pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].offset = offsetof(_sgp_vertex, color);
-    pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].format = SG_VERTEXFORMAT_FLOAT4;
+    pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].format = SG_VERTEXFORMAT_UBYTE4N;
     pip_desc.sample_count = sample_count;
     pip_desc.depth.pixel_format = depth_format;
     pip_desc.colors[0].pixel_format = color_format;
@@ -2207,13 +2211,18 @@ void sgp_reset_blend_mode(void) {
 void sgp_set_color(float r, float g, float b, float a) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
-    sgp_color color = {r,g,b,a};
-    _sgp.state.color = color;
+    _sgp.state.color = (sgp_color_ub4){
+        _sg_clamp(r*255.0f, 0.0f, 255.0f),
+        _sg_clamp(g*255.0f, 0.0f, 255.0f),
+        _sg_clamp(b*255.0f, 0.0f, 255.0f),
+        _sg_clamp(a*255.0f, 0.0f, 255.0f)
+    };
 }
 
 void sgp_reset_color(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
+    _sgp.state.color = _sgp_white_color;
 }
 
 void sgp_set_image(int channel, sg_image image) {
@@ -2642,7 +2651,7 @@ static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint3
         return;
     }
 
-    sgp_color color = _sgp.state.color;
+    sgp_color_ub4 color = _sgp.state.color;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for (uint32_t i=0;i<num_vertices;++i) {
@@ -2680,7 +2689,7 @@ void sgp_clear(void) {
         {-1.0f,  1.0f}, // top left
     };
     const sgp_vec2 texcoord = {0.0f, 0.0f};
-    sgp_color color = _sgp.state.color;
+    sgp_color_ub4 color = _sgp.state.color;
 
     // make a quad composed of 2 triangles
     v[0].position = quad[0]; v[0].texcoord = texcoord; v[0].color = color;
@@ -2785,7 +2794,7 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     // compute vertices
     _sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
-    sgp_color color = _sgp.state.color;
+    sgp_color_ub4 color = _sgp.state.color;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for (uint32_t i=0;i<count;v+=6, rect++, i++) {
@@ -2891,7 +2900,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
     }
 
     // compute texture coords
-    sgp_color color = _sgp.state.color;
+    sgp_color_ub4 color = _sgp.state.color;
     for (uint32_t i=0;i<count;i++) {
         // compute source rect
         float tl = rects[i].src.x*iw;
