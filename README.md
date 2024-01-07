@@ -16,6 +16,7 @@ Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
 * D3D11/OpenGL 3.3/Metal/WebGPU graphics backends (through Sokol GFX).
 * **Automatic batching** (merge recent draw calls into batches automatically).
 * **Batch optimizer** (rearranges the ordering of draw calls to batch more).
+* Batch draw calls even when using different color states. **NEW**
 * Uses preallocated memory (no allocations at runtime).
 * Supports drawing basic 2D primitives (rectangles, triangles, lines and points).
 * Supports the classic 2D color blending modes (color blend, add, modulate, multiply).
@@ -449,6 +450,8 @@ and has proved to be stable.
 This library has been originally sponsored by the MMORPG game [Medivia Online](https://medivia.online/),
 I would like to thank them for supporting my work.
 
+Thanks @kkukshtel for sponsoring batching draw calls with different colors feature.
+
 ## Related projects
 
 Make sure to checkout the excellent [Sokol](https://github.com/floooh/sokol) project by @floooh,
@@ -461,7 +464,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
-* **07-Jan-2024**: Make possible to set custom depth format and sample count in pipelines, format source files.
+* **07-Jan-2024**: Make possible to set custom depth format and sample count in pipelines, batch draw calls even when using different colors, format source files.
 * **31-Oct-2023**: Update to latest Sokol, introduced new WebGPU backend.
 * **30-Sep-2023**: Update to latest Sokol, deprecated GLES2 backend, add image sampler APIs, changes in draw textured APIs.
 * **31-Dec-2021**: The library was open sourced.
