@@ -372,7 +372,9 @@ MIT, see LICENSE file or the end of `sokol_gp.h` file.
 #define SGP_BATCH_OPTIMIZER_DEPTH 8
 #endif
 
-/* Number of draw commands that the batch optimizer looks back. */
+/* Number of uniform floats (4-bytes) slots that can be set in a shader.
+Increase this value if you need to use shader with many uniforms.
+*/
 #ifndef SGP_UNIFORM_CONTENT_SLOTS
 #define SGP_UNIFORM_CONTENT_SLOTS 4
 #endif
