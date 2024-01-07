@@ -12,7 +12,6 @@ This examples shows all primitives shapes and transformation functions.
 #include <stdio.h>
 #include <stdlib.h>
 
-static sgp_vec2 points_buffer[4096];
 static const float PI = 3.14159265358979323846264338327f;
 
 static void draw_rects(void) {
@@ -49,9 +48,11 @@ static void draw_rects(void) {
 }
 
 static void draw_points(void) {
+    // point grid
     sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
+    static sgp_vec2 points_buffer[4096];
     unsigned int count = 0;
     for (int y=64;y<height-64 && count < 4096;y+=8) {
         for (int x=64;x<width-64 && count < 4096;x+=8) {
@@ -63,10 +64,12 @@ static void draw_points(void) {
 }
 
 static void draw_lines(void) {
+    // spiral
     sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
-    unsigned int count = 0;
     sgp_irect viewport = sgp_query_state()->viewport;
     sgp_vec2 c = {viewport.w / 2.0f, viewport.h / 2.0f};
+    static sgp_vec2 points_buffer[4096];
+    unsigned int count = 0;
     points_buffer[count++] = c;
     for (float theta = 0.0f; theta <= PI*8.0f; theta+=PI/16.0f) {
         float r = 10.0f*theta;
@@ -74,11 +77,25 @@ static void draw_lines(void) {
         points_buffer[count++] = v;
     }
     sgp_draw_lines_strip(points_buffer, count);
+
+    // x
+    sgp_push_transform();
+    sgp_translate(viewport.w/2, viewport.h/2);
+    int x_size = 32;
+    sgp_line x_line[2] = {
+        {{-x_size, -x_size}, { x_size, x_size}},
+        {{ x_size, -x_size}, {-x_size, x_size}},
+    };
+    sgp_draw_lines(x_line, 2);
+    sgp_pop_transform();
 }
 
 static void draw_triangles(void) {
+    float time = sapp_frame_count() / 60.0f;
     sgp_irect viewport = sgp_query_state()->viewport;
     int width = viewport.w, height = viewport.h;
+
+    // triangle
     float hw = width * 0.5f;
     float hh = height * 0.5f;
     float w = height*0.2f;
@@ -89,19 +106,48 @@ static void draw_triangles(void) {
     sgp_push_transform();
     sgp_translate(-w*1.5f, 0.0f);
     sgp_draw_filled_triangle(ax, ay, bx, by, cx, cy);
-    sgp_translate(w*3.0f, 0.0f);
-    unsigned int count = 0;
-    float step = (2.0f*PI)/6.0f;
-    for (float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
-        sgp_vec2 v = {hw + w*cosf(theta), hh - w*sinf(theta)};
-        points_buffer[count++] = v;
-        if (count % 3 == 1) {
-            sgp_vec2 u = {hw, hh};
-            points_buffer[count++] = u;
-        }
-    }
+
+    // hexagon
+    sgp_translate(w*3.0f, -hh*0.5f);
     sgp_set_color(0.0f, 1.0f, 1.0f, 1.0f);
-    sgp_draw_filled_triangles_strip(points_buffer, count);
+    {
+        float step = (2.0f*PI)/6.0f;
+        unsigned int count = 0;
+        static sgp_vec2 points_buffer[4096];
+        for (float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
+            sgp_vec2 v = {hw + w*cosf(theta), hh - w*sinf(theta)};
+            points_buffer[count++] = v;
+            if (count % 3 == 1) {
+                sgp_vec2 u = {hw, hh};
+                points_buffer[count++] = u;
+            }
+        }
+        sgp_draw_filled_triangles_strip(points_buffer, count);
+    }
+
+    // color wheel
+    sgp_translate(0.0f, hh);
+    sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
+    {
+        float step = (2.0f*PI)/64.0f;
+        unsigned int count = 0;
+        static sgp_vertex vertex_buffer[4096];
+        for (float theta = 0.0f; theta <= 2.0f*PI + step*0.5f; theta+=step) {
+            sgp_vec2 v = {hw + w*cosf(theta), hh - w*sinf(theta)};
+            vertex_buffer[count].position = v;
+            vertex_buffer[count].color = (sgp_color_ub4){(sinf(theta + time*1) + 1.0f) * 0.5f * 255.0f,
+                                                         (sinf(theta + time*2) + 1.0f) * 0.5f * 255.0f,
+                                                         (sinf(theta + time*4) + 1.0f) * 0.5f * 255.0f, 255};
+            count++;
+            if (count % 3 == 1) {
+                sgp_vec2 u = {hw, hh};
+                vertex_buffer[count].position = u;
+                vertex_buffer[count].color = (sgp_color_ub4){255, 255, 255, 255};
+                count++;
+            }
+        }
+        sgp_draw(SG_PRIMITIVETYPE_TRIANGLE_STRIP, vertex_buffer, count);
+    }
     sgp_pop_transform();
 }
 

@@ -422,6 +422,7 @@ void sgp_reset_state(void);                               /* Reset all state to 
 
 /* Drawing functions. */
 void sgp_clear(void);                                                                         /* Clears the current viewport using the current state color. */
+void sgp_draw(sg_primitive_type primitive_type, const sgp_vertex* vertices, uint32_t count);  /* Low level drawing function, capable of drawing any primitive. */
 void sgp_draw_points(const sgp_point* points, uint32_t count);                                /* Draws points in a batch. */
 void sgp_draw_point(float x, float y);                                                        /* Draws a single point. */
 void sgp_draw_lines(const sgp_line* lines, uint32_t count);                                   /* Draws lines in a batch. */
@@ -464,21 +465,13 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
-* **07-Jan-2024**: Make possible to set custom depth format and sample count in pipelines, batch draw calls even when using different colors, format source files.
+* **07-Jan-2024**: Make possible to set custom depth format and sample count in pipelines, batch draw calls even when using different colors, introduce low level primitive drawing function, format source files.
 * **31-Oct-2023**: Update to latest Sokol, introduced new WebGPU backend.
 * **30-Sep-2023**: Update to latest Sokol, deprecated GLES2 backend, add image sampler APIs, changes in draw textured APIs.
 * **31-Dec-2021**: The library was open sourced.
 * **05-Aug-2020**: Added support for custom shaders.
 * **03-Jun-2020**: Added the batch optimizer.
 * **29-May-2020**: The library was created.
-
-## Future features planned
-
-These are features I would like to implement someday in the future
-(if there is enough interest).
-
-* Draw textured triangles
-* Support drawing primitives with colored vertices
 
 ## Screenshots
 

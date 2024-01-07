@@ -500,6 +500,12 @@ typedef struct sgp_color_ub4 {
     uint8_t r, g, b, a;
 } sgp_color_ub4;
 
+typedef struct sgp_vertex {
+    sgp_vec2 position;
+    sgp_vec2 texcoord;
+    sgp_color_ub4 color;
+} sgp_vertex;
+
 typedef struct sgp_uniform {
     uint32_t size;
     float content[SGP_UNIFORM_CONTENT_SLOTS];
@@ -607,6 +613,7 @@ SOKOL_GP_API_DECL void sgp_reset_state(void);                               /* R
 
 /* Drawing functions. */
 SOKOL_GP_API_DECL void sgp_clear(void);                                                                         /* Clears the current viewport using the current state color. */
+SOKOL_GP_API_DECL void sgp_draw(sg_primitive_type primitive_type, const sgp_vertex* vertices, uint32_t count);  /* Low level drawing function, capable of drawing any primitive. */
 SOKOL_GP_API_DECL void sgp_draw_points(const sgp_point* points, uint32_t count);                                /* Draws points in a batch. */
 SOKOL_GP_API_DECL void sgp_draw_point(float x, float y);                                                        /* Draws a single point. */
 SOKOL_GP_API_DECL void sgp_draw_lines(const sgp_line* lines, uint32_t count);                                   /* Draws lines in a batch. */
@@ -662,12 +669,6 @@ enum {
     _SGP_MAX_STACK_DEPTH = 64
 };
 
-typedef struct _sgp_vertex {
-    sgp_vec2 position;
-    sgp_vec2 texcoord;
-    sgp_color_ub4 color;
-} _sgp_vertex;
-
 typedef struct _sgp_region {
     float x1, y1, x2, y2;
 } _sgp_region;
@@ -718,7 +719,7 @@ typedef struct _sgp_context {
     uint32_t num_vertices;
     uint32_t num_uniforms;
     uint32_t num_commands;
-    _sgp_vertex* vertices;
+    sgp_vertex* vertices;
     sgp_uniform* uniforms;
     _sgp_command* commands;
 
@@ -1536,11 +1537,11 @@ static sg_pipeline _sgp_make_pipeline(sg_shader shader, sg_primitive_type primit
     sg_pipeline_desc pip_desc;
     memset(&pip_desc, 0, sizeof(sg_pipeline_desc));
     pip_desc.shader = shader;
-    pip_desc.layout.buffers[0].stride = sizeof(_sgp_vertex);
-    pip_desc.layout.attrs[SGP_VS_ATTR_COORD].offset = offsetof(_sgp_vertex, position);
+    pip_desc.layout.buffers[0].stride = sizeof(sgp_vertex);
+    pip_desc.layout.attrs[SGP_VS_ATTR_COORD].offset = offsetof(sgp_vertex, position);
     pip_desc.layout.attrs[SGP_VS_ATTR_COORD].format = SG_VERTEXFORMAT_FLOAT4;
     if (has_vs_color) {
-        pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].offset = offsetof(_sgp_vertex, color);
+        pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].offset = offsetof(sgp_vertex, color);
         pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].format = SG_VERTEXFORMAT_UBYTE4N;
     }
     pip_desc.sample_count = sample_count;
@@ -1675,7 +1676,7 @@ void sgp_setup(const sgp_desc* desc) {
     _sgp.num_vertices = _sgp.desc.max_vertices;
     _sgp.num_commands = _sgp.desc.max_commands;
     _sgp.num_uniforms = _sgp.desc.max_commands;
-    _sgp.vertices = (_sgp_vertex*) _sg_malloc(_sgp.num_vertices * sizeof(_sgp_vertex));
+    _sgp.vertices = (sgp_vertex*) _sg_malloc(_sgp.num_vertices * sizeof(sgp_vertex));
     _sgp.uniforms = (sgp_uniform*) _sg_malloc(_sgp.num_uniforms * sizeof(sgp_uniform));
     _sgp.commands = (_sgp_command*) _sg_malloc(_sgp.num_commands * sizeof(_sgp_command));
     if (!_sgp.commands || !_sgp.uniforms || !_sgp.commands) {
@@ -1683,14 +1684,14 @@ void sgp_setup(const sgp_desc* desc) {
         _sgp_set_error(SGP_ERROR_ALLOC_FAILED);
         return;
     }
-    memset(_sgp.vertices, 0, _sgp.num_vertices * sizeof(_sgp_vertex));
+    memset(_sgp.vertices, 0, _sgp.num_vertices * sizeof(sgp_vertex));
     memset(_sgp.uniforms, 0, _sgp.num_uniforms * sizeof(sgp_uniform));
     memset(_sgp.commands, 0, _sgp.num_commands * sizeof(_sgp_command));
 
     // create vertex buffer
     sg_buffer_desc vertex_buf_desc;
     memset(&vertex_buf_desc, 0, sizeof(sg_buffer_desc));
-    vertex_buf_desc.size = (size_t)(_sgp.num_vertices * sizeof(_sgp_vertex));
+    vertex_buf_desc.size = (size_t)(_sgp.num_vertices * sizeof(sgp_vertex));
     vertex_buf_desc.type = SG_BUFFERTYPE_VERTEXBUFFER;
     vertex_buf_desc.usage = SG_USAGE_STREAM;
 
@@ -1939,7 +1940,7 @@ void sgp_flush(void) {
 
     // upload vertices
     uint32_t base_vertex = _sgp.state._base_vertex;
-    uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(_sgp_vertex);
+    uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(sgp_vertex);
     sg_range vertex_range = {&_sgp.vertices[base_vertex], num_vertices};
     int offset = sg_append_buffer(_sgp.vertex_buf, &vertex_range);
     if (sg_query_buffer_overflow(_sgp.vertex_buf)) {
@@ -2278,9 +2279,9 @@ void sgp_reset_sampler(int channel) {
     sgp_set_sampler(channel, _sgp.nearest_smp);
 }
 
-static _sgp_vertex* _sgp_next_vertices(uint32_t count) {
+static sgp_vertex* _sgp_next_vertices(uint32_t count) {
     if (SOKOL_LIKELY(_sgp.cur_vertex + count <= _sgp.num_vertices)) {
-        _sgp_vertex *vertices = &_sgp.vertices[_sgp.cur_vertex];
+        sgp_vertex *vertices = &_sgp.vertices[_sgp.cur_vertex];
         _sgp.cur_vertex += count;
         return vertices;
     } else {
@@ -2503,8 +2504,8 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
             }
 
             // rearrange vertices memory for the batch
-            memmove(&_sgp.vertices[prev_end_vertex + num_vertices], &_sgp.vertices[prev_end_vertex], prev_num_vertices * sizeof(_sgp_vertex));
-            memcpy(&_sgp.vertices[prev_end_vertex], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(_sgp_vertex));
+            memmove(&_sgp.vertices[prev_end_vertex + num_vertices], &_sgp.vertices[prev_end_vertex], prev_num_vertices * sizeof(sgp_vertex));
+            memcpy(&_sgp.vertices[prev_end_vertex], &_sgp.vertices[vertex_index + num_vertices], num_vertices * sizeof(sgp_vertex));
 
             // offset vertices of intermediate draw commands
             for (uint32_t i=0;i<inter_cmd_count;++i) {
@@ -2541,8 +2542,8 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
         }
 
         // rearrange vertices memory for the batch
-        memmove(&_sgp.vertices[vertex_index + prev_num_vertices], &_sgp.vertices[vertex_index], num_vertices * sizeof(_sgp_vertex));
-        memcpy(&_sgp.vertices[vertex_index], &_sgp.vertices[prev_cmd->args.draw.vertex_index], prev_num_vertices * sizeof(_sgp_vertex));
+        memmove(&_sgp.vertices[vertex_index + prev_num_vertices], &_sgp.vertices[vertex_index], num_vertices * sizeof(sgp_vertex));
+        memcpy(&_sgp.vertices[vertex_index], &_sgp.vertices[prev_cmd->args.draw.vertex_index], prev_num_vertices * sizeof(sgp_vertex));
 
         // update draw region and vertices
         prev_region.x1 = _sg_min(prev_region.x1, region.x1);
@@ -2576,7 +2577,7 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
 #endif // SGP_BATCH_OPTIMIZER_DEPTH > 0
 }
 
-static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
+static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices, sg_primitive_type primitive_type) {
     // override pipeline
     sgp_uniform* uniform = NULL;
     if (_sgp.state.pipeline.id != SG_INVALID_ID) {
@@ -2597,7 +2598,8 @@ static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex
     }
 
     // try to merge on previous command to draw in a batch
-    if (_sgp_merge_batch_command(pip, _sgp.state.textures, uniform, region, vertex_index, num_vertices)) {
+    if (primitive_type != SG_PRIMITIVETYPE_TRIANGLE_STRIP && primitive_type != SG_PRIMITIVETYPE_LINE_STRIP &&
+        _sgp_merge_batch_command(pip, _sgp.state.textures, uniform, region, vertex_index, num_vertices)) {
         return;
     }
 
@@ -2647,30 +2649,6 @@ static void _sgp_transform_vec2(sgp_mat2x3* matrix, sgp_vec2* dst, const sgp_vec
     }
 }
 
-static void _sgp_draw_solid_pip(sg_pipeline pip, const sgp_vec2* vertices, uint32_t num_vertices, float thickness) {
-    uint32_t vertex_index = _sgp.cur_vertex;
-    _sgp_vertex* v = _sgp_next_vertices(num_vertices);
-    if (SOKOL_UNLIKELY(!vertices)) {
-        return;
-    }
-
-    sgp_color_ub4 color = _sgp.state.color;
-    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
-    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
-    for (uint32_t i=0;i<num_vertices;++i) {
-        sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
-        region.x1 = _sg_min(region.x1, p.x - thickness);
-        region.y1 = _sg_min(region.y1, p.y - thickness);
-        region.x2 = _sg_max(region.x2, p.x + thickness);
-        region.y2 = _sg_max(region.y2, p.y + thickness);
-        v[i].position = p;
-        v[i].texcoord.x = 0.0f;
-        v[i].texcoord.y = 0.0f;
-        v[i].color = color;
-    }
-    _sgp_queue_draw(pip, region, vertex_index, num_vertices);
-}
-
 void sgp_clear(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
@@ -2678,13 +2656,13 @@ void sgp_clear(void) {
     // setup vertices
     uint32_t num_vertices = 6;
     uint32_t vertex_index = _sgp.cur_vertex;
-    _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
+    sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if (SOKOL_UNLIKELY(!vertices)) {
         return;
     }
 
     // compute vertices
-    _sgp_vertex* v = vertices;
+    sgp_vertex* v = vertices;
     const sgp_vec2 quad[4] = {
         {-1.0f, -1.0f}, // bottom left
         { 1.0f, -1.0f}, // bottom right
@@ -2705,78 +2683,112 @@ void sgp_clear(void) {
     _sgp_region region = {-1.0f, -1.0f, 1.0f, 1.0f};
 
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, SGP_BLENDMODE_NONE);
-    _sgp_queue_draw(pip, region, vertex_index, num_vertices);
+    _sgp_queue_draw(pip, region, vertex_index, num_vertices, SG_PRIMITIVETYPE_TRIANGLES);
 }
 
-void sgp_draw_points(const sgp_point* points, uint32_t count) {
+void sgp_draw(sg_primitive_type primitive_type, const sgp_vertex* vertices, uint32_t count) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     if (SOKOL_UNLIKELY(count == 0)) {
         return;
     }
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_POINTS, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, points, count, _sgp.state.thickness);
+
+    // setup vertices
+    uint32_t vertex_index = _sgp.cur_vertex;
+    sgp_vertex* v = _sgp_next_vertices(count);
+    if (SOKOL_UNLIKELY(!v)) {
+        return;
+    }
+
+    // fill vertices
+    float thickness = (primitive_type == SG_PRIMITIVETYPE_POINTS || primitive_type == SG_PRIMITIVETYPE_LINES || primitive_type == SG_PRIMITIVETYPE_LINE_STRIP) ? _sgp.state.thickness : 0.0f;
+    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
+    for (uint32_t i=0;i<count;++i) {
+        sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i].position);
+        region.x1 = _sg_min(region.x1, p.x - thickness);
+        region.y1 = _sg_min(region.y1, p.y - thickness);
+        region.x2 = _sg_max(region.x2, p.x + thickness);
+        region.y2 = _sg_max(region.y2, p.y + thickness);
+        v[i].position = p;
+        v[i].texcoord = vertices[i].texcoord;
+        v[i].color = vertices[i].color;
+    }
+
+    // queue draw
+    sg_pipeline pip = _sgp_lookup_pipeline(primitive_type, _sgp.state.blend_mode);
+    _sgp_queue_draw(pip, region, vertex_index, count, primitive_type);
+}
+
+static void _sgp_draw_solid_pip(sg_primitive_type primitive_type, const sgp_vec2* vertices, uint32_t num_vertices) {
+    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
+    SOKOL_ASSERT(_sgp.cur_state > 0);
+    if (SOKOL_UNLIKELY(num_vertices == 0)) {
+        return;
+    }
+
+    // setup vertices
+    uint32_t vertex_index = _sgp.cur_vertex;
+    sgp_vertex* v = _sgp_next_vertices(num_vertices);
+    if (SOKOL_UNLIKELY(!v)) {
+        return;
+    }
+
+    // fill vertices
+    float thickness = (primitive_type == SG_PRIMITIVETYPE_POINTS || primitive_type == SG_PRIMITIVETYPE_LINES || primitive_type == SG_PRIMITIVETYPE_LINE_STRIP) ? _sgp.state.thickness : 0.0f;
+    sgp_color_ub4 color = _sgp.state.color;
+    sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
+    for (uint32_t i=0;i<num_vertices;++i) {
+        sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
+        region.x1 = _sg_min(region.x1, p.x - thickness);
+        region.y1 = _sg_min(region.y1, p.y - thickness);
+        region.x2 = _sg_max(region.x2, p.x + thickness);
+        region.y2 = _sg_max(region.y2, p.y + thickness);
+        v[i].position = p;
+        v[i].texcoord.x = 0.0f;
+        v[i].texcoord.y = 0.0f;
+        v[i].color = color;
+    }
+
+    // queue draw
+    sg_pipeline pip = _sgp_lookup_pipeline(primitive_type, _sgp.state.blend_mode);
+    _sgp_queue_draw(pip, region, vertex_index, num_vertices, primitive_type);
+}
+
+void sgp_draw_points(const sgp_point* points, uint32_t count) {
+    _sgp_draw_solid_pip(SG_PRIMITIVETYPE_POINTS, points, count);
 }
 
 void sgp_draw_point(float x, float y) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_point point = {x, y};
     sgp_draw_points(&point, 1);
 }
 
 void sgp_draw_lines(const sgp_line* lines, uint32_t count) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
-    if (SOKOL_UNLIKELY(count == 0)) {
-        return;
-    }
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINES, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, (const sgp_point*)lines, count*2, _sgp.state.thickness);
+    _sgp_draw_solid_pip(SG_PRIMITIVETYPE_LINES, (const sgp_point*)lines, count*2);
 }
 
 void sgp_draw_line(float ax, float ay, float bx, float by) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_line line = {{ax,ay},{bx, by}};
     sgp_draw_lines(&line, 1);
 }
 
 void sgp_draw_lines_strip(const sgp_point* points, uint32_t count) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
-    if (SOKOL_UNLIKELY(count == 0)) {
-        return;
-    }
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_LINE_STRIP, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, points, count, _sgp.state.thickness);
+    _sgp_draw_solid_pip(SG_PRIMITIVETYPE_LINE_STRIP, points, count);
 }
 
 void sgp_draw_filled_triangles(const sgp_triangle* triangles, uint32_t count) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
-    if (SOKOL_UNLIKELY(count == 0)) {
-        return;
-    }
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, (const sgp_point*)triangles, count*3, 0.0f);
+    _sgp_draw_solid_pip(SG_PRIMITIVETYPE_TRIANGLES, (const sgp_point*)triangles, count*3);
 }
 
 void sgp_draw_filled_triangle(float ax, float ay, float bx, float by, float cx, float cy) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
     sgp_triangle triangle = {{ax,ay},{bx, by},{cx, cy}};
     sgp_draw_filled_triangles(&triangle, 1);
 }
 
 void sgp_draw_filled_triangles_strip(const sgp_point* points, uint32_t count) {
-    SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
-    SOKOL_ASSERT(_sgp.cur_state > 0);
-    if (SOKOL_UNLIKELY(count == 0)) {
-        return;
-    }
-    sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLE_STRIP, _sgp.state.blend_mode);
-    _sgp_draw_solid_pip(pip, points, count, 0.0f);
+    _sgp_draw_solid_pip(SG_PRIMITIVETYPE_TRIANGLE_STRIP, points, count);
 }
 
 void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
@@ -2789,13 +2801,13 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     // setup vertices
     uint32_t num_vertices = count * 6;
     uint32_t vertex_index = _sgp.cur_vertex;
-    _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
+    sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if (SOKOL_UNLIKELY(!vertices)) {
         return;
     }
 
     // compute vertices
-    _sgp_vertex* v = vertices;
+    sgp_vertex* v = vertices;
     const sgp_rect* rect = rects;
     sgp_color_ub4 color = _sgp.state.color;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
@@ -2832,8 +2844,9 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
         v[5].position = quad[2]; v[5].texcoord = vtexquad[2]; v[5].color = color;
     }
 
+    // queue draw
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, region, vertex_index, num_vertices);
+    _sgp_queue_draw(pip, region, vertex_index, num_vertices, SG_PRIMITIVETYPE_TRIANGLES);
 }
 
 void sgp_draw_filled_rect(float x, float y, float w, float h) {
@@ -2862,7 +2875,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
     // setup vertices
     uint32_t num_vertices = count * 6;
     uint32_t vertex_index = _sgp.cur_vertex;
-    _sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
+    sgp_vertex* vertices = _sgp_next_vertices(num_vertices);
     if (SOKOL_UNLIKELY(!vertices)) {
         return;
     }
@@ -2893,7 +2906,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
             region.y2 = _sg_max(region.y2, quad[j].y);
         }
 
-        _sgp_vertex* v = &vertices[i*6];
+        sgp_vertex* v = &vertices[i*6];
         v[0].position = quad[0];
         v[1].position = quad[1];
         v[2].position = quad[2];
@@ -2918,7 +2931,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
         };
 
         // make a quad composed of 2 triangles
-        _sgp_vertex* v = &vertices[i*6];
+        sgp_vertex* v = &vertices[i*6];
         v[0].texcoord = vtexquad[0]; v[0].color = color;
         v[1].texcoord = vtexquad[1]; v[1].color = color;
         v[2].texcoord = vtexquad[2]; v[2].color = color;
@@ -2927,8 +2940,9 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
         v[5].texcoord = vtexquad[2]; v[5].color = color;
     }
 
+    // queue draw
     sg_pipeline pip = _sgp_lookup_pipeline(SG_PRIMITIVETYPE_TRIANGLES, _sgp.state.blend_mode);
-    _sgp_queue_draw(pip, region, vertex_index, num_vertices);
+    _sgp_queue_draw(pip, region, vertex_index, num_vertices, SG_PRIMITIVETYPE_TRIANGLES);
 }
 
 void sgp_draw_textured_rect(int channel, sgp_rect dest_rect, sgp_rect src_rect) {
