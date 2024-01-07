@@ -122,10 +122,10 @@ update-thirdparty:
 .PHONY: all shaders clean clean-shaders lint update-thirdparty
 
 test: all
-	./build/sample-rectangle
-	./build/sample-blend
-	./build/sample-primitives
-	./build/sample-effect
-	./build/sample-framebuffer
-	./build/sample-sdf
-	./build/sample-bench
+	./build/sample-rectangle$(OUTEXT)
+	./build/sample-blend$(OUTEXT)
+	./build/sample-primitives$(OUTEXT)
+	./build/sample-effect$(OUTEXT)
+	./build/sample-framebuffer$(OUTEXT)
+	./build/sample-sdf$(OUTEXT)
+	./build/sample-bench$(OUTEXT)

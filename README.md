@@ -16,7 +16,7 @@ Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
 * D3D11/OpenGL 3.3/Metal/WebGPU graphics backends (through Sokol GFX).
 * **Automatic batching** (merge recent draw calls into batches automatically).
 * **Batch optimizer** (rearranges the ordering of draw calls to batch more).
-* Batch draw calls even when using different color states. **NEW**
+* Batch draw calls even when using different color states. **\*NEW\***
 * Uses preallocated memory (no allocations at runtime).
 * Supports drawing basic 2D primitives (rectangles, triangles, lines and points).
 * Supports the classic 2D color blending modes (color blend, add, modulate, multiply).

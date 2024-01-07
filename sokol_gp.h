@@ -547,6 +547,7 @@ typedef struct sgp_pipeline_desc {
     sg_pixel_format color_format;       /* Color format, defaults to the value used when creating Sokol GP context. */
     sg_pixel_format depth_format;       /* Depth format, defaults to the value used when creating Sokol GP context. */
     int sample_count;                   /* Sample count, defaults to the value used when creating Sokol GP context. */
+    bool has_vs_color;                  /* If true, the current color state will be passed as an attribute to the vertex shader. */
 } sgp_pipeline_desc;
 
 /* Initialization and de-initialization. */
@@ -1530,7 +1531,7 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
 }
 
 static sg_pipeline _sgp_make_pipeline(sg_shader shader, sg_primitive_type primitive_type, sgp_blend_mode blend_mode,
-                                      sg_pixel_format color_format, sg_pixel_format depth_format, int sample_count) {
+                                      sg_pixel_format color_format, sg_pixel_format depth_format, int sample_count, bool has_vs_color) {
     // create pipeline
     sg_pipeline_desc pip_desc;
     memset(&pip_desc, 0, sizeof(sg_pipeline_desc));
@@ -1538,8 +1539,10 @@ static sg_pipeline _sgp_make_pipeline(sg_shader shader, sg_primitive_type primit
     pip_desc.layout.buffers[0].stride = sizeof(_sgp_vertex);
     pip_desc.layout.attrs[SGP_VS_ATTR_COORD].offset = offsetof(_sgp_vertex, position);
     pip_desc.layout.attrs[SGP_VS_ATTR_COORD].format = SG_VERTEXFORMAT_FLOAT4;
-    pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].offset = offsetof(_sgp_vertex, color);
-    pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].format = SG_VERTEXFORMAT_UBYTE4N;
+    if (has_vs_color) {
+        pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].offset = offsetof(_sgp_vertex, color);
+        pip_desc.layout.attrs[SGP_VS_ATTR_COLOR].format = SG_VERTEXFORMAT_UBYTE4N;
+    }
     pip_desc.sample_count = sample_count;
     pip_desc.depth.pixel_format = depth_format;
     pip_desc.colors[0].pixel_format = color_format;
@@ -1560,7 +1563,7 @@ static sg_pipeline _sgp_lookup_pipeline(sg_primitive_type primitive_type, sgp_bl
         return _sgp.pipelines[pip_index];
     }
 
-    sg_pipeline pip = _sgp_make_pipeline(_sgp.shader, primitive_type, blend_mode, _sgp.desc.color_format, _sgp.desc.depth_format, _sgp.desc.sample_count);
+    sg_pipeline pip = _sgp_make_pipeline(_sgp.shader, primitive_type, blend_mode, _sgp.desc.color_format, _sgp.desc.depth_format, _sgp.desc.sample_count, true);
     if (pip.id != SG_INVALID_ID) {
         _sgp.pipelines[pip_index] = pip;
     }
@@ -1847,7 +1850,7 @@ sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
     sg_pixel_format depth_format = _sg_def(desc->depth_format, _sgp.desc.depth_format);
     int sample_count = _sg_def(desc->sample_count, _sgp.desc.sample_count);
     if (sg_query_shader_state(shader) == SG_RESOURCESTATE_VALID) {
-        pip = _sgp_make_pipeline(shader, primitive_type, blend_mode, color_format, depth_format, sample_count);
+        pip = _sgp_make_pipeline(shader, primitive_type, blend_mode, color_format, depth_format, sample_count, desc->has_vs_color);
     } else if (shader.id != SG_INVALID_ID) {
         sg_destroy_shader(shader);
     }

@@ -130,6 +130,7 @@ static void init(void) {
     sgp_pipeline_desc pip_desc;
     memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
     pip_desc.shader = *effect_program_shader_desc(sg_query_backend());
+    pip_desc.has_vs_color = true;
     pip = sgp_make_pipeline(&pip_desc);
     if (sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to make custom pipeline\n");
