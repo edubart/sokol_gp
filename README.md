@@ -351,19 +351,6 @@ MIT, see LICENSE file or the end of `sokol_gp.h` file.
 Here is a quick list of all library functions for quick reference:
 
 ```c
-/* Structure that defines SGP setup parameters. */
-typedef struct sgp_desc {
-    uint32_t max_vertices;
-    uint32_t max_commands;
-} sgp_desc;
-
-/* Structure that defines SGP custom pipeline creation parameters. */
-typedef struct sgp_pipeline_desc {
-    sg_shader_desc shader;              /* Sokol shader description. */
-    sg_primitive_type primitive_type;   /* Draw primitive type (triangles, lines, points, etc). Default is triangles. */
-    sgp_blend_mode blend_mode;          /* Color blend mode. Default is no blend. */
-} sgp_pipeline_desc;
-
 /* Initialization and de-initialization. */
 void sgp_setup(const sgp_desc* desc);                 /* Initializes the SGP context, and should be called after `sg_setup`. */
 void sgp_shutdown(void);                              /* Destroys the SGP context. */
