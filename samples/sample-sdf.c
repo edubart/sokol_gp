@@ -17,6 +17,7 @@ in this case the shader is a SDF (signed distance field) animation.
 #include <stdlib.h>
 
 static sg_pipeline pip;
+static sg_shader shd;
 
 static void frame(void) {
     // begin draw commands queue
@@ -66,9 +67,15 @@ static void init(void) {
     }
 
     // initialize shader
+    shd = sg_make_shader(sdf_program_shader_desc(sg_query_backend()));
+    if (sg_query_shader_state(shd) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "failed to make custom pipeline shader\n");
+        exit(-1);
+    }
     sgp_pipeline_desc pip_desc;
     memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
-    pip_desc.shader = *sdf_program_shader_desc(sg_query_backend());
+    pip_desc.shader = shd;
+    pip_desc.has_vs_color = true;
     pip = sgp_make_pipeline(&pip_desc);
     if (sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to make custom pipeline\n");
@@ -78,6 +85,7 @@ static void init(void) {
 
 static void cleanup(void) {
     sg_destroy_pipeline(pip);
+    sg_destroy_shader(shd);
     sgp_shutdown();
     sg_shutdown();
 }

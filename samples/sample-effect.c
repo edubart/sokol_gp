@@ -20,6 +20,7 @@ This sample showcases how to create 2D shader effects using multiple textures.
 #include "sample-effect.glsl.h"
 
 static sg_pipeline pip;
+static sg_shader shd;
 static sg_image image;
 static sg_sampler linear_sampler;
 static sg_image perlin_image;
@@ -127,9 +128,14 @@ static void init(void) {
     }
 
     // initialize shader
+    shd = sg_make_shader(effect_program_shader_desc(sg_query_backend()));
+    if (sg_query_shader_state(shd) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "failed to make custom pipeline shader\n");
+        exit(-1);
+    }
     sgp_pipeline_desc pip_desc;
     memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
-    pip_desc.shader = *effect_program_shader_desc(sg_query_backend());
+    pip_desc.shader = shd;
     pip_desc.has_vs_color = true;
     pip = sgp_make_pipeline(&pip_desc);
     if (sg_query_pipeline_state(pip) != SG_RESOURCESTATE_VALID) {
@@ -142,6 +148,7 @@ static void cleanup(void) {
     sg_destroy_image(image);
     sg_destroy_image(perlin_image);
     sg_destroy_pipeline(pip);
+    sg_destroy_shader(shd);
     sgp_shutdown();
     sg_shutdown();
 }

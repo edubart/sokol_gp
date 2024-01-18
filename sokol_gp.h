@@ -1,6 +1,6 @@
 /*
 Minimal efficient cross platform 2D graphics painter for Sokol GFX.
-sokol_gp - v0.4.0 - 07/Jan/2024
+sokol_gp - v0.4.1 - 18/Jan/2024
 Eduardo Bart - edub4rt@gmail.com
 https://github.com/edubart/sokol_gp
 
@@ -547,7 +547,7 @@ typedef struct sgp_desc {
 
 /* Structure that defines SGP custom pipeline creation parameters. */
 typedef struct sgp_pipeline_desc {
-    sg_shader_desc shader;              /* Sokol shader description. */
+    sg_shader shader;                   /* Sokol shader. */
     sg_primitive_type primitive_type;   /* Draw primitive type (triangles, lines, points, etc). Default is triangles. */
     sgp_blend_mode blend_mode;          /* Color blend mode. Default is no blend. */
     sg_pixel_format color_format;       /* Color format, defaults to the value used when creating Sokol GP context. */
@@ -1843,19 +1843,12 @@ const char* sgp_get_error_message(sgp_error error_code) {
 }
 
 sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc* desc) {
-    sg_pipeline pip = {SG_INVALID_ID};
-    sg_shader shader = sg_make_shader(&desc->shader);
     sg_primitive_type primitive_type = _sg_def(desc->primitive_type, SG_PRIMITIVETYPE_TRIANGLES);
     sgp_blend_mode blend_mode = _sg_def(desc->blend_mode, SGP_BLENDMODE_NONE);
     sg_pixel_format color_format = _sg_def(desc->color_format, _sgp.desc.color_format);
     sg_pixel_format depth_format = _sg_def(desc->depth_format, _sgp.desc.depth_format);
     int sample_count = _sg_def(desc->sample_count, _sgp.desc.sample_count);
-    if (sg_query_shader_state(shader) == SG_RESOURCESTATE_VALID) {
-        pip = _sgp_make_pipeline(shader, primitive_type, blend_mode, color_format, depth_format, sample_count, desc->has_vs_color);
-    } else if (shader.id != SG_INVALID_ID) {
-        sg_destroy_shader(shader);
-    }
-    return pip;
+    return _sgp_make_pipeline(desc->shader, primitive_type, blend_mode, color_format, depth_format, sample_count, desc->has_vs_color);
 }
 
 static inline sgp_mat2x3 _sgp_default_proj(int width, int height) {

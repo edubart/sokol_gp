@@ -465,6 +465,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
+* **18-Jan-2024**: Fix shader leaking when creating custom SGP pipelines.
 * **07-Jan-2024**: Make possible to set custom depth format and sample count in pipelines, batch draw calls even when using different colors, introduce low level primitive drawing function, format source files.
 * **31-Oct-2023**: Update to latest Sokol, introduced new WebGPU backend.
 * **30-Sep-2023**: Update to latest Sokol, deprecated GLES2 backend, add image sampler APIs, changes in draw textured APIs.
