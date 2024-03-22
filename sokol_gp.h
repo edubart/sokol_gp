@@ -1602,6 +1602,7 @@ static sg_shader _sgp_make_common_shader(void) {
     switch (backend) {
         case SG_BACKEND_METAL_MACOS:
         case SG_BACKEND_METAL_IOS:
+        case SG_BACKEND_METAL_SIMULATOR:
             desc.vs.entry = "main0";
             desc.fs.entry = "main0";
             break;
@@ -1630,6 +1631,7 @@ static sg_shader _sgp_make_common_shader(void) {
             desc.fs.source = sgp_fs_source_metal_macos;
             break;
         case SG_BACKEND_METAL_IOS:
+        case SG_BACKEND_METAL_SIMULATOR:
             desc.vs.source = sgp_vs_source_metal_ios;
             desc.fs.source = sgp_fs_source_metal_ios;
             break;
@@ -2209,10 +2211,10 @@ void sgp_set_color(float r, float g, float b, float a) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     _sgp.state.color = (sgp_color_ub4){
-        _sg_clamp(r*255.0f, 0.0f, 255.0f),
-        _sg_clamp(g*255.0f, 0.0f, 255.0f),
-        _sg_clamp(b*255.0f, 0.0f, 255.0f),
-        _sg_clamp(a*255.0f, 0.0f, 255.0f)
+        (uint8_t)_sg_clamp(r*255.0f, 0.0f, 255.0f),
+        (uint8_t)_sg_clamp(g*255.0f, 0.0f, 255.0f),
+        (uint8_t)_sg_clamp(b*255.0f, 0.0f, 255.0f),
+        (uint8_t)_sg_clamp(a*255.0f, 0.0f, 255.0f)
     };
 }
 
