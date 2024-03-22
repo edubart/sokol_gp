@@ -34,8 +34,7 @@ static void frame(void) {
     sg_image_desc image_desc = sg_query_image_desc(image);
     float window_ratio = window_width / (float)window_height;
     float image_ratio = image_desc.width / (float)image_desc.height;
-    effect_uniforms_t uniforms;
-    memset(&uniforms, 0, sizeof(effect_uniforms_t));
+    effect_uniforms_t uniforms = {0};
     uniforms.iVelocity.x = 0.02f;
     uniforms.iVelocity.y = 0.01f;
     uniforms.iPressure = 0.3f;
@@ -60,8 +59,8 @@ static void frame(void) {
     sgp_reset_pipeline();
 
     // dispatch draw commands
-    sg_pass_action pass_action = {0};
-    sg_begin_default_pass(&pass_action, window_width, window_height);
+    sg_pass pass = {.swapchain = sglue_swapchain()};
+    sg_begin_pass(&pass);
     sgp_flush();
     sgp_end();
     sg_end_pass();
@@ -75,8 +74,7 @@ static sg_image load_image(const char *filename) {
     if (!data) {
         return img;
     }
-    sg_image_desc image_desc;
-    memset(&image_desc, 0, sizeof(sg_image_desc));
+    sg_image_desc image_desc = {0};
     image_desc.width = width;
     image_desc.height = height;
     image_desc.data.subimage[0][0].ptr = data;
@@ -89,7 +87,7 @@ static sg_image load_image(const char *filename) {
 static void init(void) {
     // initialize Sokol GFX
     sg_desc sgdesc = {
-        .context = sapp_sgcontext(),
+        .environment = sglue_environment(),
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
@@ -133,8 +131,7 @@ static void init(void) {
         fprintf(stderr, "failed to make custom pipeline shader\n");
         exit(-1);
     }
-    sgp_pipeline_desc pip_desc;
-    memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
+    sgp_pipeline_desc pip_desc = {0};
     pip_desc.shader = shd;
     pip_desc.has_vs_color = true;
     pip = sgp_make_pipeline(&pip_desc);

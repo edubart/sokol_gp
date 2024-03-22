@@ -12,10 +12,10 @@ This sample showcases how to use Sokol GP to draw inside frame buffers (render t
 #include <stdio.h>
 #include <stdlib.h>
 
-static sg_image fb_image;
+static sg_image fb_color_image;
 static sg_image fb_depth_image;
+static sg_attachments fb_attachments;
 static sg_sampler linear_sampler;
-static sg_pass fb_pass;
 
 static void draw_triangles(void) {
     const float PI = 3.14159265f;
@@ -45,14 +45,17 @@ static void draw_fbo(void) {
     sgp_project(0, 128, 128, 0);
     draw_triangles();
 
-    sg_pass_action pass_action;
-    memset(&pass_action, 0, sizeof(sg_pass_action));
+    sg_pass_action pass_action = {0};
     pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
     pass_action.colors[0].clear_value.r = 1.0f;
     pass_action.colors[0].clear_value.g = 1.0f;
     pass_action.colors[0].clear_value.b = 1.0f;
     pass_action.colors[0].clear_value.a = 0.2f;
-    sg_begin_pass(fb_pass, &pass_action);
+    sg_pass pass = {
+        .action = pass_action,
+        .attachments = fb_attachments
+    };
+    sg_begin_pass(&pass);
     sgp_flush();
     sgp_end();
     sg_end_pass();
@@ -76,7 +79,7 @@ static void frame(void) {
         for (int x=0;x<width;x+=192) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
-            sgp_set_image(0, fb_image);
+            sgp_set_image(0, fb_color_image);
             sgp_set_sampler(0, linear_sampler);
             if (i % 2 == 0) {
                 sgp_draw_filled_rect(x, y, 128, 128);
@@ -93,8 +96,8 @@ static void frame(void) {
     }
 
     // dispatch draw commands
-    sg_pass_action pass_action = {0};
-    sg_begin_default_pass(&pass_action, width, height);
+    sg_pass pass = {.swapchain = sglue_swapchain()};
+    sg_begin_pass(&pass);
     sgp_flush();
     sgp_end();
     sg_end_pass();
@@ -104,7 +107,7 @@ static void frame(void) {
 static void init(void) {
     // initialize Sokol GFX
     sg_desc sgdesc = {
-        .context = sapp_sgcontext(),
+        .environment = sglue_environment(),
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
@@ -122,20 +125,18 @@ static void init(void) {
     }
 
     // create frame buffer image
-    sg_image_desc fb_image_desc;
-    memset(&fb_image_desc, 0, sizeof(sg_image_desc));
+    sg_image_desc fb_image_desc = {0};
     fb_image_desc.render_target = true;
     fb_image_desc.width = 128;
     fb_image_desc.height = 128;
-    fb_image = sg_make_image(&fb_image_desc);
-    if (sg_query_image_state(fb_image) != SG_RESOURCESTATE_VALID) {
+    fb_color_image = sg_make_image(&fb_image_desc);
+    if (sg_query_image_state(fb_color_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer image\n");
         exit(-1);
     }
 
     // create frame buffer depth stencil
-    sg_image_desc fb_depth_image_desc;
-    memset(&fb_depth_image_desc, 0, sizeof(sg_image_desc));
+    sg_image_desc fb_depth_image_desc = {0};
     fb_depth_image_desc.render_target = true;
     fb_depth_image_desc.width = 128;
     fb_depth_image_desc.height = 128;
@@ -143,6 +144,21 @@ static void init(void) {
     fb_depth_image = sg_make_image(&fb_depth_image_desc);
     if (sg_query_image_state(fb_depth_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer depth image\n");
+        exit(-1);
+    }
+
+    // create frame buffer attachments
+    sg_attachments_desc fb_attachments_desc = {
+        .colors = {
+            {.image = fb_color_image}
+        },
+        .depth_stencil = {
+            .image = fb_depth_image
+        }
+    };
+    fb_attachments = sg_make_attachments(&fb_attachments_desc);
+    if (sg_query_attachments_state(fb_attachments) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "Failed to create frame buffer attachments\n");
         exit(-1);
     }
 
@@ -158,23 +174,12 @@ static void init(void) {
         fprintf(stderr, "failed to create linear sampler");
         exit(-1);
     }
-
-    // create frame buffer pass
-    sg_pass_desc pass_desc;
-    memset(&pass_desc, 0, sizeof(sg_pass_desc));
-    pass_desc.color_attachments[0].image = fb_image;
-    pass_desc.depth_stencil_attachment.image = fb_depth_image;
-    fb_pass = sg_make_pass(&pass_desc);
-    if (sg_query_pass_state(fb_pass) != SG_RESOURCESTATE_VALID) {
-        fprintf(stderr, "Failed to create frame buffer pass\n");
-        exit(-1);
-    }
 }
 
 static void cleanup(void) {
-    sg_destroy_image(fb_image);
+    sg_destroy_attachments(fb_attachments);
+    sg_destroy_image(fb_color_image);
     sg_destroy_image(fb_depth_image);
-    sg_destroy_pass(fb_pass);
     sgp_shutdown();
     sg_shutdown();
 }

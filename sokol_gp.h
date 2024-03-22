@@ -175,8 +175,8 @@ static void frame(void) {
     sgp_draw_filled_rect(-0.5f, -0.5f, 1.0f, 1.0f);
 
     // Begin a render pass.
-    sg_pass_action pass_action = {0};
-    sg_begin_default_pass(&pass_action, width, height);
+    sg_pass pass = {.swapchain = sglue_swapchain()};
+    sg_begin_pass(&pass);
     // Dispatch all draw commands to Sokol GFX.
     sgp_flush();
     // Finish a draw command queue, clearing it.
@@ -191,7 +191,7 @@ static void frame(void) {
 static void init(void) {
     // Initialize Sokol GFX.
     sg_desc sgdesc = {
-        .context = sapp_sgcontext(),
+        .environment = sglue_environment(),
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
@@ -1668,9 +1668,9 @@ void sgp_setup(const sgp_desc* desc) {
     _sgp.desc = *desc;
     _sgp.desc.max_vertices = _sg_def(desc->max_vertices, _SGP_DEFAULT_MAX_VERTICES);
     _sgp.desc.max_commands = _sg_def(desc->max_commands, _SGP_DEFAULT_MAX_COMMANDS);
-    _sgp.desc.color_format = _sg_def(desc->color_format, _sg.desc.context.color_format);
-    _sgp.desc.depth_format = _sg_def(desc->depth_format, _sg.desc.context.depth_format);
-    _sgp.desc.sample_count = _sg_def(desc->sample_count, _sg.desc.context.sample_count);
+    _sgp.desc.color_format = _sg_def(desc->color_format, _sg.desc.environment.defaults.color_format);
+    _sgp.desc.depth_format = _sg_def(desc->depth_format, _sg.desc.environment.defaults.depth_format);
+    _sgp.desc.sample_count = _sg_def(desc->sample_count, _sg.desc.environment.defaults.sample_count);
 
     // allocate buffers
     _sgp.num_vertices = _sgp.desc.max_vertices;

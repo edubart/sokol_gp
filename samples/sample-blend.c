@@ -88,8 +88,8 @@ static void frame(void) {
     draw_rects(width/(float)height);
 
     // dispatch draw commands
-    sg_pass_action pass_action = {0};
-    sg_begin_default_pass(&pass_action, width, height);
+    sg_pass pass = {.swapchain = sglue_swapchain()};
+    sg_begin_pass(&pass);
     sgp_flush();
     sgp_end();
     sg_end_pass();
@@ -99,7 +99,7 @@ static void frame(void) {
 static void init(void) {
     // initialize Sokol GFX
     sg_desc sgdesc = {
-        .context = sapp_sgcontext(),
+        .environment = sglue_environment(),
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);

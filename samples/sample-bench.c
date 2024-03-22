@@ -181,8 +181,8 @@ static void frame(void) {
     bench_sync_mixed();
 
     // dispatch draw commands
-    sg_pass_action pass_action = {0};
-    sg_begin_default_pass(&pass_action, width, height);
+    sg_pass pass = {.swapchain = sglue_swapchain()};
+    sg_begin_pass(&pass);
     sgp_flush();
     sgp_end();
     sg_end_pass();
@@ -213,8 +213,7 @@ static sg_image create_image(int width, int height) {
             data[y*width*4+x*4+3] = 255;
         }
     }
-    sg_image_desc image_desc;
-    memset(&image_desc, 0, sizeof(sg_image_desc));
+    sg_image_desc image_desc = {0};
     image_desc.width = width;
     image_desc.height = height;
     image_desc.data.subimage[0][0].ptr = data;
@@ -230,7 +229,7 @@ static void init(void) {
 
     // initialize Sokol GFX
     sg_desc sgdesc = {
-        .context = sapp_sgcontext(),
+        .environment = sglue_environment(),
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);

@@ -26,8 +26,7 @@ static void frame(void) {
 
     // draw using the custom shader pipeline
     sgp_set_pipeline(pip);
-    sdf_uniforms_t uniform;
-    memset(&uniform, 0, sizeof(sdf_uniforms_t));
+    sdf_uniforms_t uniform = {0};
     uniform.iResolution.x = width;
     uniform.iResolution.y = height;
     uniform.iTime = sapp_frame_count() / 60.0f;
@@ -38,8 +37,8 @@ static void frame(void) {
     sgp_reset_pipeline();
 
     // dispatch draw commands
-    sg_pass_action pass_action = {0};
-    sg_begin_default_pass(&pass_action, width, height);
+    sg_pass pass = {.swapchain = sglue_swapchain()};
+    sg_begin_pass(&pass);
     sgp_flush();
     sgp_end();
     sg_end_pass();
@@ -49,7 +48,7 @@ static void frame(void) {
 static void init(void) {
     // initialize Sokol GFX
     sg_desc sgdesc = {
-        .context = sapp_sgcontext(),
+        .environment = sglue_environment(),
         .logger.func = slog_func
     };
     sg_setup(&sgdesc);
@@ -72,8 +71,7 @@ static void init(void) {
         fprintf(stderr, "failed to make custom pipeline shader\n");
         exit(-1);
     }
-    sgp_pipeline_desc pip_desc;
-    memset(&pip_desc, 0, sizeof(sgp_pipeline_desc));
+    sgp_pipeline_desc pip_desc = {0};
     pip_desc.shader = shd;
     pip_desc.has_vs_color = true;
     pip = sgp_make_pipeline(&pip_desc);
