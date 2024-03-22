@@ -452,6 +452,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
+* **22-Mar-2024**: Update to latest Sokol, added support for iOS simulator backend.
 * **18-Jan-2024**: Fix shader leaking when creating custom SGP pipelines.
 * **07-Jan-2024**: Make possible to set custom depth format and sample count in pipelines, batch draw calls even when using different colors, introduce low level primitive drawing function, format source files.
 * **31-Oct-2023**: Update to latest Sokol, introduced new WebGPU backend.
