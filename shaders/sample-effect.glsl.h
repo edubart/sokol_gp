@@ -1277,7 +1277,7 @@ static const char effect_fs_source_wgsl[2241] = {
     0x00,
 };
 const sg_shader_desc* effect_program_shader_desc(sg_backend backend) {
-  if (backend == SG_BACKEND_GLCORE33) {
+  if (backend == SG_BACKEND_GLCORE) {
     static sg_shader_desc desc;
     static bool valid;
     if (!valid) {

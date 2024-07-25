@@ -67,11 +67,11 @@ ifndef backend
 	else ifeq ($(platform), web)
 		backend=gles3
 	else
-		backend=glcore33
+		backend=glcore
 	endif
 endif
-ifeq ($(backend), glcore33)
-	DEFS+=-DSOKOL_GLCORE33
+ifeq ($(backend), glcore)
+	DEFS+=-DSOKOL_GLCORE
 else ifeq ($(backend), gles3)
 	DEFS+=-DSOKOL_GLES3
 else ifeq ($(backend), d3d11)

@@ -788,7 +788,7 @@ static const char sgp_fs_source_wgsl[682] = {
     0x6c,0x6f,0x72,0x29,0x3b,0x0a,0x7d,0x0a,0x0a,0x00,
 };
 const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
-  if (backend == SG_BACKEND_GLCORE33) {
+  if (backend == SG_BACKEND_GLCORE) {
     static sg_shader_desc desc;
     static bool valid;
     if (!valid) {

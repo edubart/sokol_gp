@@ -1585,7 +1585,7 @@ static sg_shader _sgp_make_common_shader(void) {
     desc.fs.image_sampler_pairs[0].image_slot = 0;
     desc.fs.image_sampler_pairs[0].sampler_slot = 0;
 
-    // GLCORE33 / GLES3 only
+    // GLCORE / GLES3 only
     desc.attrs[SGP_VS_ATTR_COORD].name = "coord";
     desc.attrs[SGP_VS_ATTR_COLOR].name = "color";
     desc.fs.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
@@ -1614,7 +1614,7 @@ static sg_shader _sgp_make_common_shader(void) {
 
     // source
     switch (backend) {
-        case SG_BACKEND_GLCORE33:
+        case SG_BACKEND_GLCORE:
             desc.vs.source = sgp_vs_source_glsl330;
             desc.fs.source = sgp_fs_source_glsl330;
             break;

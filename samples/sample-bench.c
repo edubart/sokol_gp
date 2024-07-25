@@ -249,7 +249,7 @@ static void init(void) {
         exit(-1);
     }
 
-#if defined(_SAPP_LINUX) && defined(SOKOL_GLCORE33)
+#if defined(_SAPP_LINUX) && defined(SOKOL_GLCORE)
     /* Disable swap interval */
     _sapp_glx_swapinterval(0);
 #endif
