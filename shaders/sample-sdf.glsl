@@ -3,7 +3,7 @@
 @ctype float float
 
 @vs vs
-uniform uniforms {
+uniform vs_uniforms {
     vec2 iResolution;
     float iTime;
 };
@@ -20,7 +20,7 @@ void main() {
 @fs fs
 uniform texture2D iTexChannel0;
 uniform sampler iSmpChannel0;
-uniform uniforms {
+uniform fs_uniforms {
     vec2 iResolution;
     float iTime;
 };

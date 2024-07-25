@@ -6,7 +6,7 @@ INCS=-I. -Ithirdparty -Ishaders
 OUTDIR=build
 OUTEXT=
 SHDC=sokol-shdc
-SHDCFLAGS=--format sokol_impl --slang glsl330:glsl300es:hlsl4:metal_macos:metal_ios:wgsl
+SHDCFLAGS=--format sokol_impl --slang glsl410:glsl300es:hlsl4:metal_macos:metal_ios:wgsl
 SHADERS=\
 	shaders/sample-effect.glsl.h \
 	shaders/sample-sdf.glsl.h \
