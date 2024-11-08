@@ -24,7 +24,7 @@
             Bind slot: IMG_iTexChannel0 => 0
         Sampler 'iSmpChannel0':
             Type: SG_SAMPLERTYPE_FILTERING
-            Bind slot: SMP_iSmpChannel0 => 1
+            Bind slot: SMP_iSmpChannel0 => 0
         Image Sampler Pair 'iTexChannel0_iSmpChannel0':
             Image: iTexChannel0
             Sampler: iSmpChannel0
@@ -43,7 +43,7 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend);
 #define ATTR_program_coord (0)
 #define ATTR_program_color (1)
 #define IMG_iTexChannel0 (0)
-#define SMP_iSmpChannel0 (1)
+#define SMP_iSmpChannel0 (0)
 #if defined(SOKOL_SHDC_IMPL)
 /*
     #version 410
@@ -781,11 +781,11 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
             desc.images[0].image_type = SG_IMAGETYPE_2D;
             desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
             desc.images[0].multisampled = false;
-            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
-            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
             desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
             desc.image_sampler_pairs[0].image_slot = 0;
-            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].sampler_slot = 0;
             desc.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
             desc.label = "sgp_program_shader";
         }
@@ -806,11 +806,11 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
             desc.images[0].image_type = SG_IMAGETYPE_2D;
             desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
             desc.images[0].multisampled = false;
-            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
-            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
             desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
             desc.image_sampler_pairs[0].image_slot = 0;
-            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].sampler_slot = 0;
             desc.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
             desc.label = "sgp_program_shader";
         }
@@ -836,12 +836,12 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
             desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
             desc.images[0].multisampled = false;
             desc.images[0].hlsl_register_t_n = 0;
-            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
-            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.samplers[1].hlsl_register_s_n = 0;
+            desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[0].hlsl_register_s_n = 0;
             desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
             desc.image_sampler_pairs[0].image_slot = 0;
-            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].sampler_slot = 0;
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -860,12 +860,12 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
             desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
             desc.images[0].multisampled = false;
             desc.images[0].msl_texture_n = 0;
-            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
-            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.samplers[1].msl_sampler_n = 0;
+            desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[0].msl_sampler_n = 0;
             desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
             desc.image_sampler_pairs[0].image_slot = 0;
-            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].sampler_slot = 0;
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -884,12 +884,12 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
             desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
             desc.images[0].multisampled = false;
             desc.images[0].msl_texture_n = 0;
-            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
-            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.samplers[1].msl_sampler_n = 0;
+            desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[0].msl_sampler_n = 0;
             desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
             desc.image_sampler_pairs[0].image_slot = 0;
-            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].sampler_slot = 0;
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -908,12 +908,12 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
             desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
             desc.images[0].multisampled = false;
             desc.images[0].wgsl_group1_binding_n = 64;
-            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
-            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.samplers[1].wgsl_group1_binding_n = 80;
+            desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[0].wgsl_group1_binding_n = 80;
             desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
             desc.image_sampler_pairs[0].image_slot = 0;
-            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].sampler_slot = 0;
             desc.label = "sgp_program_shader";
         }
         return &desc;
