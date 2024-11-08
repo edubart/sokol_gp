@@ -15,11 +15,11 @@ void main() {
 @end
 
 @fs fs
-uniform texture2D iTexChannel0;
-uniform texture2D iTexChannel1;
-uniform sampler iSmpChannel0;
-uniform sampler iSmpChannel1;
-uniform uniforms {
+layout(binding=0) uniform texture2D iTexChannel0;
+layout(binding=1) uniform texture2D iTexChannel1;
+layout(binding=0) uniform sampler iSmpChannel0;
+layout(binding=1) uniform sampler iSmpChannel1;
+layout(binding=0) uniform uniforms {
     vec2 iVelocity;
     float iPressure;
     float iTime;

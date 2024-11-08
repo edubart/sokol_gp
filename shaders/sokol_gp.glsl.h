@@ -11,22 +11,23 @@
     =========
     Shader program: 'program':
         Get shader desc: sgp_program_shader_desc(sg_query_backend());
-        Vertex shader: vs
-            Attributes:
-                ATTR_sgp_vs_coord => 0
-                ATTR_sgp_vs_color => 1
-        Fragment shader: fs
-            Image 'iTexChannel0':
-                Image type: SG_IMAGETYPE_2D
-                Sample type: SG_IMAGESAMPLETYPE_FLOAT
-                Multisampled: false
-                Bind slot: SLOT_sgp_iTexChannel0 => 0
-            Sampler 'iSmpChannel0':
-                Type: SG_SAMPLERTYPE_FILTERING
-                Bind slot: SLOT_sgp_iSmpChannel0 => 0
-            Image Sampler Pair 'iTexChannel0_iSmpChannel0':
-                Image: iTexChannel0
-                Sampler: iSmpChannel0
+        Vertex Shader: vs
+        Fragment Shader: fs
+        Attributes:
+            ATTR_program_coord => 0
+            ATTR_program_color => 1
+    Bindings:
+        Image 'iTexChannel0':
+            Image type: SG_IMAGETYPE_2D
+            Sample type: SG_IMAGESAMPLETYPE_FLOAT
+            Multisampled: false
+            Bind slot: IMG_iTexChannel0 => 0
+        Sampler 'iSmpChannel0':
+            Type: SG_SAMPLERTYPE_FILTERING
+            Bind slot: SMP_iSmpChannel0 => 1
+        Image Sampler Pair 'iTexChannel0_iSmpChannel0':
+            Image: iTexChannel0
+            Sampler: iSmpChannel0
 */
 #if !defined(SOKOL_GFX_INCLUDED)
 #error "Please include sokol_gfx.h before sokol_gp.glsl.h"
@@ -39,10 +40,10 @@
 #endif
 #endif
 const sg_shader_desc* sgp_program_shader_desc(sg_backend backend);
-#define ATTR_sgp_vs_coord (0)
-#define ATTR_sgp_vs_color (1)
-#define SLOT_sgp_iTexChannel0 (0)
-#define SLOT_sgp_iSmpChannel0 (0)
+#define ATTR_program_coord (0)
+#define ATTR_program_color (1)
+#define IMG_iTexChannel0 (0)
+#define SMP_iSmpChannel0 (1)
 #if defined(SOKOL_SHDC_IMPL)
 /*
     #version 410
@@ -689,9 +690,9 @@ static const uint8_t sgp_vs_source_wgsl[790] = {
 
     var<private> fragColor : vec4f;
 
-    @group(1) @binding(48) var iTexChannel0 : texture_2d<f32>;
+    @group(1) @binding(64) var iTexChannel0 : texture_2d<f32>;
 
-    @group(1) @binding(64) var iSmpChannel0 : sampler;
+    @group(1) @binding(80) var iSmpChannel0 : sampler;
 
     var<private> texUV : vec2f;
 
@@ -725,11 +726,11 @@ static const uint8_t sgp_fs_source_wgsl[682] = {
     0x72,0x6d,0x69,0x74,0x79,0x29,0x3b,0x0a,0x0a,0x76,0x61,0x72,0x3c,0x70,0x72,0x69,
     0x76,0x61,0x74,0x65,0x3e,0x20,0x66,0x72,0x61,0x67,0x43,0x6f,0x6c,0x6f,0x72,0x20,
     0x3a,0x20,0x76,0x65,0x63,0x34,0x66,0x3b,0x0a,0x0a,0x40,0x67,0x72,0x6f,0x75,0x70,
-    0x28,0x31,0x29,0x20,0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x34,0x38,0x29,
+    0x28,0x31,0x29,0x20,0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x36,0x34,0x29,
     0x20,0x76,0x61,0x72,0x20,0x69,0x54,0x65,0x78,0x43,0x68,0x61,0x6e,0x6e,0x65,0x6c,
     0x30,0x20,0x3a,0x20,0x74,0x65,0x78,0x74,0x75,0x72,0x65,0x5f,0x32,0x64,0x3c,0x66,
     0x33,0x32,0x3e,0x3b,0x0a,0x0a,0x40,0x67,0x72,0x6f,0x75,0x70,0x28,0x31,0x29,0x20,
-    0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x36,0x34,0x29,0x20,0x76,0x61,0x72,
+    0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x38,0x30,0x29,0x20,0x76,0x61,0x72,
     0x20,0x69,0x53,0x6d,0x70,0x43,0x68,0x61,0x6e,0x6e,0x65,0x6c,0x30,0x20,0x3a,0x20,
     0x73,0x61,0x6d,0x70,0x6c,0x65,0x72,0x3b,0x0a,0x0a,0x76,0x61,0x72,0x3c,0x70,0x72,
     0x69,0x76,0x61,0x74,0x65,0x3e,0x20,0x74,0x65,0x78,0x55,0x56,0x20,0x3a,0x20,0x76,
@@ -770,22 +771,22 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
         static bool valid;
         if (!valid) {
             valid = true;
-            desc.attrs[0].name = "coord";
-            desc.attrs[1].name = "color";
-            desc.vs.source = (const char*)sgp_vs_source_glsl410;
-            desc.vs.entry = "main";
-            desc.fs.source = (const char*)sgp_fs_source_glsl410;
-            desc.fs.entry = "main";
-            desc.fs.images[0].used = true;
-            desc.fs.images[0].multisampled = false;
-            desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
-            desc.fs.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
-            desc.fs.samplers[0].used = true;
-            desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.fs.image_sampler_pairs[0].used = true;
-            desc.fs.image_sampler_pairs[0].image_slot = 0;
-            desc.fs.image_sampler_pairs[0].sampler_slot = 0;
-            desc.fs.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
+            desc.vertex_func.source = (const char*)sgp_vs_source_glsl410;
+            desc.vertex_func.entry = "main";
+            desc.fragment_func.source = (const char*)sgp_fs_source_glsl410;
+            desc.fragment_func.entry = "main";
+            desc.attrs[0].glsl_name = "coord";
+            desc.attrs[1].glsl_name = "color";
+            desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.images[0].image_type = SG_IMAGETYPE_2D;
+            desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+            desc.images[0].multisampled = false;
+            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.image_sampler_pairs[0].image_slot = 0;
+            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -795,22 +796,22 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
         static bool valid;
         if (!valid) {
             valid = true;
-            desc.attrs[0].name = "coord";
-            desc.attrs[1].name = "color";
-            desc.vs.source = (const char*)sgp_vs_source_glsl300es;
-            desc.vs.entry = "main";
-            desc.fs.source = (const char*)sgp_fs_source_glsl300es;
-            desc.fs.entry = "main";
-            desc.fs.images[0].used = true;
-            desc.fs.images[0].multisampled = false;
-            desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
-            desc.fs.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
-            desc.fs.samplers[0].used = true;
-            desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.fs.image_sampler_pairs[0].used = true;
-            desc.fs.image_sampler_pairs[0].image_slot = 0;
-            desc.fs.image_sampler_pairs[0].sampler_slot = 0;
-            desc.fs.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
+            desc.vertex_func.source = (const char*)sgp_vs_source_glsl300es;
+            desc.vertex_func.entry = "main";
+            desc.fragment_func.source = (const char*)sgp_fs_source_glsl300es;
+            desc.fragment_func.entry = "main";
+            desc.attrs[0].glsl_name = "coord";
+            desc.attrs[1].glsl_name = "color";
+            desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.images[0].image_type = SG_IMAGETYPE_2D;
+            desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+            desc.images[0].multisampled = false;
+            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.image_sampler_pairs[0].image_slot = 0;
+            desc.image_sampler_pairs[0].sampler_slot = 1;
+            desc.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -820,25 +821,27 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
         static bool valid;
         if (!valid) {
             valid = true;
-            desc.attrs[0].sem_name = "TEXCOORD";
-            desc.attrs[0].sem_index = 0;
-            desc.attrs[1].sem_name = "TEXCOORD";
-            desc.attrs[1].sem_index = 1;
-            desc.vs.source = (const char*)sgp_vs_source_hlsl4;
-            desc.vs.d3d11_target = "vs_4_0";
-            desc.vs.entry = "main";
-            desc.fs.source = (const char*)sgp_fs_source_hlsl4;
-            desc.fs.d3d11_target = "ps_4_0";
-            desc.fs.entry = "main";
-            desc.fs.images[0].used = true;
-            desc.fs.images[0].multisampled = false;
-            desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
-            desc.fs.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
-            desc.fs.samplers[0].used = true;
-            desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.fs.image_sampler_pairs[0].used = true;
-            desc.fs.image_sampler_pairs[0].image_slot = 0;
-            desc.fs.image_sampler_pairs[0].sampler_slot = 0;
+            desc.vertex_func.source = (const char*)sgp_vs_source_hlsl4;
+            desc.vertex_func.d3d11_target = "vs_4_0";
+            desc.vertex_func.entry = "main";
+            desc.fragment_func.source = (const char*)sgp_fs_source_hlsl4;
+            desc.fragment_func.d3d11_target = "ps_4_0";
+            desc.fragment_func.entry = "main";
+            desc.attrs[0].hlsl_sem_name = "TEXCOORD";
+            desc.attrs[0].hlsl_sem_index = 0;
+            desc.attrs[1].hlsl_sem_name = "TEXCOORD";
+            desc.attrs[1].hlsl_sem_index = 1;
+            desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.images[0].image_type = SG_IMAGETYPE_2D;
+            desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+            desc.images[0].multisampled = false;
+            desc.images[0].hlsl_register_t_n = 0;
+            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[1].hlsl_register_s_n = 0;
+            desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.image_sampler_pairs[0].image_slot = 0;
+            desc.image_sampler_pairs[0].sampler_slot = 1;
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -848,19 +851,21 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
         static bool valid;
         if (!valid) {
             valid = true;
-            desc.vs.source = (const char*)sgp_vs_source_metal_macos;
-            desc.vs.entry = "main0";
-            desc.fs.source = (const char*)sgp_fs_source_metal_macos;
-            desc.fs.entry = "main0";
-            desc.fs.images[0].used = true;
-            desc.fs.images[0].multisampled = false;
-            desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
-            desc.fs.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
-            desc.fs.samplers[0].used = true;
-            desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.fs.image_sampler_pairs[0].used = true;
-            desc.fs.image_sampler_pairs[0].image_slot = 0;
-            desc.fs.image_sampler_pairs[0].sampler_slot = 0;
+            desc.vertex_func.source = (const char*)sgp_vs_source_metal_macos;
+            desc.vertex_func.entry = "main0";
+            desc.fragment_func.source = (const char*)sgp_fs_source_metal_macos;
+            desc.fragment_func.entry = "main0";
+            desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.images[0].image_type = SG_IMAGETYPE_2D;
+            desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+            desc.images[0].multisampled = false;
+            desc.images[0].msl_texture_n = 0;
+            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[1].msl_sampler_n = 0;
+            desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.image_sampler_pairs[0].image_slot = 0;
+            desc.image_sampler_pairs[0].sampler_slot = 1;
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -870,19 +875,21 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
         static bool valid;
         if (!valid) {
             valid = true;
-            desc.vs.source = (const char*)sgp_vs_source_metal_ios;
-            desc.vs.entry = "main0";
-            desc.fs.source = (const char*)sgp_fs_source_metal_ios;
-            desc.fs.entry = "main0";
-            desc.fs.images[0].used = true;
-            desc.fs.images[0].multisampled = false;
-            desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
-            desc.fs.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
-            desc.fs.samplers[0].used = true;
-            desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.fs.image_sampler_pairs[0].used = true;
-            desc.fs.image_sampler_pairs[0].image_slot = 0;
-            desc.fs.image_sampler_pairs[0].sampler_slot = 0;
+            desc.vertex_func.source = (const char*)sgp_vs_source_metal_ios;
+            desc.vertex_func.entry = "main0";
+            desc.fragment_func.source = (const char*)sgp_fs_source_metal_ios;
+            desc.fragment_func.entry = "main0";
+            desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.images[0].image_type = SG_IMAGETYPE_2D;
+            desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+            desc.images[0].multisampled = false;
+            desc.images[0].msl_texture_n = 0;
+            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[1].msl_sampler_n = 0;
+            desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.image_sampler_pairs[0].image_slot = 0;
+            desc.image_sampler_pairs[0].sampler_slot = 1;
             desc.label = "sgp_program_shader";
         }
         return &desc;
@@ -892,19 +899,21 @@ const sg_shader_desc* sgp_program_shader_desc(sg_backend backend) {
         static bool valid;
         if (!valid) {
             valid = true;
-            desc.vs.source = (const char*)sgp_vs_source_wgsl;
-            desc.vs.entry = "main";
-            desc.fs.source = (const char*)sgp_fs_source_wgsl;
-            desc.fs.entry = "main";
-            desc.fs.images[0].used = true;
-            desc.fs.images[0].multisampled = false;
-            desc.fs.images[0].image_type = SG_IMAGETYPE_2D;
-            desc.fs.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
-            desc.fs.samplers[0].used = true;
-            desc.fs.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-            desc.fs.image_sampler_pairs[0].used = true;
-            desc.fs.image_sampler_pairs[0].image_slot = 0;
-            desc.fs.image_sampler_pairs[0].sampler_slot = 0;
+            desc.vertex_func.source = (const char*)sgp_vs_source_wgsl;
+            desc.vertex_func.entry = "main";
+            desc.fragment_func.source = (const char*)sgp_fs_source_wgsl;
+            desc.fragment_func.entry = "main";
+            desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.images[0].image_type = SG_IMAGETYPE_2D;
+            desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+            desc.images[0].multisampled = false;
+            desc.images[0].wgsl_group1_binding_n = 64;
+            desc.samplers[1].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.samplers[1].sampler_type = SG_SAMPLERTYPE_FILTERING;
+            desc.samplers[1].wgsl_group1_binding_n = 80;
+            desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+            desc.image_sampler_pairs[0].image_slot = 0;
+            desc.image_sampler_pairs[0].sampler_slot = 1;
             desc.label = "sgp_program_shader";
         }
         return &desc;

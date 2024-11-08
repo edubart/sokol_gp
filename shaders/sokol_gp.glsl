@@ -14,8 +14,8 @@ void main() {
 @end
 
 @fs fs
-uniform texture2D iTexChannel0;
-uniform sampler iSmpChannel0;
+layout(binding=0) uniform texture2D iTexChannel0;
+layout(binding=1) uniform sampler iSmpChannel0;
 layout(location=0) in vec2 texUV;
 layout(location=1) in vec4 iColor;
 layout(location=0) out vec4 fragColor;
