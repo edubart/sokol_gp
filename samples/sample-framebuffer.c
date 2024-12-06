@@ -13,6 +13,7 @@ This sample showcases how to use Sokol GP to draw inside frame buffers (render t
 #include <stdlib.h>
 
 static sg_image fb_color_image;
+static sg_image fb_resolve_image;
 static sg_image fb_depth_image;
 static sg_attachments fb_attachments;
 static sg_sampler linear_sampler;
@@ -47,6 +48,7 @@ static void draw_fbo(void) {
 
     sg_pass_action pass_action = {0};
     pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    pass_action.colors[0].store_action = SG_STOREACTION_DONTCARE;
     pass_action.colors[0].clear_value.r = 1.0f;
     pass_action.colors[0].clear_value.g = 1.0f;
     pass_action.colors[0].clear_value.b = 1.0f;
@@ -79,7 +81,7 @@ static void frame(void) {
         for (int x=0;x<width;x+=192) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
-            sgp_set_image(0, fb_color_image);
+            sgp_set_image(0, fb_resolve_image);
             sgp_set_sampler(0, linear_sampler);
             if (i % 2 == 0) {
                 sgp_draw_filled_rect(x, y, 128, 128);
@@ -124,23 +126,36 @@ static void init(void) {
         exit(-1);
     }
 
-    // create frame buffer image
-    sg_image_desc fb_image_desc = {0};
-    fb_image_desc.render_target = true;
-    fb_image_desc.width = 128;
-    fb_image_desc.height = 128;
-    fb_color_image = sg_make_image(&fb_image_desc);
+    // create frame buffer color image (multi-sampled)
+    sg_image_desc fb_color_image_desc = {
+        .render_target = true,
+        .width = 128,
+        .height = 128,
+        .sample_count = sapp_sample_count(),
+    };
+    fb_color_image = sg_make_image(&fb_color_image_desc);
     if (sg_query_image_state(fb_color_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer image\n");
         exit(-1);
     }
 
+    // create frame buffer resolve image
+    sg_image_desc fb_resolve_image_desc = {
+        .render_target = true,
+        .width = 128,
+        .height = 128,
+        .sample_count = 1,
+    };
+    fb_resolve_image = sg_make_image(&fb_resolve_image_desc);
+
     // create frame buffer depth stencil
-    sg_image_desc fb_depth_image_desc = {0};
-    fb_depth_image_desc.render_target = true;
-    fb_depth_image_desc.width = 128;
-    fb_depth_image_desc.height = 128;
-    fb_depth_image_desc.pixel_format = sapp_depth_format();
+    sg_image_desc fb_depth_image_desc = {
+        .render_target = true,
+        .width = 128,
+        .height = 128,
+        .pixel_format = sapp_depth_format(),
+        .sample_count = sapp_sample_count(),
+    };
     fb_depth_image = sg_make_image(&fb_depth_image_desc);
     if (sg_query_image_state(fb_depth_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create frame buffer depth image\n");
@@ -151,6 +166,9 @@ static void init(void) {
     sg_attachments_desc fb_attachments_desc = {
         .colors = {
             {.image = fb_color_image}
+        },
+        .resolves = {
+            {.image = fb_resolve_image}
         },
         .depth_stencil = {
             .image = fb_depth_image
@@ -179,6 +197,7 @@ static void init(void) {
 static void cleanup(void) {
     sg_destroy_attachments(fb_attachments);
     sg_destroy_image(fb_color_image);
+    sg_destroy_image(fb_resolve_image);
     sg_destroy_image(fb_depth_image);
     sgp_shutdown();
     sg_shutdown();
@@ -193,5 +212,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .cleanup_cb = cleanup,
         .window_title = "Frame buffer (Sokol GP)",
         .logger.func = slog_func,
+        .sample_count = 4,
     };
 }

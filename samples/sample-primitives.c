@@ -239,5 +239,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .cleanup_cb = cleanup,
         .window_title = "Primitives (Sokol GP)",
         .logger.func = slog_func,
+        .sample_count = 4,
     };
 }
