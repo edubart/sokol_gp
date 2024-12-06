@@ -25,9 +25,6 @@
         Sampler 'iSmpChannel0':
             Type: SG_SAMPLERTYPE_FILTERING
             Bind slot: SMP_iSmpChannel0 => 0
-        Image Sampler Pair 'iTexChannel0_iSmpChannel0':
-            Image: iTexChannel0
-            Sampler: iSmpChannel0
 */
 #if !defined(SOKOL_GFX_INCLUDED)
 #error "Please include sokol_gfx.h before sokol_gp.glsl.h"

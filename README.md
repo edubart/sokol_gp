@@ -318,16 +318,16 @@ using shader, blend mode and a draw primitive associated with it. Then you shoul
 call `sgp_set_pipeline()` before the shader draw call. You are responsible for using
 the same blend mode and drawing primitive as the created pipeline.
 
-Custom uniforms can be passed to the shader with `sgp_set_uniform(data, size)`,
+Custom uniforms can be passed to the shader with `sgp_set_uniform(vs_data, vs_size, fs_data, fs_size)`,
 where you should always pass a pointer to a struct with exactly the same schema and size
-as the one defined in the shader.
+as the one defined in the vertex and fragment shaders.
 
 Although you can create custom shaders for each graphics backend manually,
 it is advised should use the Sokol shader compiler [SHDC](https://github.com/floooh/sokol-tools/blob/master/docs/sokol-shdc.md),
 because it can generate shaders for multiple backends from a single `.glsl` file,
 and this usually works well.
 
-By default the library uniform buffer per draw call has just 4 float uniforms
+By default the library uniform buffer per draw call has just 8 float uniforms
 (`SGP_UNIFORM_CONTENT_SLOTS` configuration), and that may be too low to use with custom shaders.
 This is the default because typically newcomers may not want to use custom 2D shaders,
 and increasing a larger value means more overhead.
@@ -339,7 +339,7 @@ the number of uniforms of your largest shader.
 The following macros can be defined before including to change the library behavior:
 
 - `SGP_BATCH_OPTIMIZER_DEPTH` - Number of draw commands that the batch optimizer looks back at. Default is 8.
-- `SGP_UNIFORM_CONTENT_SLOTS` - Maximum number of floats that can be stored in each draw call uniform buffer. Default is 4.
+- `SGP_UNIFORM_CONTENT_SLOTS` - Maximum number of floats that can be stored in each draw call uniform buffer. Default is 8.
 - `SGP_TEXTURE_SLOTS` - Maximum number of textures that can be bound per draw call. Default is 4.
 
 ## License
@@ -385,7 +385,7 @@ void sgp_scale_at(float sx, float sy, float x, float y);  /* Scales the 2D coord
 /* State change for custom pipelines. */
 void sgp_set_pipeline(sg_pipeline pipeline);              /* Sets current draw pipeline. */
 void sgp_reset_pipeline(void);                            /* Resets to the current draw pipeline to default (builtin pipelines). */
-void sgp_set_uniform(const void* data, uint32_t size);    /* Sets uniform buffer for a custom pipeline. */
+void sgp_set_uniform(const void* vs_data, uint32_t vs_size, const void *fs_data, uint32_t fs_size); /* Sets uniform buffer for a custom pipeline. */
 void sgp_reset_uniform(void);                             /* Resets uniform buffer to default (current state color). */
 
 /* State change functions for the common pipelines. */
@@ -452,6 +452,7 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
+* **06-Dec-2024**: Update to latest Sokol, resulting breaking changes in `sgp_set_uniform` API.
 * **27-Jul-2024**: Update to latest Sokol, the OpenGL backend requires now at least GL 4.1.
 * **22-Mar-2024**: Update to latest Sokol, added support for iOS simulator backend.
 * **18-Jan-2024**: Fix shader leaking when creating custom SGP pipelines.

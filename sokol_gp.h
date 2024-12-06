@@ -323,16 +323,16 @@ using shader, blend mode and a draw primitive associated with it. Then you shoul
 call `sgp_set_pipeline()` before the shader draw call. You are responsible for using
 the same blend mode and drawing primitive as the created pipeline.
 
-Custom uniforms can be passed to the shader with `sgp_set_uniform(data, size)`,
+Custom uniforms can be passed to the shader with `sgp_set_uniform(vs_data, vs_size, fs_data, fs_size)`,
 where you should always pass a pointer to a struct with exactly the same schema and size
-as the one defined in the shader.
+as the one defined in the vertex and fragment shaders.
 
 Although you can create custom shaders for each graphics backend manually,
 it is advised should use the Sokol shader compiler [SHDC](https://github.com/floooh/sokol-tools/blob/master/docs/sokol-shdc.md),
 because it can generate shaders for multiple backends from a single `.glsl` file,
 and this usually works well.
 
-By default the library uniform buffer per draw call has just 4 float uniforms
+By default the library uniform buffer per draw call has just 8 float uniforms
 (`SGP_UNIFORM_CONTENT_SLOTS` configuration), and that may be too low to use with custom shaders.
 This is the default because typically newcomers may not want to use custom 2D shaders,
 and increasing a larger value means more overhead.
@@ -344,7 +344,7 @@ the number of uniforms of your largest shader.
 The following macros can be defined before including to change the library behavior:
 
 - `SGP_BATCH_OPTIMIZER_DEPTH` - Number of draw commands that the batch optimizer looks back at. Default is 8.
-- `SGP_UNIFORM_CONTENT_SLOTS` - Maximum number of floats that can be stored in each draw call uniform buffer. Default is 4.
+- `SGP_UNIFORM_CONTENT_SLOTS` - Maximum number of floats that can be stored in each draw call uniform buffer. Default is 8.
 - `SGP_TEXTURE_SLOTS` - Maximum number of textures that can be bound per draw call. Default is 4.
 
 ## License
@@ -376,7 +376,7 @@ MIT, see LICENSE file or the end of `sokol_gp.h` file.
 Increase this value if you need to use shader with many uniforms.
 */
 #ifndef SGP_UNIFORM_CONTENT_SLOTS
-#define SGP_UNIFORM_CONTENT_SLOTS 4
+#define SGP_UNIFORM_CONTENT_SLOTS 8
 #endif
 
 /* Number of texture slots that can be bound in a pipeline. */
@@ -457,6 +457,11 @@ typedef enum sgp_vs_attr_location {
     SGP_VS_ATTR_COLOR = 1
 } sgp_vs_attr_location;
 
+typedef enum sgp_uniform_slot {
+    SGP_UNIFORM_SLOT_VERTEX = 0,
+    SGP_UNIFORM_SLOT_FRAGMENT = 1
+} sgp_uniform_slot;
+
 typedef struct sgp_isize {
     int w, h;
 } sgp_isize;
@@ -506,9 +511,15 @@ typedef struct sgp_vertex {
     sgp_color_ub4 color;
 } sgp_vertex;
 
+typedef union sgp_uniform_data {
+    float floats[SGP_UNIFORM_CONTENT_SLOTS];
+    uint8_t bytes[SGP_UNIFORM_CONTENT_SLOTS * sizeof(float)];
+} sgp_uniform_data;
+
 typedef struct sgp_uniform {
-    uint32_t size;
-    float content[SGP_UNIFORM_CONTENT_SLOTS];
+    uint16_t vs_size;
+    uint16_t fs_size;
+    sgp_uniform_data data;
 } sgp_uniform;
 
 typedef struct sgp_textures_uniform {
@@ -590,7 +601,7 @@ SOKOL_GP_API_DECL void sgp_scale_at(float sx, float sy, float x, float y);  /* S
 /* State change for custom pipelines. */
 SOKOL_GP_API_DECL void sgp_set_pipeline(sg_pipeline pipeline);              /* Sets current draw pipeline. */
 SOKOL_GP_API_DECL void sgp_reset_pipeline(void);                            /* Resets to the current draw pipeline to default (builtin pipelines). */
-SOKOL_GP_API_DECL void sgp_set_uniform(const void* data, uint32_t size);    /* Sets uniform buffer for a custom pipeline. */
+SOKOL_GP_API_DECL void sgp_set_uniform(const void* vs_data, uint32_t vs_size, const void *fs_data, uint32_t fs_size); /* Sets uniform buffer for a custom pipeline. */
 SOKOL_GP_API_DECL void sgp_reset_uniform(void);                             /* Resets uniform buffer to default (current state color). */
 
 /* State change functions for the common pipelines. */
@@ -1390,9 +1401,9 @@ static const uint8_t sgp_vs_source_wgsl[790] = {
 
     var<private> fragColor : vec4f;
 
-    @group(1) @binding(48) var iTexChannel0 : texture_2d<f32>;
+    @group(1) @binding(64) var iTexChannel0 : texture_2d<f32>;
 
-    @group(1) @binding(64) var iSmpChannel0 : sampler;
+    @group(1) @binding(80) var iSmpChannel0 : sampler;
 
     var<private> texUV : vec2f;
 
@@ -1426,11 +1437,11 @@ static const uint8_t sgp_fs_source_wgsl[682] = {
     0x72,0x6d,0x69,0x74,0x79,0x29,0x3b,0x0a,0x0a,0x76,0x61,0x72,0x3c,0x70,0x72,0x69,
     0x76,0x61,0x74,0x65,0x3e,0x20,0x66,0x72,0x61,0x67,0x43,0x6f,0x6c,0x6f,0x72,0x20,
     0x3a,0x20,0x76,0x65,0x63,0x34,0x66,0x3b,0x0a,0x0a,0x40,0x67,0x72,0x6f,0x75,0x70,
-    0x28,0x31,0x29,0x20,0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x34,0x38,0x29,
+    0x28,0x31,0x29,0x20,0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x36,0x34,0x29,
     0x20,0x76,0x61,0x72,0x20,0x69,0x54,0x65,0x78,0x43,0x68,0x61,0x6e,0x6e,0x65,0x6c,
     0x30,0x20,0x3a,0x20,0x74,0x65,0x78,0x74,0x75,0x72,0x65,0x5f,0x32,0x64,0x3c,0x66,
     0x33,0x32,0x3e,0x3b,0x0a,0x0a,0x40,0x67,0x72,0x6f,0x75,0x70,0x28,0x31,0x29,0x20,
-    0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x36,0x34,0x29,0x20,0x76,0x61,0x72,
+    0x40,0x62,0x69,0x6e,0x64,0x69,0x6e,0x67,0x28,0x38,0x30,0x29,0x20,0x76,0x61,0x72,
     0x20,0x69,0x53,0x6d,0x70,0x43,0x68,0x61,0x6e,0x6e,0x65,0x6c,0x30,0x20,0x3a,0x20,
     0x73,0x61,0x6d,0x70,0x6c,0x65,0x72,0x3b,0x0a,0x0a,0x76,0x61,0x72,0x3c,0x70,0x72,
     0x69,0x76,0x61,0x74,0x65,0x3e,0x20,0x74,0x65,0x78,0x55,0x56,0x20,0x3a,0x20,0x76,
@@ -1893,7 +1904,8 @@ void sgp_begin(int width, int height) {
     _sgp.state.thickness = _sg_max(1.0f / width, 1.0f / height);
     _sgp.state.color = _sgp_white_color;
     memset(&_sgp.state.uniform, 0, sizeof(sgp_uniform));
-    _sgp.state.uniform.size = 0;
+    _sgp.state.uniform.vs_size = 0;
+    _sgp.state.uniform.fs_size = 0;
     _sgp.state.blend_mode = SGP_BLENDMODE_NONE;
     _sgp.state._base_vertex = _sgp.cur_vertex;
     _sgp.state._base_uniform = _sgp.cur_uniform;
@@ -1974,6 +1986,7 @@ void sgp_flush(void) {
                     break;
                 }
                 bool apply_bindings = false;
+                bool apply_uniforms = false;
                 // pipeline
                 if (args->pip.id != cur_pip_id) {
                     // when pipeline changes we need to re-apply uniforms and bindings
@@ -2002,14 +2015,22 @@ void sgp_flush(void) {
                 }
                 if (apply_bindings) {
                     sg_apply_bindings(&bind);
+                    apply_uniforms = true;
                 }
                 // uniforms
                 if (cur_uniform_index != args->uniform_index) {
                     cur_uniform_index = args->uniform_index;
+                    apply_uniforms = true;
+                }
+                if (apply_uniforms && cur_uniform_index != _SGP_IMPOSSIBLE_ID) {
                     sgp_uniform* uniform = &_sgp.uniforms[cur_uniform_index];
-                    if (uniform->size > 0) {
-                        sg_range uniform_range = {&uniform->content, uniform->size};
-                        sg_apply_uniforms(0, &uniform_range);
+                    if (uniform->vs_size > 0) {
+                        sg_range uniform_range = {&uniform->data.bytes[0], uniform->vs_size};
+                        sg_apply_uniforms(SGP_UNIFORM_SLOT_VERTEX, &uniform_range);
+                    }
+                    if (uniform->fs_size > 0) {
+                        sg_range uniform_range = {&uniform->data.bytes[uniform->vs_size], uniform->fs_size};
+                        sg_apply_uniforms(SGP_UNIFORM_SLOT_FRAGMENT, &uniform_range);
                     }
                 }
                 //  draw
@@ -2165,25 +2186,32 @@ void sgp_reset_pipeline(void) {
     sgp_set_pipeline(pip);
 }
 
-void sgp_set_uniform(const void* data, uint32_t size) {
+void sgp_set_uniform(const void* vs_data, uint32_t vs_size, const void *fs_data, uint32_t fs_size) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.state.pipeline.id != SG_INVALID_ID);
+    uint32_t size = vs_size + fs_size;
     SOKOL_ASSERT(size <= sizeof(float) * SGP_UNIFORM_CONTENT_SLOTS);
-    if (size > 0) {
-        SOKOL_ASSERT(data);
-        memcpy(&_sgp.state.uniform.content, data, size);
+    if (vs_size > 0) {
+        SOKOL_ASSERT(vs_data);
+        memcpy(&_sgp.state.uniform.data.bytes[0], vs_data, vs_size);
     }
-    if (size < _sgp.state.uniform.size) {
+    if (fs_size > 0) {
+        SOKOL_ASSERT(fs_data);
+        memcpy(&_sgp.state.uniform.data.bytes[vs_size], fs_data, fs_size);
+    }
+    uint32_t old_size = _sgp.state.uniform.vs_size + _sgp.state.uniform.fs_size;
+    if (size < old_size) {
         // zero old uniform data
-        memset((uint8_t*)(&_sgp.state.uniform) + size, 0, _sgp.state.uniform.size - size);
+        memset((uint8_t*)(&_sgp.state.uniform) + size, 0, old_size - size);
     }
-    _sgp.state.uniform.size = size;
+    _sgp.state.uniform.vs_size = vs_size;
+    _sgp.state.uniform.fs_size = fs_size;
 }
 
 void sgp_reset_uniform(void) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.state.pipeline.id != SG_INVALID_ID);
-    sgp_set_uniform(NULL, 0);
+    sgp_set_uniform(NULL, 0, NULL, 0);
 }
 
 void sgp_set_blend_mode(sgp_blend_mode blend_mode) {

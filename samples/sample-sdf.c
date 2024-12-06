@@ -26,11 +26,12 @@ static void frame(void) {
 
     // draw using the custom shader pipeline
     sgp_set_pipeline(pip);
-    sdf_vs_uniforms_t uniform = {0};
-    uniform.iResolution.x = width;
-    uniform.iResolution.y = height;
-    uniform.iTime = sapp_frame_count() / 60.0f;
-    sgp_set_uniform(&uniform, sizeof(sdf_vs_uniforms_t));
+    sdf_vs_uniforms_t vs_uniform = {0};
+    vs_uniform.iResolution.x = width;
+    vs_uniform.iResolution.y = height;
+    sdf_fs_uniforms_t fs_uniform = {0};
+    fs_uniform.iTime = sapp_frame_count() / 60.0f;
+    sgp_set_uniform(&vs_uniform, sizeof(sdf_vs_uniforms_t), &fs_uniform, sizeof(sdf_fs_uniforms_t));
     sgp_unset_image(0);
     sgp_draw_filled_rect(0, 0, width, height);
     sgp_reset_image(0);

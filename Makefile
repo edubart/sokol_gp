@@ -1,5 +1,5 @@
 CFLAGS=-std=c99
-CFLAGS+=-Wall -Wextra -Wshadow -Wno-unused-function
+CFLAGS+=-Wall -Wextra -Wshadow -Wno-unused-function -Wno-missing-field-initializers
 DEFS=
 CC=gcc
 INCS=-I. -Ithirdparty -Ishaders

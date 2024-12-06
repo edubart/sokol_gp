@@ -3,9 +3,8 @@
 @ctype float float
 
 @vs vs
-uniform vs_uniforms {
+layout(binding=0) uniform vs_uniforms {
     vec2 iResolution;
-    float iTime;
 };
 layout(location=0) in vec4 coord;
 layout(location=0) out vec2 texUV;
@@ -18,10 +17,7 @@ void main() {
 @end
 
 @fs fs
-uniform texture2D iTexChannel0;
-uniform sampler iSmpChannel0;
-uniform fs_uniforms {
-    vec2 iResolution;
+layout(binding=1) uniform fs_uniforms {
     float iTime;
 };
 layout(location=0) in vec2 texUV;

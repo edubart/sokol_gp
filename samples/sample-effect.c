@@ -34,7 +34,7 @@ static void frame(void) {
     sg_image_desc image_desc = sg_query_image_desc(image);
     float window_ratio = window_width / (float)window_height;
     float image_ratio = image_desc.width / (float)image_desc.height;
-    effect_uniforms_t uniforms = {0};
+    effect_fs_uniforms_t uniforms = {0};
     uniforms.iVelocity.x = 0.02f;
     uniforms.iVelocity.y = 0.01f;
     uniforms.iPressure = 0.3f;
@@ -44,7 +44,7 @@ static void frame(void) {
     uniforms.iZoom = 0.4f;
     uniforms.iLevel = 1.0f;
     sgp_set_pipeline(pip);
-    sgp_set_uniform(&uniforms, sizeof(effect_uniforms_t));
+    sgp_set_uniform(NULL, 0, &uniforms, sizeof(effect_fs_uniforms_t));
     sgp_set_image(IMG_iTexChannel0, image);
     sgp_set_image(IMG_iTexChannel1, perlin_image);
     sgp_set_sampler(SMP_iSmpChannel0, linear_sampler);
