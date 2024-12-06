@@ -265,7 +265,9 @@ The library supports the most usual blend modes used in 2D, which are the follow
 
 - `SGP_BLENDMODE_NONE` - No blending (`dstRGBA = srcRGBA`).
 - `SGP_BLENDMODE_BLEND` - Alpha blending (`dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))` and `dstA = srcA + (dstA * (1-srcA))`)
-- `SGP_BLENDMODE_ADD` - Color add (`dstRGB = (srcRGB * srcA) + dstRGB` and `dstA = dstA`)
+- `SGP_BLENDMODE_BLEND_PREMULTIPLIED` - Pre-multiplied alpha blending (`dstRGBA = srcRGBA + (dstRGBA * (1-srcA))`)
+- `SGP_BLENDMODE_ADD` - Additive blending (`dstRGB = (srcRGB * srcA) + dstRGB` and `dstA = dstA`)
+- `SGP_BLENDMODE_ADD_PREMULTIPLIED` - Pre-multiplied additive blending (`dstRGB = srcRGB + dstRGB` and `dstA = dstA`)
 - `SGP_BLENDMODE_MOD` - Color modulate (`dstRGB = srcRGB * dstRGB` and `dstA = dstA`)
 - `SGP_BLENDMODE_MUL` - Color multiply (`dstRGB = (srcRGB * dstRGB) + (dstRGB * (1-srcA))` and `dstA = (srcA * dstA) + (dstA * (1-srcA))`)
 
@@ -452,7 +454,8 @@ very useful for simplifying finite state machines in game devlopment.
 
 ## Updates
 
-* **06-Dec-2024**: Update to latest Sokol, resulting breaking changes in `sgp_set_uniform` API.
+* **06-Dec-2024**: Update to latest Sokol, resulting breaking changes in `sgp_set_uniform` API,
+added new pre-multiplied blend modes.
 * **27-Jul-2024**: Update to latest Sokol, the OpenGL backend requires now at least GL 4.1.
 * **22-Mar-2024**: Update to latest Sokol, added support for iOS simulator backend.
 * **18-Jan-2024**: Fix shader leaking when creating custom SGP pipelines.

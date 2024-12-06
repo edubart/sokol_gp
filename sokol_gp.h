@@ -1,6 +1,6 @@
 /*
 Minimal efficient cross platform 2D graphics painter for Sokol GFX.
-sokol_gp - v0.6.0 - 25/Jul/2024
+sokol_gp - v0.7.0 - 06/Dec/2024
 Eduardo Bart - edub4rt@gmail.com
 https://github.com/edubart/sokol_gp
 
@@ -270,7 +270,9 @@ The library supports the most usual blend modes used in 2D, which are the follow
 
 - `SGP_BLENDMODE_NONE` - No blending (`dstRGBA = srcRGBA`).
 - `SGP_BLENDMODE_BLEND` - Alpha blending (`dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))` and `dstA = srcA + (dstA * (1-srcA))`)
-- `SGP_BLENDMODE_ADD` - Color add (`dstRGB = (srcRGB * srcA) + dstRGB` and `dstA = dstA`)
+- `SGP_BLENDMODE_BLEND_PREMULTIPLIED` - Pre-multiplied alpha blending (`dstRGBA = srcRGBA + (dstRGBA * (1-srcA))`)
+- `SGP_BLENDMODE_ADD` - Additive blending (`dstRGB = (srcRGB * srcA) + dstRGB` and `dstA = dstA`)
+- `SGP_BLENDMODE_ADD_PREMULTIPLIED` - Pre-multiplied additive blending (`dstRGB = srcRGB + dstRGB` and `dstA = dstA`)
 - `SGP_BLENDMODE_MOD` - Color modulate (`dstRGB = srcRGB * dstRGB` and `dstA = dstA`)
 - `SGP_BLENDMODE_MUL` - Color multiply (`dstRGB = (srcRGB * dstRGB) + (dstRGB * (1-srcA))` and `dstA = (srcA * dstA) + (dstA * (1-srcA))`)
 
@@ -435,20 +437,25 @@ typedef enum sgp_error {
 
 /* Blend modes. */
 typedef enum sgp_blend_mode {
-    SGP_BLENDMODE_NONE = 0, /* No blending.
-                               dstRGBA = srcRGBA */
-    SGP_BLENDMODE_BLEND,    /* Alpha blending.
-                               dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))
-                               dstA = srcA + (dstA * (1-srcA)) */
-    SGP_BLENDMODE_ADD,      /* Color add.
-                               dstRGB = (srcRGB * srcA) + dstRGB
-                               dstA = dstA */
-    SGP_BLENDMODE_MOD,      /* Color modulate.
-                               dstRGB = srcRGB * dstRGB
-                               dstA = dstA */
-    SGP_BLENDMODE_MUL,      /* Color multiply.
-                               dstRGB = (srcRGB * dstRGB) + (dstRGB * (1-srcA))
-                               dstA = (srcA * dstA) + (dstA * (1-srcA)) */
+    SGP_BLENDMODE_NONE = 0,               /* No blending
+                                             dstRGBA = srcRGBA */
+    SGP_BLENDMODE_BLEND,                  /* Alpha blending.
+                                             dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))
+                                             dstA = srcA + (dstA * (1-srcA)) */
+    SGP_BLENDMODE_BLEND_PREMULTIPLIED,    /* Pre-multiplied alpha blending.
+                                             dstRGBA = srcRGBA + (dstRGBA * (1-srcA)) */
+    SGP_BLENDMODE_ADD,                    /* Additive blending.
+                                             dstRGB = (srcRGB * srcA) + dstRGB
+                                             dstA = dstA */
+    SGP_BLENDMODE_ADD_PREMULTIPLIED,      /* Pre-multiplied additive blending.
+                                             dstRGB = srcRGB + dstRGB
+                                             dstA = dstA */
+    SGP_BLENDMODE_MOD,                    /* Color modulate.
+                                             dstRGB = srcRGB * dstRGB
+                                             dstA = dstA */
+    SGP_BLENDMODE_MUL,                    /* Color multiply.
+                                             dstRGB = (srcRGB * dstRGB) + (dstRGB * (1-srcA))
+                                             dstA = (srcA * dstA) + (dstA * (1-srcA)) */
     _SGP_BLENDMODE_NUM
 } sgp_blend_mode;
 
@@ -1528,9 +1535,27 @@ static sg_blend_state _sgp_blend_state(sgp_blend_mode blend_mode) {
             blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
             blend.op_alpha = SG_BLENDOP_ADD;
             break;
+        case SGP_BLENDMODE_BLEND_PREMULTIPLIED:
+            blend.enabled = true;
+            blend.src_factor_rgb = SG_BLENDFACTOR_ONE;
+            blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            blend.op_rgb = SG_BLENDOP_ADD;
+            blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+            blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            blend.op_alpha = SG_BLENDOP_ADD;
+            break;
         case SGP_BLENDMODE_ADD:
             blend.enabled = true;
             blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+            blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
+            blend.op_rgb = SG_BLENDOP_ADD;
+            blend.src_factor_alpha = SG_BLENDFACTOR_ZERO;
+            blend.dst_factor_alpha = SG_BLENDFACTOR_ONE;
+            blend.op_alpha = SG_BLENDOP_ADD;
+            break;
+        case SGP_BLENDMODE_ADD_PREMULTIPLIED:
+            blend.enabled = true;
+            blend.src_factor_rgb = SG_BLENDFACTOR_ONE;
             blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
             blend.op_rgb = SG_BLENDOP_ADD;
             blend.src_factor_alpha = SG_BLENDFACTOR_ZERO;

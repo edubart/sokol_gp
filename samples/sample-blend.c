@@ -16,6 +16,7 @@ This sample tests all blending modes that Sokol GP provides.
 #include <stdlib.h>
 
 static void draw_3rects(float brightness, float alpha) {
+    sgp_translate(2.5f, 2.5f);
     sgp_set_color(brightness, 0.0f, 0.0f, alpha);
     sgp_draw_filled_rect(0, 0, 10, 10);
     sgp_set_color(0.0f, brightness, 0.0f, alpha);
@@ -31,36 +32,50 @@ static void draw_rects(float ratio) {
     // none
     sgp_set_blend_mode(SGP_BLENDMODE_NONE);
     sgp_push_transform();
-    sgp_translate(10,10);
-    draw_3rects(1.0f, 1.0f);
+    sgp_translate(0, 0);
+    draw_3rects(1.0f, 0.5f);
     sgp_pop_transform();
 
     // blend
     sgp_set_blend_mode(SGP_BLENDMODE_BLEND);
     sgp_push_transform();
-    sgp_translate(30,10);
+    sgp_translate(20, 0);
+    draw_3rects(1.0f, 0.5f);
+    sgp_pop_transform();
+
+    // blend premultiplied
+    sgp_set_blend_mode(SGP_BLENDMODE_BLEND_PREMULTIPLIED);
+    sgp_push_transform();
+    sgp_translate(40, 0);
     draw_3rects(1.0f, 0.5f);
     sgp_pop_transform();
 
     // add
     sgp_set_blend_mode(SGP_BLENDMODE_ADD);
     sgp_push_transform();
-    sgp_translate(50,10);
-    draw_3rects(1.0f, 1.0f);
+    sgp_translate(20, 20);
+    draw_3rects(1.0f, 0.5f);
+    sgp_pop_transform();
+
+    // add premultiplied
+    sgp_set_blend_mode(SGP_BLENDMODE_ADD_PREMULTIPLIED);
+    sgp_push_transform();
+    sgp_translate(40, 20);
+    draw_3rects(1.0f, 0.5f);
     sgp_pop_transform();
 
     // mod
     sgp_set_blend_mode(SGP_BLENDMODE_MOD);
     sgp_push_transform();
-    sgp_translate(10,30);
-    draw_3rects(1.0f, 1.0f);
+    sgp_translate(20, 40);
+    draw_3rects(1.0f, 0.5f);
     sgp_pop_transform();
 
-    // mod
+    // mul
     sgp_set_blend_mode(SGP_BLENDMODE_MUL);
     sgp_push_transform();
-    sgp_translate(30,30);
-    draw_3rects(1.0f, 1.0f);
+    sgp_translate(40, 40);
+    draw_3rects(1.0f, 0.5f);
     sgp_pop_transform();
 }
 
