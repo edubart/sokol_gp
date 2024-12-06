@@ -8,6 +8,7 @@ layout(location=0) out vec2 texUV;
 layout(location=1) out vec4 iColor;
 void main() {
     gl_Position = vec4(coord.xy, 0.0, 1.0);
+    gl_PointSize = 1.0;
     texUV = coord.zw;
     iColor = color;
 }
