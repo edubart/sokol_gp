@@ -5,7 +5,7 @@ using modern graphics API through the excellent [Sokol GFX](https://github.com/f
 
 Sokol GP, or in short SGP, stands for Sokol Graphics Painter.
 
-![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)
+[![sample-primitives](https://edubart.github.io/sokol_gp/sample-primitives.png)](https://edubart.github.io/sokol_gp/sample-primitives.html)
 
 ## Features
 
@@ -470,31 +470,31 @@ added new pre-multiplied blend modes.
 ## Screenshots
 
 Here are some screenshots of all samples in `samples` directory.
-Click on any of the images to view it in your browser.
+Click on any of the images to view it actually being rendered in realtime in your browser.
 
 Primitives sample:
 
-[![sample-primitives](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-primitives.png)](https://edubart.github.io/sokol_gp/sample-primitives.html)
+[![sample-primitives](https://edubart.github.io/sokol_gp/sample-primitives.png)](https://edubart.github.io/sokol_gp/sample-primitives.html)
 
 Blending modes samples:
 
-[![sample-blend](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-blend.png)](https://edubart.github.io/sokol_gp/sample-blend.html)
+[![sample-blend](https://edubart.github.io/sokol_gp/sample-blend.png)](https://edubart.github.io/sokol_gp/sample-blend.html)
 
 Frame buffer sample:
 
-[![sample-framebuffer](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-framebuffer.png)](https://edubart.github.io/sokol_gp/sample-framebuffer.html)
+[![sample-framebuffer](https://edubart.github.io/sokol_gp/sample-framebuffer.png)](https://edubart.github.io/sokol_gp/sample-framebuffer.html)
 
 Rectangle sample:
 
-[![sample-rectangle](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-rectangle.png)](https://edubart.github.io/sokol_gp/sample-rectangle.html)
+[![sample-rectangle](https://edubart.github.io/sokol_gp/sample-rectangle.png)](https://edubart.github.io/sokol_gp/sample-rectangle.html)
 
 Effect sample:
 
-[![sample-effect](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-effect.gif)](https://edubart.github.io/sokol_gp/sample-effect.html)
+[![sample-effect](https://edubart.github.io/sokol_gp/sample-effect.png)](https://edubart.github.io/sokol_gp/sample-effect.html)
 
 SDF sample:
 
-[![sample-sdf](https://raw.githubusercontent.com/edubart/sokol_gp/master/screenshots/sample-sdf.gif)](https://edubart.github.io/sokol_gp/sample-sdf.html)
+[![sample-sdf](https://edubart.github.io/sokol_gp/sample-sdf.png)](https://edubart.github.io/sokol_gp/sample-sdf.html)
 
 ## Donation
 
