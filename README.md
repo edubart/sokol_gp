@@ -498,7 +498,5 @@ SDF sample:
 
 ## Donation
 
-I'm a full-time open source developer.
-Any amount of the donation will be appreciated and could bring me encouragement to keep supporting this and other open source projects.
-
-[![Become a Patron](https://c5.patreon.com/external/logo/become_a_patron_button.png)](https://www.patreon.com/edubart)
+I'm a full-time open source developer, any amount of the donation through my GitHub will be appreciated and could bring me encouragement to keep supporting this and other open source projects.
+I may accept one-time sponsorships for small features or minor enhancements aligned with the project goals, in this case contact me.
