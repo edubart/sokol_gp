@@ -131,6 +131,7 @@ static void init(void) {
         .render_target = true,
         .width = 128,
         .height = 128,
+        .pixel_format = sapp_color_format(),
         .sample_count = sapp_sample_count(),
     };
     fb_color_image = sg_make_image(&fb_color_image_desc);
@@ -144,6 +145,7 @@ static void init(void) {
         .render_target = true,
         .width = 128,
         .height = 128,
+        .pixel_format = sapp_color_format(),
         .sample_count = 1,
     };
     fb_resolve_image = sg_make_image(&fb_resolve_image_desc);
