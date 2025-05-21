@@ -26,6 +26,7 @@ static sg_shader shd;
 static sg_image background_image;
 static sg_image link_image;
 static sg_image lightmap_image;
+static sg_image placeholder_image; // Added for placeholder
 static sg_sampler linear_sampler;
 static sg_image light_buffer;    // Offscreen buffer to accumulate lights
 static sg_image depth_buffer;    // Depth buffer for proper depth testing
@@ -148,8 +149,12 @@ static void frame(void) {
         sgp_set_uniform(NULL, 0, &uniforms, sizeof(fs_uniforms_t));
         
         // Use lightmap image for the light shape
-        sgp_set_image(0, lightmap_image);
-        sgp_set_sampler(0, linear_sampler);
+        sgp_set_image(0, lightmap_image);          // Bound to iMainTex
+        sgp_set_sampler(0, linear_sampler);        // Bound to iMainSampler
+        // Bind placeholder for the second texture/sampler slot (iLightMask/iLightSampler)
+        // as the shader declares it, even if this path doesn't use it.
+        sgp_set_image(1, placeholder_image);     // Bound to iLightMask
+        sgp_set_sampler(1, linear_sampler);        // Bound to iLightSampler (can reuse linear_sampler)
         
         sgp_draw_filled_rect(
             lights[i].x - lights[i].size/2,
@@ -213,7 +218,10 @@ static void frame(void) {
     sgp_draw_filled_rect(x_offset, y_offset, scale_w, scale_h);
     
     // Draw player sprite
-    sgp_set_image(0, link_image);
+    sgp_set_image(0, link_image); // This correctly sets iMainTex for player
+    // iLightMask (slot 1) is still light_buffer from background - this is correct for player rendering
+    // iMainSampler (slot 0) is still linear_sampler - correct
+    // iLightSampler (slot 1) is still linear_sampler - correct
     sgp_set_uniform(NULL, 0, &uniforms, sizeof(fs_uniforms_t));
     sgp_draw_filled_rect(
         player.x - player.w/2,
@@ -261,10 +269,12 @@ static void init(void) {
     background_image = load_image("images/background.png");
     link_image = load_image("images/link.png");
     lightmap_image = load_image("images/simple_white_alpha.png");
+    placeholder_image = create_white_texture(); // Create placeholder
     
     if (sg_query_image_state(background_image) != SG_RESOURCESTATE_VALID ||
         sg_query_image_state(link_image) != SG_RESOURCESTATE_VALID ||
-        sg_query_image_state(lightmap_image) != SG_RESOURCESTATE_VALID) {
+        sg_query_image_state(lightmap_image) != SG_RESOURCESTATE_VALID ||
+        sg_query_image_state(placeholder_image) != SG_RESOURCESTATE_VALID) { // Check placeholder
         fprintf(stderr, "Failed to load one or more images\n");
         exit(-1);
     }
@@ -385,6 +395,7 @@ static void cleanup(void) {
     sg_destroy_image(background_image);
     sg_destroy_image(link_image);
     sg_destroy_image(lightmap_image);
+    sg_destroy_image(placeholder_image); // Destroy placeholder
     sg_destroy_image(light_buffer);
     sg_destroy_image(depth_buffer);
     sg_destroy_attachments(light_pass_attachments);
