@@ -18,9 +18,9 @@
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
-#define LIGHT_SIZE 150.0f
+#define LIGHT_SIZE 150.0f     // Even bigger lights
 
-static sg_pipeline pip_blend;    // Pipeline for sprites (alpha blending)
+static sg_pipeline pip_blend;    // Pipeline for sprites and background
 static sg_pipeline pip_add;      // Pipeline for lights (additive blending)
 static sg_shader shd;
 static sg_image background_image;
@@ -61,13 +61,24 @@ typedef struct {
     float size;         // Light radius
 } light_source_t;
 
-#define MAX_LIGHTS 8
 static light_source_t lights[] = {
-    {300, 300, 1.0f, 1.0f, 0.8f, 1.0f, LIGHT_SIZE},  // Warm white light
+    {300, 250, 1.0f, 1.0f, 0.8f, 1.2f, LIGHT_SIZE},  // Warm white light
     {500, 400, 1.0f, 0.3f, 0.2f, 1.0f, LIGHT_SIZE},  // Red-orange light
     {200, 200, 0.2f, 0.4f, 1.0f, 1.0f, LIGHT_SIZE},  // Blue light
 };
 static const int num_lights = sizeof(lights)/sizeof(lights[0]);
+
+// Create a 1x1 white image that will be our default texture
+static sg_image create_white_texture(void) {
+    uint32_t white_pixel = 0xFFFFFFFF;
+    sg_image_desc desc = {
+        .width = 1,
+        .height = 1,
+        .data.subimage[0][0].ptr = &white_pixel,
+        .data.subimage[0][0].size = sizeof(white_pixel)
+    };
+    return sg_make_image(&desc);
+}
 
 static sg_image load_image(const char *filename) {
     int width, height, channels;
@@ -93,16 +104,10 @@ static void frame(void) {
     float secs = sapp_frame_count() * sapp_frame_duration();
     fs_uniforms_t uniforms = {
         .ambient_light = 0.05f,     // Very dark ambient for more contrast
-        .light_intensity = 1.0f,    // Base light intensity
+        .light_intensity = 1.0f,
         .time = secs,
-        .is_light = 0.0f           // Start with regular texture mode
+        .is_light = 0.0f
     };
-
-    // Set up constant bindings
-    sgp_set_image(0, background_image);
-    sgp_set_image(1, lightmap_image);
-    sgp_set_sampler(0, linear_sampler);
-    sgp_set_sampler(1, linear_sampler);
 
     // Calculate background scaling to maintain aspect ratio and fill screen
     float bg_aspect = 870.0f/674.0f;
@@ -116,18 +121,36 @@ static void frame(void) {
     float x_offset = (WINDOW_WIDTH - scale_w) * 0.5f;
     float y_offset = (WINDOW_HEIGHT - scale_h) * 0.5f;
     
-    // Draw background with alpha blend
+    // First pass: Draw background (very dark with just ambient light)
     sgp_set_pipeline(pip_blend);
+    sgp_set_image(0, background_image);
+    
+    // Use a white texture here - we don't want any pre-existing light yet
+    sgp_set_image(1, lightmap_image);
+    
+    sgp_set_sampler(0, linear_sampler);
+    sgp_set_sampler(1, linear_sampler);
     sgp_set_uniform(NULL, 0, &uniforms, sizeof(fs_uniforms_t));
     sgp_draw_filled_rect(x_offset, y_offset, scale_w, scale_h);
-
-    // Draw lights with additive blend
+    
+    // Second pass: Draw player sprite (BEFORE lights)
+    sgp_set_image(0, link_image);
+    sgp_set_uniform(NULL, 0, &uniforms, sizeof(fs_uniforms_t));
+    sgp_draw_filled_rect(
+        player.x - player.w/2,
+        player.y - player.h/2, 
+        player.w,
+        player.h
+    );
+    
+    // Third pass: Draw colored lights on top with additive blending
     sgp_set_pipeline(pip_add);
     uniforms.is_light = 1.0f;  // Switch to light mode
+    
     for (int i = 0; i < num_lights; i++) {
         // Animate light positions slightly
-        lights[i].x += sinf(secs * 2.0f + i * 1.0f) * 0.5f;
-        lights[i].y += cosf(secs * 1.5f + i * 2.0f) * 0.5f;
+        lights[i].x += sinf(secs * 1.0f + i * 1.0f) * 0.5f;
+        lights[i].y += cosf(secs * 0.8f + i * 2.0f) * 0.5f;
         
         // Update uniforms for this light
         uniforms.light_r = lights[i].r;
@@ -136,6 +159,9 @@ static void frame(void) {
         uniforms.light_intensity = lights[i].intensity;
         sgp_set_uniform(NULL, 0, &uniforms, sizeof(fs_uniforms_t));
         
+        // Use lightmap image for the light shape
+        sgp_set_image(0, lightmap_image);
+        
         sgp_draw_filled_rect(
             lights[i].x - lights[i].size/2,
             lights[i].y - lights[i].size/2,
@@ -143,28 +169,15 @@ static void frame(void) {
             lights[i].size
         );
     }
-
-    // Draw player sprite with alpha blend
-    sgp_set_pipeline(pip_blend);
-    uniforms.is_light = 0.0f;  // Back to regular texture mode
-    sgp_set_image(0, link_image);  // Only change the main texture
-    sgp_set_uniform(NULL, 0, &uniforms, sizeof(fs_uniforms_t));
     
-    sgp_draw_filled_rect(
-        player.x - player.w/2,
-        player.y - player.h/2, 
-        player.w,
-        player.h
-    );
-
     // Reset state
     sgp_reset_image(0);
     sgp_reset_image(1);
     sgp_reset_sampler(0);
     sgp_reset_sampler(1);
     sgp_reset_pipeline();
-
-    // Dispatch draw commands
+    
+    // End scene rendering
     sg_pass pass = {.swapchain = sglue_swapchain()};
     sg_begin_pass(&pass);
     sgp_flush();
@@ -217,15 +230,15 @@ static void init(void) {
         fprintf(stderr, "Failed to create linear sampler\n");
         exit(-1);
     }
-
-    // Initialize shader and pipelines
+    
+    // Initialize shader
     shd = sg_make_shader(zelda_lighting_program_shader_desc(sg_query_backend()));
     if (sg_query_shader_state(shd) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "Failed to create shader\n");
         exit(-1);
     }
 
-    // Create alpha blend pipeline for sprites
+    // Create alpha blend pipeline for sprites and background
     sgp_pipeline_desc pip_blend_desc = {0};
     pip_blend_desc.shader = shd;
     pip_blend_desc.has_vs_color = true;

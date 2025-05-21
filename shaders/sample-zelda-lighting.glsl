@@ -15,8 +15,8 @@ void main() {
 @end
 
 @fs fs
-layout(binding=0) uniform texture2D iMainTex;    // Main scene texture
-layout(binding=1) uniform texture2D iLightTex;   // Light map texture
+layout(binding=0) uniform texture2D iMainTex;    // Main scene texture (or lightmap in light pass)
+layout(binding=1) uniform texture2D iLightTex;   // Light accumulation texture
 layout(binding=0) uniform sampler iMainSampler;
 layout(binding=1) uniform sampler iLightSampler;
 layout(binding=1) uniform fs_uniforms {
@@ -33,19 +33,32 @@ layout(location=0) out vec4 fragColor;
 
 void main() {
     if (iIsLight > 0.5) {
-        // Light pass - multiplicative blending
-        vec4 lightColor = texture(sampler2D(iLightTex, iLightSampler), texUV);
-        float intensity = lightColor.r * iLightIntensity;
+        // Light pass - draws each individual light
+        
+        // Sample the lightmap to get the shape of the light
+        vec4 lightMask = texture(sampler2D(iMainTex, iMainSampler), texUV);
+        
+        // Calculate falloff for soft circle light
+        float dist = distance(texUV, vec2(0.5, 0.5));
+        float attenuation = 1.0 - smoothstep(0.0, 0.48, dist);  // Adjusted for sharper edge
+        
+        // Combined light intensity
+        float intensity = lightMask.r * iLightIntensity * attenuation;
+        
+        // Output light color with proper alpha for screen lighting
         fragColor = vec4(iLightColor * intensity, intensity);
     } else {
-        // Regular texture pass
+        // Scene pass - renders backgrounds and sprites
         vec4 mainColor = texture(sampler2D(iMainTex, iMainSampler), texUV);
         vec4 lightColor = texture(sampler2D(iLightTex, iLightSampler), texUV);
         
-        // Apply lighting
-        vec3 finalColor = mainColor.rgb * max(iAmbientLight, lightColor.r);
+        // Lighting is ambient base + additively blended lights
+        float lighting = iAmbientLight + lightColor.r;
         
-        // Keep original alpha for sprites
+        // Apply lighting to the texture
+        vec3 finalColor = mainColor.rgb * lighting;
+        
+        // Keep original alpha from texture
         fragColor = vec4(finalColor, mainColor.a);
     }
 }
