@@ -11,7 +11,8 @@ SHADERS=\
 	shaders/sample-effect.glsl.h \
 	shaders/sample-sdf.glsl.h \
 	shaders/sokol_gp.glsl.h \
-	shaders/zdepth.glsl.h
+	shaders/zdepth.glsl.h \
+	shaders/sample-zelda-lighting.glsl.h
 
 # platform
 ifndef platform
@@ -93,7 +94,8 @@ SAMPLES=\
 	build/sample-bench$(OUTEXT) \
 	build/sample-sdf$(OUTEXT) \
 	build/sample-effect$(OUTEXT) \
-	build/sample-zdepth$(OUTEXT)
+	build/sample-zdepth$(OUTEXT) \
+	build/sample-zelda-lighting$(OUTEXT)
 
 all: $(SAMPLES)
 
@@ -134,3 +136,4 @@ test: all
 	./build/sample-sdf$(OUTEXT)
 	./build/sample-bench$(OUTEXT)
 	./build/sample-zdepth$(OUTEXT)
+	./build/sample-zelda-lighting$(OUTEXT)
