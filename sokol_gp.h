@@ -651,6 +651,15 @@ SOKOL_GP_API_DECL sgp_desc sgp_query_desc(void);    /* Returns description of th
 
 #ifdef __cplusplus
 } // extern "C"
+
+// reference-based equivalents for c++
+
+inline void sgp_setup(const sgp_desc& desc) { return sgp_setup(&desc); }
+inline sg_pipeline sgp_make_pipeline(const sgp_pipeline_desc& desc) { return sgp_make_pipeline(&desc); }
+
+template <class T, class U>
+inline void sgp_set_uniform(const T& vs_data, uint32_t vs_size, const U& fs_data, uint32_t fs_size) { return sgp_set_uniform((const void *)&vs_data, vs_size, (const void *)&fs_data, fs_size); }
+
 #endif
 
 #endif // SOKOL_GP_INCLUDED
@@ -1757,8 +1766,10 @@ void sgp_setup(const sgp_desc* desc) {
     sg_buffer_desc vertex_buf_desc;
     memset(&vertex_buf_desc, 0, sizeof(sg_buffer_desc));
     vertex_buf_desc.size = (size_t)(_sgp.num_vertices * sizeof(sgp_vertex));
-    vertex_buf_desc.type = SG_BUFFERTYPE_VERTEXBUFFER;
-    vertex_buf_desc.usage = SG_USAGE_STREAM;
+	vertex_buf_desc.usage = (sg_buffer_usage){
+      .vertex_buffer = true,
+      .stream_update = true,
+    };
 
     _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
     if (sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
@@ -2916,7 +2927,7 @@ void sgp_draw_filled_rect(float x, float y, float w, float h) {
 }
 
 static sgp_isize _sgp_query_image_size(sg_image img_id) {
-    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    const _sg_image_t* img = _sg_lookup_image(img_id.id);
     SOKOL_ASSERT(img);
     sgp_isize size = {img ? img->cmn.width : 0, img ? img->cmn.height : 0};
     return size;
