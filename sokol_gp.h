@@ -1660,7 +1660,7 @@ static sg_shader _sgp_make_common_shader(void) {
     desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
     desc.views[0].texture.multisampled = false;
     desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
-    desc.views[0].texture.sample_type = SG_SAMPLERTYPE_FILTERING;
+    desc.views[0].texture.sample_type = SG_IMAGESAMPLETYPE_FLOAT;
 
     // Pair the view with the sampler
     desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
@@ -2326,7 +2326,6 @@ void sgp_set_view(int channel, sg_view view) {
     SOKOL_ASSERT(_sgp.init_cookie == _SGP_INIT_COOKIE);
     SOKOL_ASSERT(_sgp.cur_state > 0);
     SOKOL_ASSERT(channel >= 0 && channel < SGP_TEXTURE_SLOTS);
-    SOKOL_ASSERT(view.id != SG_INVALID_ID);
     if (_sgp.state.textures.views[channel].id == view.id) {
         return;
     }
@@ -2950,22 +2949,36 @@ void sgp_draw_filled_rect(float x, float y, float w, float h) {
     sgp_draw_filled_rects(&rect, 1);
 }
 
-static sgp_isize _sgp_query_view_image_size(sg_view view) {
-    sg_image img_id = sg_query_view_image(view);
-    if (SOKOL_UNLIKELY(img_id.id == SG_INVALID_ID)) {
-        return (sgp_isize){0, 0};
-    }
-    int w = sg_query_image_width(img_id);
-    int h = sg_query_image_height(img_id);
-    return (sgp_isize){w, h};
-    
+static sgp_isize _sgp_query_view_size(sg_view view_id) {
+    sg_view_desc vd = sg_query_view_desc(view_id);
+
+    // parent image handle
+    sg_image v_img = vd.texture.image;
+
+    int w0 = sg_query_image_width(v_img);
+    int h0 = sg_query_image_height(v_img);
+
     // Fast path - uses sgl internals
     // SOKOL_ASSERT(_sg.valid);
-    // const _sg_image_t* img = _sg_lookup_image(img_id.id);
+    // int w0 = 0;
+    // int h0 = 0;
+    // const _sg_image_t* img = _sg_lookup_image(v_img.id);
     // if (img) {
-    //     return (sgp_isize){ img->cmn.width, img->cmn.height };
+    //     w0 = img->cmn.width;
+    //     h0 = img->cmn.height;
     // }
-    // return (sgp_isize){0, 0};
+
+    // Early exit
+    if (SOKOL_UNLIKELY(w0 <= 0 || h0 <= 0)) {
+        return (sgp_isize){ 0, 0 };
+    }
+
+    int base_mip = vd.texture.mip_levels.base;
+    // size at the view's base mip
+    int w = w0 >> base_mip; if (w < 1) w = 1;
+    int h = h0 >> base_mip; if (h < 1) h = 1;
+
+    return (sgp_isize){ w, h };
 }
 
 void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32_t count) {
@@ -2986,7 +2999,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
     }
 
     // compute image values used for texture coords transform
-    sgp_isize image_size = _sgp_query_view_image_size(view);
+    sgp_isize image_size = _sgp_query_view_size(view);
     if (SOKOL_UNLIKELY(image_size.w == 0 || image_size.h == 0)) {
         return;
     }
