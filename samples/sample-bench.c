@@ -22,6 +22,8 @@ there is a 2.2x in FPS gains.
 
 static sg_image image1;
 static sg_image image2;
+static sg_view view1;
+static sg_view view2;
 static float image_ratio;
 
 static const int count = 48;
@@ -29,29 +31,29 @@ static const int rect_count = 4;
 
 static void bench_repeated_textured(void) {
     sgp_reset_color();
-    sgp_set_image(0, image1);
+    sgp_set_view(0, view1);
     for (int y=0;y<count;++y) {
         for (int x=0;x<count;++x) {
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
-    sgp_reset_image(0);
+    sgp_reset_view(0);
 }
 
 static void bench_multiple_textured(void) {
     sgp_reset_color();
     for (int y=0;y<count;++y) {
         for (int x=0;x<count;++x) {
-            sgp_set_image(0, x % 2 == 0 ? image1 : image2);
+            sgp_set_view(0, x % 2 == 0 ? view1 : view2);
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
-    sgp_reset_image(0);
+    sgp_reset_view(0);
 }
 
 static void bench_colored_textured(void) {
     sgp_reset_color();
-    sgp_set_image(0, image1);
+    sgp_set_view(0, view1);
     for (int y=0;y<count;++y) {
         for (int x=0;x<count;++x) {
             if (x % 3 == 0) {
@@ -64,7 +66,7 @@ static void bench_colored_textured(void) {
             sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
         }
     }
-    sgp_reset_image(0);
+    sgp_reset_view(0);
 }
 
 static void bench_repeated_filled(void) {
@@ -106,16 +108,16 @@ static void bench_mixed(void) {
             if ((x+y) % 2 == 0) {
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
             } else {
-                sgp_set_image(0, image1);
+                sgp_set_view(0, view1);
                 sgp_draw_filled_rect(x*rect_count*2, y*rect_count*2, rect_count, rect_count);
-                sgp_reset_image(0);
+                sgp_reset_view(0);
             }
         }
     }
 }
 
 static void bench_sync_mixed(void) {
-    sgp_set_image(0, image1);
+    sgp_set_view(0, view1);
     sgp_reset_color();
     for (int y=0;y<count;++y) {
         for (int x=0;x<count;++x) {
@@ -128,14 +130,14 @@ static void bench_sync_mixed(void) {
             }
         }
     }
-    sgp_reset_image(0);
+    sgp_reset_view(0);
 }
 
 static void draw_cat(void) {
     sgp_reset_color();
-    sgp_set_image(0, image1);
+    sgp_set_view(0, view1);
     sgp_draw_filled_rect(0, 0, rect_count*count*2, rect_count*count*2);
-    sgp_reset_image(0);
+    sgp_reset_view(0);
 }
 
 static void draw_rect(void) {
@@ -216,8 +218,7 @@ static sg_image create_image(int width, int height) {
     sg_image_desc image_desc = {0};
     image_desc.width = width;
     image_desc.height = height;
-    image_desc.data.subimage[0][0].ptr = data;
-    image_desc.data.subimage[0][0].size = num_pixels;
+    image_desc.data.mip_levels[0] = (sg_range){ .ptr = data, .size = num_pixels };
     sg_image image = sg_make_image(&image_desc);
     free(data);
     assert(sg_query_image_state(image) == SG_RESOURCESTATE_VALID);
@@ -256,10 +257,14 @@ static void init(void) {
 
     image1 = create_image(128, 128);
     image2 = create_image(128, 128);
+    view1 = sgp_make_texture_view_from_image(image1, "view1");
+    view2 = sgp_make_texture_view_from_image(image2, "view2");
     image_ratio = 1.0f;
 }
 
 static void cleanup(void) {
+    sg_destroy_view(view1);
+    sg_destroy_view(view2);
     sg_destroy_image(image1);
     sg_destroy_image(image2);
     sgp_shutdown();
