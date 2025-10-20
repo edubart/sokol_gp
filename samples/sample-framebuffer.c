@@ -214,14 +214,7 @@ static void init(void) {
         exit(-1); 
     }
 
-    fb_tex_view = sg_make_view(&(sg_view_desc){
-        .texture = (sg_texture_view_desc){
-            .image      = fb_resolve_image,
-            .mip_levels = { .base = 0, .count = 1 },
-            .slices     = { .base = 0, .count = 1 },
-        },
-        .label = "fb_texture_view"
-    });
+    fb_tex_view = sgp_make_texture_view_from_image(fb_resolve_image, "fb_tex_view");
     if (sg_query_view_state(fb_tex_view) != SG_RESOURCESTATE_VALID) { 
         fprintf(stderr,"Failed to create FB texture view\n"); 
         exit(-1); 
