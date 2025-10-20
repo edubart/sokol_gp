@@ -15,6 +15,12 @@ This sample showcases how to use Sokol GP to draw inside frame buffers (render t
 static sg_image fb_color_image;
 static sg_image fb_resolve_image;
 static sg_image fb_depth_image;
+
+static sg_view fb_color_view;
+static sg_view fb_resolve_view;
+static sg_view fb_depth_view;
+static sg_view fb_tex_view;
+
 static sg_attachments fb_attachments;
 static sg_sampler linear_sampler;
 
@@ -81,7 +87,7 @@ static void frame(void) {
         for (int x=0;x<width;x+=192) {
             sgp_push_transform();
             sgp_rotate_at(time, x+64, y+64);
-            sgp_set_image(0, fb_resolve_image);
+            sgp_set_view(0, fb_tex_view);
             sgp_set_sampler(0, linear_sampler);
             if (i % 2 == 0) {
                 sgp_draw_filled_rect(x, y, 128, 128);
@@ -90,7 +96,7 @@ static void frame(void) {
                 sgp_rect src_rect = {0, 0, 128, 128};
                 sgp_draw_textured_rect(0, dest_rect, src_rect);
             }
-            sgp_reset_image(0);
+            sgp_reset_view(0);
             sgp_reset_sampler(0);
             sgp_pop_transform();
             i++;
@@ -128,7 +134,7 @@ static void init(void) {
 
     // create frame buffer color image (multi-sampled)
     sg_image_desc fb_color_image_desc = {
-        .render_target = true,
+        .usage.color_attachment = true,
         .width = 128,
         .height = 128,
         .pixel_format = sapp_color_format(),
@@ -142,17 +148,21 @@ static void init(void) {
 
     // create frame buffer resolve image
     sg_image_desc fb_resolve_image_desc = {
-        .render_target = true,
+        .usage.resolve_attachment = true,
         .width = 128,
         .height = 128,
         .pixel_format = sapp_color_format(),
         .sample_count = 1,
     };
     fb_resolve_image = sg_make_image(&fb_resolve_image_desc);
+    if (sg_query_image_state(fb_resolve_image) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "Failed to create frame buffer resolve image\n");
+        exit(-1);
+    }
 
     // create frame buffer depth stencil
     sg_image_desc fb_depth_image_desc = {
-        .render_target = true,
+        .usage.depth_stencil_attachment = true,
         .width = 128,
         .height = 128,
         .pixel_format = sapp_depth_format(),
@@ -164,23 +174,58 @@ static void init(void) {
         exit(-1);
     }
 
-    // create frame buffer attachments
-    sg_attachments_desc fb_attachments_desc = {
-        .colors = {
-            {.image = fb_color_image}
+    // create views
+    fb_color_view = sg_make_view(&(sg_view_desc){
+        .color_attachment = (sg_image_view_desc){ 
+            .image = fb_color_image, 
+            .mip_level = 0, 
+            .slice = 0, 
         },
-        .resolves = {
-            {.image = fb_resolve_image}
-        },
-        .depth_stencil = {
-            .image = fb_depth_image
-        }
-    };
-    fb_attachments = sg_make_attachments(&fb_attachments_desc);
-    if (sg_query_attachments_state(fb_attachments) != SG_RESOURCESTATE_VALID) {
-        fprintf(stderr, "Failed to create frame buffer attachments\n");
-        exit(-1);
+        .label = "fb_color_view"
+    });
+    if (sg_query_view_state(fb_color_view) != SG_RESOURCESTATE_VALID) { 
+        fprintf(stderr,"Failed to create FB color view\n"); 
+        exit(-1); 
     }
+
+    fb_resolve_view = sg_make_view(&(sg_view_desc){
+        .resolve_attachment = (sg_image_view_desc){ 
+            .image = fb_resolve_image, 
+            .mip_level = 0, 
+            .slice = 0, 
+        },
+        .label = "fb_resolve_view"
+    });
+    if (sg_query_view_state(fb_resolve_view) != SG_RESOURCESTATE_VALID) { 
+        fprintf(stderr,"Failed to create FB resolve view\n"); 
+        exit(-1); 
+    }
+
+    fb_depth_view = sg_make_view(&(sg_view_desc){
+        .depth_stencil_attachment = (sg_image_view_desc){ 
+            .image = fb_depth_image, 
+            .mip_level = 0, 
+            .slice = 0, 
+        },
+        .label = "fb_depth_view"
+    });
+    if (sg_query_view_state(fb_depth_view) != SG_RESOURCESTATE_VALID) { 
+        fprintf(stderr,"Failed to create FB depth stencil view\n"); 
+        exit(-1); 
+    }
+
+    fb_tex_view = sgp_make_texture_view_from_image(fb_resolve_image, "fb_tex_view");
+    if (sg_query_view_state(fb_tex_view) != SG_RESOURCESTATE_VALID) { 
+        fprintf(stderr,"Failed to create FB texture view\n"); 
+        exit(-1); 
+    }
+
+    // create frame buffer attachments
+    fb_attachments = (sg_attachments){
+        .colors[0] = fb_color_view,
+        .resolves[0] = fb_resolve_view,
+        .depth_stencil = fb_depth_view
+    };
 
     // create linear sampler
     sg_sampler_desc linear_sampler_desc = {
@@ -197,10 +242,14 @@ static void init(void) {
 }
 
 static void cleanup(void) {
-    sg_destroy_attachments(fb_attachments);
+    sg_destroy_view(fb_color_view);
+    sg_destroy_view(fb_resolve_view);
+    sg_destroy_view(fb_depth_view);
+    sg_destroy_view(fb_tex_view);
     sg_destroy_image(fb_color_image);
     sg_destroy_image(fb_resolve_image);
     sg_destroy_image(fb_depth_image);
+    sg_destroy_sampler(linear_sampler);
     sgp_shutdown();
     sg_shutdown();
 }
@@ -208,6 +257,7 @@ static void cleanup(void) {
 sapp_desc sokol_main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
+    // SOKOL_LOG("Entered sokol main");
     return (sapp_desc){
         .init_cb = init,
         .frame_cb = frame,
