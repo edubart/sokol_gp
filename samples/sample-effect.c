@@ -22,8 +22,10 @@ This sample showcases how to create 2D shader effects using multiple textures.
 static sg_pipeline pip;
 static sg_shader shd;
 static sg_image image;
+static sg_view view;
 static sg_sampler linear_sampler;
 static sg_image perlin_image;
+static sg_view perlin_view;
 
 static void frame(void) {
     // begin draw commands queue
@@ -45,15 +47,15 @@ static void frame(void) {
     uniforms.iLevel = 1.0f;
     sgp_set_pipeline(pip);
     sgp_set_uniform(NULL, 0, &uniforms, sizeof(effect_fs_uniforms_t));
-    sgp_set_image(IMG_iTexChannel0, image);
-    sgp_set_image(IMG_iTexChannel1, perlin_image);
+    sgp_set_view(IMG_iTexChannel0, view);
+    sgp_set_view(IMG_iTexChannel1, perlin_view);
     sgp_set_sampler(SMP_iSmpChannel0, linear_sampler);
     sgp_set_sampler(SMP_iSmpChannel1, linear_sampler);
     float width = (window_ratio >= image_ratio) ? window_width : image_ratio*window_height;
     float height = (window_ratio >= image_ratio) ? window_width/image_ratio : window_height;
     sgp_draw_filled_rect(0, 0, width, height);
-    sgp_reset_image(IMG_iTexChannel0);
-    sgp_reset_image(IMG_iTexChannel1);
+    sgp_reset_view(IMG_iTexChannel0);
+    sgp_reset_view(IMG_iTexChannel1);
     sgp_reset_sampler(SMP_iSmpChannel0);
     sgp_reset_sampler(SMP_iSmpChannel1);
     sgp_reset_pipeline();
@@ -77,8 +79,9 @@ static sg_image load_image(const char *filename) {
     sg_image_desc image_desc = {0};
     image_desc.width = width;
     image_desc.height = height;
-    image_desc.data.subimage[0][0].ptr = data;
-    image_desc.data.subimage[0][0].size = (size_t)(width * height * 4);
+    image_desc.data.mip_levels[0] = (sg_range){ 
+        .ptr = data, 
+        .size = (size_t)(width * height * 4) };
     img = sg_make_image(&image_desc);
     stbi_image_free(data);
     return img;
@@ -109,6 +112,12 @@ static void init(void) {
     perlin_image = load_image("images/perlin.png");
     if (sg_query_image_state(image) != SG_RESOURCESTATE_VALID || sg_query_image_state(perlin_image) != SG_RESOURCESTATE_VALID) {
         fprintf(stderr, "failed to load images");
+        exit(-1);
+    }
+    view = sgp_make_texture_view_from_image(image, "view");
+    perlin_view = sgp_make_texture_view_from_image(perlin_image, "perlin_view");
+    if (sg_query_view_state(view) != SG_RESOURCESTATE_VALID || sg_query_view_state(perlin_view) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "failed to create views");
         exit(-1);
     }
 
@@ -142,6 +151,8 @@ static void init(void) {
 }
 
 static void cleanup(void) {
+    sg_destroy_view(view);
+    sg_destroy_view(perlin_view);
     sg_destroy_image(image);
     sg_destroy_image(perlin_image);
     sg_destroy_pipeline(pip);
