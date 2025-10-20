@@ -32,9 +32,9 @@ static void frame(void) {
     sdf_fs_uniforms_t fs_uniform = {0};
     fs_uniform.iTime = sapp_frame_count() / 60.0f;
     sgp_set_uniform(&vs_uniform, sizeof(sdf_vs_uniforms_t), &fs_uniform, sizeof(sdf_fs_uniforms_t));
-    sgp_unset_image(0);
+    sgp_unset_view(0);
     sgp_draw_filled_rect(0, 0, width, height);
-    sgp_reset_image(0);
+    sgp_reset_view(0);
     sgp_reset_pipeline();
 
     // dispatch draw commands
