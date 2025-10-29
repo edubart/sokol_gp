@@ -2485,6 +2485,33 @@ static inline bool _sgp_region_overlaps(_sgp_region a, _sgp_region b) {
     return !(a.x2 <= b.x1 || b.x2 <= a.x1  || a.y2 <= b.y1 || b.y2 <= a.y1);
 }
 
+// Optimized texture uniform comparison - early exit on count mismatch
+static inline bool _sgp_textures_equal(const sgp_textures_uniform* a, const sgp_textures_uniform* b) {
+    if (a->count != b->count) {
+        return false;
+    }
+    // Compare only the used slots based on count
+    for (uint32_t i = 0; i < a->count; ++i) {
+        if (a->images[i].id != b->images[i].id || a->samplers[i].id != b->samplers[i].id) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Optimized uniform comparison - compare sizes first, then data
+static inline bool _sgp_uniforms_equal(const sgp_uniform* a, const sgp_uniform* b) {
+    if (a->vs_size != b->vs_size || a->fs_size != b->fs_size) {
+        return false;
+    }
+    // Compare actual data bytes
+    uint32_t total_size = a->vs_size + a->fs_size;
+    if (total_size == 0) {
+        return true;
+    }
+    return memcmp(&a->data.bytes[0], &b->data.bytes[0], total_size) == 0;
+}
+
 static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textures, sgp_uniform* uniform, _sgp_region region, uint32_t vertex_index, uint32_t num_vertices) {
 #if SGP_BATCH_OPTIMIZER_DEPTH > 0
     _sgp_command* prev_cmd = NULL;
@@ -2513,8 +2540,8 @@ static bool _sgp_merge_batch_command(sg_pipeline pip, sgp_textures_uniform textu
 
         // can only batch commands with the same bindings and uniforms
         if (cmd->args.draw.pip.id == pip.id &&
-            memcmp(&textures, &cmd->args.draw.textures, sizeof(sgp_textures_uniform)) == 0 &&
-            (!uniform || memcmp(uniform, &_sgp.uniforms[cmd->args.draw.uniform_index], sizeof(sgp_uniform)) == 0)) {
+            _sgp_textures_equal(&textures, &cmd->args.draw.textures) &&
+            (!uniform || _sgp_uniforms_equal(uniform, &_sgp.uniforms[cmd->args.draw.uniform_index]))) {
             prev_cmd = cmd;
             break;
         } else {
@@ -2666,7 +2693,7 @@ static void _sgp_queue_draw(sg_pipeline pip, _sgp_region region, uint32_t vertex
     uint32_t uniform_index = _SGP_IMPOSSIBLE_ID;
     if (uniform) {
         sgp_uniform *prev_uniform = _sgp_prev_uniform();
-        bool reuse_uniform = prev_uniform && (memcmp(prev_uniform, uniform, sizeof(sgp_uniform)) == 0);
+        bool reuse_uniform = prev_uniform && _sgp_uniforms_equal(prev_uniform, uniform);
         if (!reuse_uniform) {
             // append new uniform
             sgp_uniform *next_uniform = _sgp_next_uniform();
@@ -2871,6 +2898,15 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
     sgp_color_ub4 color = _sgp.state.color;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
+    
+    // Constant texture coordinates for a quad - hoist outside the loop
+    static const sgp_vec2 vtexquad[4] = {
+        {0.0f, 1.0f}, // bottom left
+        {1.0f, 1.0f}, // bottom right
+        {1.0f, 0.0f}, // top right
+        {0.0f, 0.0f}, // top left
+    };
+    
     for (uint32_t i=0;i<count;v+=6, rect++, i++) {
         sgp_vec2 quad[4] = {
             {rect->x,           rect->y + rect->h}, // bottom left
@@ -2886,13 +2922,6 @@ void sgp_draw_filled_rects(const sgp_rect* rects, uint32_t count) {
             region.x2 = _sg_max(region.x2, quad[j].x);
             region.y2 = _sg_max(region.y2, quad[j].y);
         }
-
-        const sgp_vec2 vtexquad[4] = {
-            {0.0f, 1.0f}, // bottom left
-            {1.0f, 1.0f}, // bottom right
-            {1.0f, 0.0f}, // top right
-            {0.0f, 0.0f}, // top left
-        };
 
         // make a quad composed of 2 triangles
         v[0].position = quad[0]; v[0].texcoord = vtexquad[0]; v[0].color = color;
@@ -2946,8 +2975,9 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
     }
     float iw = 1.0f/(float)image_size.w, ih = 1.0f/(float)image_size.h;
 
-    // compute vertices
+    // compute vertices (combine position and texture coordinate calculation in one loop)
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
+    sgp_color_ub4 color = _sgp.state.color;
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
     for (uint32_t i=0;i<count;i++) {
         sgp_vec2 quad[4] = {
@@ -2965,19 +2995,7 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
             region.y2 = _sg_max(region.y2, quad[j].y);
         }
 
-        sgp_vertex* v = &vertices[i*6];
-        v[0].position = quad[0];
-        v[1].position = quad[1];
-        v[2].position = quad[2];
-        v[3].position = quad[3];
-        v[4].position = quad[0];
-        v[5].position = quad[2];
-    }
-
-    // compute texture coords
-    sgp_color_ub4 color = _sgp.state.color;
-    for (uint32_t i=0;i<count;i++) {
-        // compute source rect
+        // compute source rect texture coordinates
         float tl = rects[i].src.x*iw;
         float tt = rects[i].src.y*ih;
         float tr = (rects[i].src.x + rects[i].src.w)*iw;
@@ -2991,12 +3009,12 @@ void sgp_draw_textured_rects(int channel, const sgp_textured_rect* rects, uint32
 
         // make a quad composed of 2 triangles
         sgp_vertex* v = &vertices[i*6];
-        v[0].texcoord = vtexquad[0]; v[0].color = color;
-        v[1].texcoord = vtexquad[1]; v[1].color = color;
-        v[2].texcoord = vtexquad[2]; v[2].color = color;
-        v[3].texcoord = vtexquad[3]; v[3].color = color;
-        v[4].texcoord = vtexquad[0]; v[4].color = color;
-        v[5].texcoord = vtexquad[2]; v[5].color = color;
+        v[0].position = quad[0]; v[0].texcoord = vtexquad[0]; v[0].color = color;
+        v[1].position = quad[1]; v[1].texcoord = vtexquad[1]; v[1].color = color;
+        v[2].position = quad[2]; v[2].texcoord = vtexquad[2]; v[2].color = color;
+        v[3].position = quad[3]; v[3].texcoord = vtexquad[3]; v[3].color = color;
+        v[4].position = quad[0]; v[4].texcoord = vtexquad[0]; v[4].color = color;
+        v[5].position = quad[2]; v[5].texcoord = vtexquad[2]; v[5].color = color;
     }
 
     // queue draw
