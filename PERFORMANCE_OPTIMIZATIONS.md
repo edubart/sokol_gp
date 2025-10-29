@@ -50,7 +50,7 @@ static inline bool _sgp_uniforms_equal(const sgp_uniform* a, const sgp_uniform* 
 - Early exit on size/count mismatch before expensive memory comparison
 - Compares only used slots in texture arrays (not entire 4-slot array)
 - Reduces cache misses by accessing only necessary data
-- Significantly faster for common cases where differences are in metadata fields
+- Significantly faster for common cases where differences are in metadata fields (count, size) rather than actual data bytes
 
 ### 2. Constant Hoisting in Rectangle Drawing
 
@@ -152,10 +152,12 @@ These optimizations primarily target CPU-bound scenarios where draw call batchin
 2. **Large batches of rectangles**: Constant hoisting and loop fusion reduce per-primitive overhead
 3. **Triangle-heavy scenes**: Branch elimination significantly reduces arithmetic operations
 
-Expected improvements:
-- 5-15% reduction in CPU time for batch optimizer operations
-- 10-20% faster vertex generation for rectangles and textured primitives
-- 15-30% faster vertex generation for triangles (due to branch elimination with thickness=0)
+**Estimated improvements** (based on theoretical analysis of eliminated operations):
+- 5-15% estimated reduction in CPU time for batch optimizer operations (savings from eliminated memcmp calls and early exits)
+- 10-20% estimated improvement for rectangle vertex generation (from constant hoisting and loop fusion)
+- 15-30% estimated improvement for triangle vertex generation (from eliminating 4 FP ops per vertex when thickness=0)
+
+*Note: Actual performance gains will vary based on hardware, compiler optimizations, and workload characteristics. Use the `sample-bench` program to measure real-world impact in your specific use case.*
 
 ## Compatibility
 
