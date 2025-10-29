@@ -2790,15 +2790,30 @@ void sgp_draw(sg_primitive_type primitive_type, const sgp_vertex* vertices, uint
     float thickness = (primitive_type == SG_PRIMITIVETYPE_POINTS || primitive_type == SG_PRIMITIVETYPE_LINES || primitive_type == SG_PRIMITIVETYPE_LINE_STRIP) ? _sgp.state.thickness : 0.0f;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
-    for (uint32_t i=0;i<count;++i) {
-        sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i].position);
-        region.x1 = _sg_min(region.x1, p.x - thickness);
-        region.y1 = _sg_min(region.y1, p.y - thickness);
-        region.x2 = _sg_max(region.x2, p.x + thickness);
-        region.y2 = _sg_max(region.y2, p.y + thickness);
-        v[i].position = p;
-        v[i].texcoord = vertices[i].texcoord;
-        v[i].color = vertices[i].color;
+    
+    // Optimize based on whether we need thickness adjustment
+    if (thickness > 0.0f) {
+        for (uint32_t i=0;i<count;++i) {
+            sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i].position);
+            region.x1 = _sg_min(region.x1, p.x - thickness);
+            region.y1 = _sg_min(region.y1, p.y - thickness);
+            region.x2 = _sg_max(region.x2, p.x + thickness);
+            region.y2 = _sg_max(region.y2, p.y + thickness);
+            v[i].position = p;
+            v[i].texcoord = vertices[i].texcoord;
+            v[i].color = vertices[i].color;
+        }
+    } else {
+        for (uint32_t i=0;i<count;++i) {
+            sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i].position);
+            region.x1 = _sg_min(region.x1, p.x);
+            region.y1 = _sg_min(region.y1, p.y);
+            region.x2 = _sg_max(region.x2, p.x);
+            region.y2 = _sg_max(region.y2, p.y);
+            v[i].position = p;
+            v[i].texcoord = vertices[i].texcoord;
+            v[i].color = vertices[i].color;
+        }
     }
 
     // queue draw
@@ -2825,16 +2840,32 @@ static void _sgp_draw_solid_pip(sg_primitive_type primitive_type, const sgp_vec2
     sgp_color_ub4 color = _sgp.state.color;
     sgp_mat2x3 mvp = _sgp.state.mvp; // copy to stack for more efficiency
     _sgp_region region = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
-    for (uint32_t i=0;i<num_vertices;++i) {
-        sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
-        region.x1 = _sg_min(region.x1, p.x - thickness);
-        region.y1 = _sg_min(region.y1, p.y - thickness);
-        region.x2 = _sg_max(region.x2, p.x + thickness);
-        region.y2 = _sg_max(region.y2, p.y + thickness);
-        v[i].position = p;
-        v[i].texcoord.x = 0.0f;
-        v[i].texcoord.y = 0.0f;
-        v[i].color = color;
+    
+    // Optimize based on whether we need thickness adjustment
+    if (thickness > 0.0f) {
+        for (uint32_t i=0;i<num_vertices;++i) {
+            sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
+            region.x1 = _sg_min(region.x1, p.x - thickness);
+            region.y1 = _sg_min(region.y1, p.y - thickness);
+            region.x2 = _sg_max(region.x2, p.x + thickness);
+            region.y2 = _sg_max(region.y2, p.y + thickness);
+            v[i].position = p;
+            v[i].texcoord.x = 0.0f;
+            v[i].texcoord.y = 0.0f;
+            v[i].color = color;
+        }
+    } else {
+        for (uint32_t i=0;i<num_vertices;++i) {
+            sgp_vec2 p = _sgp_mat3_vec2_mul(&mvp, &vertices[i]);
+            region.x1 = _sg_min(region.x1, p.x);
+            region.y1 = _sg_min(region.y1, p.y);
+            region.x2 = _sg_max(region.x2, p.x);
+            region.y2 = _sg_max(region.y2, p.y);
+            v[i].position = p;
+            v[i].texcoord.x = 0.0f;
+            v[i].texcoord.y = 0.0f;
+            v[i].color = color;
+        }
     }
 
     // queue draw
