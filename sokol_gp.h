@@ -727,8 +727,15 @@ typedef struct _sgp_context {
     sg_shader shader;
     sg_buffer vertex_buf;
     sg_image white_img;
+    sg_view white_view;
     sg_sampler nearest_smp;
     sg_pipeline pipelines[_SG_PRIMITIVETYPE_NUM * _SGP_BLENDMODE_NUM];
+
+    // per-channel sg_view cache. sokol's new "view objects" model requires an
+    // sg_view object to bind a texture; we lazily create one per (channel,image)
+    // pair the first time it's used and reuse it on subsequent draws.
+    sg_image view_cache_img[SGP_TEXTURE_SLOTS];
+    sg_view  view_cache[SGP_TEXTURE_SLOTS];
 
     // command queue
     uint32_t cur_vertex;
@@ -1638,20 +1645,20 @@ static sg_shader _sgp_make_common_shader(void) {
     sg_backend backend = sg_query_backend();
     sg_shader_desc desc;
     memset(&desc, 0, sizeof(desc));
-    desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    desc.images[0].multisampled = false;
-    desc.images[0].image_type = SG_IMAGETYPE_2D;
-    desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+    desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.views[0].texture.multisampled = false;
+    desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
+    desc.views[0].texture.sample_type = SG_IMAGESAMPLETYPE_FLOAT;
     desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
     desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-    desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    desc.image_sampler_pairs[0].image_slot = 0;
-    desc.image_sampler_pairs[0].sampler_slot = 0;
+    desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.texture_sampler_pairs[0].view_slot = 0;
+    desc.texture_sampler_pairs[0].sampler_slot = 0;
 
     // GLCORE / GLES3 only
     desc.attrs[SGP_VS_ATTR_COORD].glsl_name = "coord";
     desc.attrs[SGP_VS_ATTR_COLOR].glsl_name = "color";
-    desc.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
+    desc.texture_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
 
     // D3D11 only
     desc.attrs[SGP_VS_ATTR_COORD].hlsl_sem_name = "TEXCOORD";
@@ -1757,8 +1764,8 @@ void sgp_setup(const sgp_desc* desc) {
     sg_buffer_desc vertex_buf_desc;
     memset(&vertex_buf_desc, 0, sizeof(sg_buffer_desc));
     vertex_buf_desc.size = (size_t)(_sgp.num_vertices * sizeof(sgp_vertex));
-    vertex_buf_desc.type = SG_BUFFERTYPE_VERTEXBUFFER;
-    vertex_buf_desc.usage = SG_USAGE_STREAM;
+    vertex_buf_desc.usage.vertex_buffer = true;
+    vertex_buf_desc.usage.stream_update = true;
 
     _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
     if (sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
@@ -1776,11 +1783,23 @@ void sgp_setup(const sgp_desc* desc) {
     white_img_desc.width = 2;
     white_img_desc.height = 2;
     white_img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-    white_img_desc.data.subimage[0][0].ptr = pixels;
-    white_img_desc.data.subimage[0][0].size = sizeof(pixels);
+    white_img_desc.data.mip_levels[0].ptr = pixels;
+    white_img_desc.data.mip_levels[0].size = sizeof(pixels);
     white_img_desc.label = "sgp-white-texture";
     _sgp.white_img = sg_make_image(&white_img_desc);
     if (sg_query_image_state(_sgp.white_img) != SG_RESOURCESTATE_VALID) {
+        sgp_shutdown();
+        _sgp_set_error(SGP_ERROR_MAKE_WHITE_IMAGE_FAILED);
+        return;
+    }
+
+    // create the texture view for the white image (sokol's new "view objects" model)
+    sg_view_desc white_view_desc;
+    memset(&white_view_desc, 0, sizeof(sg_view_desc));
+    white_view_desc.texture.image = _sgp.white_img;
+    white_view_desc.label = "sgp-white-view";
+    _sgp.white_view = sg_make_view(&white_view_desc);
+    if (sg_query_view_state(_sgp.white_view) != SG_RESOURCESTATE_VALID) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_WHITE_IMAGE_FAILED);
         return;
@@ -1851,13 +1870,47 @@ void sgp_shutdown(void) {
     if (_sgp.vertex_buf.id != SG_INVALID_ID) {
         sg_destroy_buffer(_sgp.vertex_buf);
     }
+    if (_sgp.white_view.id != SG_INVALID_ID) {
+        sg_destroy_view(_sgp.white_view);
+    }
     if (_sgp.white_img.id != SG_INVALID_ID) {
         sg_destroy_image(_sgp.white_img);
     }
     if (_sgp.nearest_smp.id != SG_INVALID_ID) {
         sg_destroy_sampler(_sgp.nearest_smp);
     }
+    for (uint32_t i = 0; i < SGP_TEXTURE_SLOTS; ++i) {
+        if (_sgp.view_cache[i].id != SG_INVALID_ID) {
+            sg_destroy_view(_sgp.view_cache[i]);
+            _sgp.view_cache[i].id = SG_INVALID_ID;
+            _sgp.view_cache_img[i].id = SG_INVALID_ID;
+        }
+    }
     memset(&_sgp, 0, sizeof(_sgp_context));
+}
+
+// Resolve an sg_image to an owned sg_view for a given binding channel. The view
+// is cached per channel; if the user binds a different image to the same channel
+// the previously-cached view is destroyed and a new one created. The white-image
+// fallback is mapped to the pre-built _sgp.white_view to avoid view churn.
+static sg_view _sgp_get_view_for_image(uint32_t channel, sg_image img) {
+    SOKOL_ASSERT(channel < SGP_TEXTURE_SLOTS);
+    if (img.id == _sgp.white_img.id) {
+        return _sgp.white_view;
+    }
+    if (_sgp.view_cache_img[channel].id == img.id && _sgp.view_cache[channel].id != SG_INVALID_ID) {
+        return _sgp.view_cache[channel];
+    }
+    if (_sgp.view_cache[channel].id != SG_INVALID_ID) {
+        sg_destroy_view(_sgp.view_cache[channel]);
+    }
+    sg_view_desc vd;
+    memset(&vd, 0, sizeof(vd));
+    vd.texture.image = img;
+    vd.label = "sgp-texture-view";
+    _sgp.view_cache[channel] = sg_make_view(&vd);
+    _sgp.view_cache_img[channel] = img;
+    return _sgp.view_cache[channel];
 }
 
 bool sgp_is_valid(void) {
@@ -2042,20 +2095,23 @@ void sgp_flush(void) {
                     cur_pip_id = args->pip.id;
                     sg_apply_pipeline(args->pip);
                 }
-                // bindings
+                // bindings — translate per-channel sg_image -> sg_view (cached)
                 for (uint32_t j=0;j<SGP_TEXTURE_SLOTS;++j) {
                     uint32_t img_id = SG_INVALID_ID;
                     uint32_t smp_id = SG_INVALID_ID;
+                    sg_view view = {SG_INVALID_ID};
                     if (j < args->textures.count) {
-                        img_id = args->textures.images[j].id;
+                        sg_image img = args->textures.images[j];
+                        img_id = img.id;
                         if (img_id != SG_INVALID_ID) {
                             smp_id = args->textures.samplers[j].id;
+                            view = _sgp_get_view_for_image(j, img);
                         }
                     }
                     if (cur_imgs_id[j] != img_id) {
-                        // when an image binding change we need to re-apply bindings
+                        // when an image binding changes we need to re-apply bindings
                         cur_imgs_id[j] = img_id;
-                        bind.images[j].id = img_id;
+                        bind.views[j].id = view.id;
                         bind.samplers[j].id = smp_id;
                         apply_bindings = true;
                     }
@@ -2916,9 +2972,7 @@ void sgp_draw_filled_rect(float x, float y, float w, float h) {
 }
 
 static sgp_isize _sgp_query_image_size(sg_image img_id) {
-    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
-    SOKOL_ASSERT(img);
-    sgp_isize size = {img ? img->cmn.width : 0, img ? img->cmn.height : 0};
+    sgp_isize size = {sg_query_image_width(img_id), sg_query_image_height(img_id)};
     return size;
 }
 
