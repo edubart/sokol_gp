@@ -354,6 +354,8 @@ The following macros can be defined before including to change the library behav
 MIT, see LICENSE file or the end of `sokol_gp.h` file.
 */
 
+#define SOKOL_GP_IMPL
+
 #if defined(SOKOL_IMPL) && !defined(SOKOL_GP_IMPL)
 #define SOKOL_GP_IMPL
 #endif
@@ -433,6 +435,7 @@ typedef enum sgp_error {
     SGP_ERROR_MAKE_NEAREST_SAMPLER_FAILED,
     SGP_ERROR_MAKE_COMMON_SHADER_FAILED,
     SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED,
+    SGP_ERROR_MAKE_VIEW_FAILED,
 } sgp_error;
 
 /* Blend modes. */
@@ -684,7 +687,8 @@ enum {
     _SGP_DEFAULT_MAX_VERTICES = 65536,
     _SGP_DEFAULT_MAX_COMMANDS = 16384,
     _SGP_MAX_MOVE_VERTICES = 96,
-    _SGP_MAX_STACK_DEPTH = 64
+    _SGP_MAX_STACK_DEPTH = 64,
+    _SGP_MAX_FLUSHES = 64
 };
 
 typedef struct _sgp_region {
@@ -718,6 +722,12 @@ typedef struct _sgp_command {
     _sgp_command_args args;
 } _sgp_command;
 
+typedef struct _sgp_view_entry {
+    uint32_t image_id;
+    uint32_t image_uninit_count;
+    sg_view view;
+} _sgp_view_entry;
+
 typedef struct _sgp_context {
     uint32_t init_cookie;
     sgp_error last_error;
@@ -725,8 +735,11 @@ typedef struct _sgp_context {
 
     // resources
     sg_shader shader;
-    sg_buffer vertex_buf;
+    sg_buffer vertex_bufs[_SGP_MAX_FLUSHES]; // one per flush in a frame
+    uint32_t cur_flush;
     sg_image white_img;
+    _sgp_view_entry* views; // texture views cache, indexed by image slot
+    uint32_t num_views;
     sg_sampler nearest_smp;
     sg_pipeline pipelines[_SG_PRIMITIVETYPE_NUM * _SGP_BLENDMODE_NUM];
 
@@ -1638,20 +1651,20 @@ static sg_shader _sgp_make_common_shader(void) {
     sg_backend backend = sg_query_backend();
     sg_shader_desc desc;
     memset(&desc, 0, sizeof(desc));
-    desc.images[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    desc.images[0].multisampled = false;
-    desc.images[0].image_type = SG_IMAGETYPE_2D;
-    desc.images[0].sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+    desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.views[0].texture.multisampled = false;
+    desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
+    desc.views[0].texture.sample_type = SG_IMAGESAMPLETYPE_FLOAT;
     desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
     desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-    desc.image_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    desc.image_sampler_pairs[0].image_slot = 0;
-    desc.image_sampler_pairs[0].sampler_slot = 0;
+    desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.texture_sampler_pairs[0].view_slot = 0;
+    desc.texture_sampler_pairs[0].sampler_slot = 0;
 
     // GLCORE / GLES3 only
     desc.attrs[SGP_VS_ATTR_COORD].glsl_name = "coord";
     desc.attrs[SGP_VS_ATTR_COLOR].glsl_name = "color";
-    desc.image_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
+    desc.texture_sampler_pairs[0].glsl_name = "iTexChannel0_iSmpChannel0";
 
     // D3D11 only
     desc.attrs[SGP_VS_ATTR_COORD].hlsl_sem_name = "TEXCOORD";
@@ -1717,6 +1730,78 @@ static sg_shader _sgp_make_common_shader(void) {
     return sg_make_shader(&desc);
 }
 
+static void _sgp_on_commit(void* user_data) {
+    _SOKOL_UNUSED(user_data);
+    _sgp.cur_flush = 0;
+}
+
+static sg_commit_listener _sgp_commit_listener(void) {
+    sg_commit_listener listener;
+    memset(&listener, 0, sizeof(listener));
+    listener.func = _sgp_on_commit;
+    return listener;
+}
+
+// Returns the vertex buffer for a flush in the current frame. Transient buffers
+// cannot be written again after being bound in a frame, thus every flush needs
+// its own buffer.
+static sg_buffer _sgp_lookup_vertex_buffer(uint32_t flush_index) {
+    sg_buffer buf = _sgp.vertex_bufs[flush_index];
+    if (buf.id != SG_INVALID_ID) {
+        return buf;
+    }
+    sg_buffer_desc vertex_buf_desc;
+    memset(&vertex_buf_desc, 0, sizeof(sg_buffer_desc));
+    vertex_buf_desc.size = (size_t)(_sgp.num_vertices * sizeof(sgp_vertex));
+    vertex_buf_desc.usage.vertex_buffer = true;
+    vertex_buf_desc.usage.write_transient = true;
+    vertex_buf_desc.label = "sgp-vertex-buffer";
+    buf = sg_make_buffer(&vertex_buf_desc);
+    if (sg_query_buffer_state(buf) != SG_RESOURCESTATE_VALID) {
+        sg_destroy_buffer(buf);
+        buf.id = SG_INVALID_ID;
+    }
+    _sgp.vertex_bufs[flush_index] = buf;
+    return buf;
+}
+
+// Returns a texture view for an image, creating it when needed. The cache is
+// indexed by image slot, so a view of a destroyed image is released once its
+// slot is reused by another image.
+static sg_view _sgp_lookup_view(sg_image image) {
+    sg_view view = {SG_INVALID_ID};
+    uint32_t slot = image.id & _SG_SLOT_MASK;
+    if (image.id == SG_INVALID_ID || slot >= _sgp.num_views) {
+        return view;
+    }
+    sg_slot_info info = sg_query_image_info(image).slot;
+    if (info.state != SG_RESOURCESTATE_VALID) {
+        return view;
+    }
+    _sgp_view_entry* entry = &_sgp.views[slot];
+    if (entry->image_id == image.id && entry->image_uninit_count == info.uninit_count) {
+        return entry->view;
+    }
+    if (entry->view.id != SG_INVALID_ID) {
+        sg_destroy_view(entry->view);
+    }
+    memset(entry, 0, sizeof(_sgp_view_entry));
+    sg_view_desc view_desc;
+    memset(&view_desc, 0, sizeof(sg_view_desc));
+    view_desc.texture.image = image;
+    view_desc.label = "sgp-texture-view";
+    view = sg_make_view(&view_desc);
+    if (sg_query_view_state(view) != SG_RESOURCESTATE_VALID) {
+        sg_destroy_view(view);
+        view.id = SG_INVALID_ID;
+        return view;
+    }
+    entry->image_id = image.id;
+    entry->image_uninit_count = info.uninit_count;
+    entry->view = view;
+    return view;
+}
+
 void sgp_setup(const sgp_desc* desc) {
     SOKOL_ASSERT(_sgp.init_cookie == 0);
 
@@ -1744,7 +1829,13 @@ void sgp_setup(const sgp_desc* desc) {
     _sgp.vertices = (sgp_vertex*) _sg_malloc(_sgp.num_vertices * sizeof(sgp_vertex));
     _sgp.uniforms = (sgp_uniform*) _sg_malloc(_sgp.num_uniforms * sizeof(sgp_uniform));
     _sgp.commands = (_sgp_command*) _sg_malloc(_sgp.num_commands * sizeof(_sgp_command));
-    if (!_sgp.commands || !_sgp.uniforms || !_sgp.commands) {
+    _sgp.num_views = (uint32_t)sg_query_desc().image_pool_size + 1;
+    _sgp.views = (_sgp_view_entry*) _sg_malloc(_sgp.num_views * sizeof(_sgp_view_entry));
+    if (_sgp.views) {
+        // must be cleared before any shutdown on errors
+        memset(_sgp.views, 0, _sgp.num_views * sizeof(_sgp_view_entry));
+    }
+    if (!_sgp.vertices || !_sgp.uniforms || !_sgp.commands || !_sgp.views) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_ALLOC_FAILED);
         return;
@@ -1753,15 +1844,9 @@ void sgp_setup(const sgp_desc* desc) {
     memset(_sgp.uniforms, 0, _sgp.num_uniforms * sizeof(sgp_uniform));
     memset(_sgp.commands, 0, _sgp.num_commands * sizeof(_sgp_command));
 
-    // create vertex buffer
-    sg_buffer_desc vertex_buf_desc;
-    memset(&vertex_buf_desc, 0, sizeof(sg_buffer_desc));
-    vertex_buf_desc.size = (size_t)(_sgp.num_vertices * sizeof(sgp_vertex));
-    vertex_buf_desc.type = SG_BUFFERTYPE_VERTEXBUFFER;
-    vertex_buf_desc.usage = SG_USAGE_STREAM;
-
-    _sgp.vertex_buf = sg_make_buffer(&vertex_buf_desc);
-    if (sg_query_buffer_state(_sgp.vertex_buf) != SG_RESOURCESTATE_VALID) {
+    // create first vertex buffer, others are created on demand,
+    // and get notified when frames end to start reusing them
+    if (_sgp_lookup_vertex_buffer(0).id == SG_INVALID_ID || !sg_add_commit_listener(_sgp_commit_listener())) {
         sgp_shutdown();
         _sgp_set_error(SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED);
         return;
@@ -1776,8 +1861,8 @@ void sgp_setup(const sgp_desc* desc) {
     white_img_desc.width = 2;
     white_img_desc.height = 2;
     white_img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-    white_img_desc.data.subimage[0][0].ptr = pixels;
-    white_img_desc.data.subimage[0][0].size = sizeof(pixels);
+    white_img_desc.data.ptr = pixels;
+    white_img_desc.data.size = sizeof(pixels);
     white_img_desc.label = "sgp-white-texture";
     _sgp.white_img = sg_make_image(&white_img_desc);
     if (sg_query_image_state(_sgp.white_img) != SG_RESOURCESTATE_VALID) {
@@ -1848,8 +1933,19 @@ void sgp_shutdown(void) {
     if (_sgp.shader.id != SG_INVALID_ID) {
         sg_destroy_shader(_sgp.shader);
     }
-    if (_sgp.vertex_buf.id != SG_INVALID_ID) {
-        sg_destroy_buffer(_sgp.vertex_buf);
+    sg_remove_commit_listener(_sgp_commit_listener());
+    for (uint32_t i=0;i<_SGP_MAX_FLUSHES;++i) {
+        if (_sgp.vertex_bufs[i].id != SG_INVALID_ID) {
+            sg_destroy_buffer(_sgp.vertex_bufs[i]);
+        }
+    }
+    if (_sgp.views) {
+        for (uint32_t i=0;i<_sgp.num_views;++i) {
+            if (_sgp.views[i].view.id != SG_INVALID_ID) {
+                sg_destroy_view(_sgp.views[i].view);
+            }
+        }
+        _sg_free(_sgp.views);
     }
     if (_sgp.white_img.id != SG_INVALID_ID) {
         sg_destroy_image(_sgp.white_img);
@@ -1902,6 +1998,8 @@ const char* sgp_get_error_message(sgp_error error_code) {
             return "SGP failed to create the common shader";
         case SGP_ERROR_MAKE_COMMON_PIPELINE_FAILED:
             return "SGP failed to create the common pipeline";
+        case SGP_ERROR_MAKE_VIEW_FAILED:
+            return "SGP failed to create texture view";
         default:
             return "Invalid error code";
     }
@@ -1993,11 +2091,24 @@ void sgp_flush(void) {
     // upload vertices
     uint32_t base_vertex = _sgp.state._base_vertex;
     uint32_t num_vertices = (end_vertex - base_vertex) * sizeof(sgp_vertex);
-    sg_range vertex_range = {&_sgp.vertices[base_vertex], num_vertices};
-    int offset = sg_append_buffer(_sgp.vertex_buf, &vertex_range);
-    if (sg_query_buffer_overflow(_sgp.vertex_buf)) {
-        _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW);
-        return;
+    sg_buffer vertex_buf = {SG_INVALID_ID};
+    if (num_vertices > 0) {
+        if (_sgp.cur_flush >= _SGP_MAX_FLUSHES) {
+            _sgp_set_error(SGP_ERROR_VERTICES_OVERFLOW);
+            return;
+        }
+        vertex_buf = _sgp_lookup_vertex_buffer(_sgp.cur_flush);
+        if (vertex_buf.id == SG_INVALID_ID) {
+            _sgp_set_error(SGP_ERROR_MAKE_VERTEX_BUFFER_FAILED);
+            return;
+        }
+        _sgp.cur_flush++;
+        sg_write_buffer_desc write_desc;
+        memset(&write_desc, 0, sizeof(sg_write_buffer_desc));
+        write_desc.src.data.ptr = &_sgp.vertices[base_vertex];
+        write_desc.src.data.size = num_vertices;
+        write_desc.dst.buffer = vertex_buf;
+        sg_write_buffer_transient(&write_desc);
     }
 
     uint32_t cur_pip_id = _SGP_IMPOSSIBLE_ID;
@@ -2010,8 +2121,7 @@ void sgp_flush(void) {
     // define the resource bindings
     sg_bindings bind;
     memset(&bind, 0, sizeof(sg_bindings));
-    bind.vertex_buffers[0] = _sgp.vertex_buf;
-    bind.vertex_buffer_offsets[0] = offset;
+    bind.vertex_buffers[0] = vertex_buf;
 
     // flush commands
     for (uint32_t i = _sgp.state._base_command; i < end_command; ++i) {
@@ -2034,6 +2144,7 @@ void sgp_flush(void) {
                 }
                 bool apply_bindings = false;
                 bool apply_uniforms = false;
+                bool missing_view = false;
                 // pipeline
                 if (args->pip.id != cur_pip_id) {
                     // when pipeline changes we need to re-apply uniforms and bindings
@@ -2055,10 +2166,21 @@ void sgp_flush(void) {
                     if (cur_imgs_id[j] != img_id) {
                         // when an image binding change we need to re-apply bindings
                         cur_imgs_id[j] = img_id;
-                        bind.images[j].id = img_id;
+                        sg_image img = {img_id};
+                        bind.views[j] = _sgp_lookup_view(img);
                         bind.samplers[j].id = smp_id;
                         apply_bindings = true;
+                        if (img_id != SG_INVALID_ID && bind.views[j].id == SG_INVALID_ID) {
+                            missing_view = true;
+                            cur_imgs_id[j] = _SGP_IMPOSSIBLE_ID; // retry on next draw
+                        }
                     }
+                }
+                if (missing_view) {
+                    // skip this draw, and force next draw to re-apply everything
+                    _sgp_set_error(SGP_ERROR_MAKE_VIEW_FAILED);
+                    cur_pip_id = _SGP_IMPOSSIBLE_ID;
+                    break;
                 }
                 if (apply_bindings) {
                     sg_apply_bindings(&bind);
@@ -2915,10 +3037,8 @@ void sgp_draw_filled_rect(float x, float y, float w, float h) {
     sgp_draw_filled_rects(&rect, 1);
 }
 
-static sgp_isize _sgp_query_image_size(sg_image img_id) {
-    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
-    SOKOL_ASSERT(img);
-    sgp_isize size = {img ? img->cmn.width : 0, img ? img->cmn.height : 0};
+static sgp_isize _sgp_query_image_size(sg_image img) {
+    sgp_isize size = {sg_query_image_width(img), sg_query_image_height(img)};
     return size;
 }
 
