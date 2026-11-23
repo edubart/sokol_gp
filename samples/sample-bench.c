@@ -216,8 +216,8 @@ static sg_image create_image(int width, int height) {
     sg_image_desc image_desc = {0};
     image_desc.width = width;
     image_desc.height = height;
-    image_desc.data.subimage[0][0].ptr = data;
-    image_desc.data.subimage[0][0].size = num_pixels;
+    image_desc.data.ptr = data;
+    image_desc.data.size = num_pixels;
     sg_image image = sg_make_image(&image_desc);
     free(data);
     assert(sg_query_image_state(image) == SG_RESOURCESTATE_VALID);

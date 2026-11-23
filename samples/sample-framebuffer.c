@@ -128,7 +128,7 @@ static void init(void) {
 
     // create frame buffer color image (multi-sampled)
     sg_image_desc fb_color_image_desc = {
-        .render_target = true,
+        .usage.color_attachment = true,
         .width = 128,
         .height = 128,
         .pixel_format = sapp_color_format(),
@@ -142,17 +142,21 @@ static void init(void) {
 
     // create frame buffer resolve image
     sg_image_desc fb_resolve_image_desc = {
-        .render_target = true,
+        .usage.resolve_attachment = true,
         .width = 128,
         .height = 128,
         .pixel_format = sapp_color_format(),
         .sample_count = 1,
     };
     fb_resolve_image = sg_make_image(&fb_resolve_image_desc);
+    if (sg_query_image_state(fb_resolve_image) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "Failed to create frame buffer resolve image\n");
+        exit(-1);
+    }
 
     // create frame buffer depth stencil
     sg_image_desc fb_depth_image_desc = {
-        .render_target = true,
+        .usage.depth_stencil_attachment = true,
         .width = 128,
         .height = 128,
         .pixel_format = sapp_depth_format(),
@@ -164,21 +168,14 @@ static void init(void) {
         exit(-1);
     }
 
-    // create frame buffer attachments
-    sg_attachments_desc fb_attachments_desc = {
-        .colors = {
-            {.image = fb_color_image}
-        },
-        .resolves = {
-            {.image = fb_resolve_image}
-        },
-        .depth_stencil = {
-            .image = fb_depth_image
-        }
-    };
-    fb_attachments = sg_make_attachments(&fb_attachments_desc);
-    if (sg_query_attachments_state(fb_attachments) != SG_RESOURCESTATE_VALID) {
-        fprintf(stderr, "Failed to create frame buffer attachments\n");
+    // create frame buffer attachment views
+    fb_attachments.colors[0] = sg_make_view(&(sg_view_desc){.color_attachment.image = fb_color_image});
+    fb_attachments.resolves[0] = sg_make_view(&(sg_view_desc){.resolve_attachment.image = fb_resolve_image});
+    fb_attachments.depth_stencil = sg_make_view(&(sg_view_desc){.depth_stencil_attachment.image = fb_depth_image});
+    if (sg_query_view_state(fb_attachments.colors[0]) != SG_RESOURCESTATE_VALID ||
+        sg_query_view_state(fb_attachments.resolves[0]) != SG_RESOURCESTATE_VALID ||
+        sg_query_view_state(fb_attachments.depth_stencil) != SG_RESOURCESTATE_VALID) {
+        fprintf(stderr, "Failed to create frame buffer attachment views\n");
         exit(-1);
     }
 
@@ -197,7 +194,9 @@ static void init(void) {
 }
 
 static void cleanup(void) {
-    sg_destroy_attachments(fb_attachments);
+    sg_destroy_view(fb_attachments.colors[0]);
+    sg_destroy_view(fb_attachments.resolves[0]);
+    sg_destroy_view(fb_attachments.depth_stencil);
     sg_destroy_image(fb_color_image);
     sg_destroy_image(fb_resolve_image);
     sg_destroy_image(fb_depth_image);

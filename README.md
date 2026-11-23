@@ -307,6 +307,13 @@ By default textures are drawn using a simple nearest filter sampler,
 you can change the sampler with `sgp_set_sampler(0, smp)` before drawing a texture,
 it's recommended to restore the default sampler using `sgp_reset_sampler(0)`.
 
+Texture views for images are created and cached internally, so you don't need to create any `sg_view` for drawing.
+Each image drawn uses one slot of the `sg_desc.view_pool_size` pool,
+and the slot may stay in use after the image is destroyed, until Sokol GFX reuses its image slot.
+
+You can call `sgp_flush()` up to 64 times per frame, and each flush in a frame uses its own vertex buffer.
+Call `sg_commit()` at the end of every frame.
+
 ## Color modulation
 
 All common pipelines have color modulation, and you can modulate

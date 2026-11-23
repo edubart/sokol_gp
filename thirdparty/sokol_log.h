@@ -25,7 +25,7 @@
 
     Optionally define the following for verbose output:
 
-    SOKOL_DEBUG         - by default this is defined if _DEBUG is defined
+    SOKOL_DEBUG         - by default this is defined if NDEBUG is not defined
 
 
     OVERVIEW
@@ -52,7 +52,7 @@
 
     On Windows with sokol_app.h also note the runtime config items to make
     stdout/stderr output visible on the console for WinMain() applications
-    via sapp_desc.win32_console_attach or sapp_desc.win32_console_create,
+    via sapp_desc.win32.console_attach or sapp_desc.win32.console_create,
     however when running in a debugger on Windows, the logging output should
     show up on the debug output UI panel.
 
@@ -123,7 +123,7 @@ extern "C" {
 
 /*
     Plug this function into the 'logger.func' struct item when initializing any of the sokol
-    headers. For instance for sokol_audio.h it would loom like this:
+    headers. For instance for sokol_audio.h it would look like this:
 
     saudio_setup(&(saudio_desc){
         .logger = {
@@ -238,14 +238,15 @@ _SOKOL_PRIVATE char* _slog_itoa(uint32_t x, char* buf, size_t buf_size) {
 
 #if defined(_SLOG_EMSCRIPTEN)
 EM_JS(void, slog_js_log, (uint32_t level, const char* c_str), {
-    const str = UTF8ToString(c_str);
+    // NOTE: wasm64 compatibility (see: https://github.com/floooh/sokol/pull/1590)
+    const str = UTF8ToString(Number(c_str));
     switch (level) {
         case 0: console.error(str); break;
         case 1: console.error(str); break;
         case 2: console.warn(str); break;
         default: console.info(str); break;
     }
-});
+})
 #endif
 
 SOKOL_API_IMPL void slog_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* message, uint32_t line_nr, const char* filename, void* user_data) {
@@ -326,15 +327,6 @@ SOKOL_API_IMPL void slog_func(const char* tag, uint32_t log_level, uint32_t log_
         __android_log_write(prio, "SOKOL", line_buf);
     #elif defined(_SLOG_EMSCRIPTEN)
         slog_js_log(log_level, line_buf);
-    #elif defined(_SLOG_LINUX) || defined(_SLOG_APPLE)
-        int prio;
-        switch (log_level) {
-            case 0: prio = LOG_CRIT; break;
-            case 1: prio = LOG_ERR; break;
-            case 2: prio = LOG_WARNING; break;
-            default: prio = LOG_INFO; break;
-        }
-        syslog(prio, "%s", line_buf);
     #endif
     if (0 == log_level) {
         abort();
