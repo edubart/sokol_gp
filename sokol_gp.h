@@ -354,8 +354,6 @@ The following macros can be defined before including to change the library behav
 MIT, see LICENSE file or the end of `sokol_gp.h` file.
 */
 
-#define SOKOL_GP_IMPL
-
 #if defined(SOKOL_IMPL) && !defined(SOKOL_GP_IMPL)
 #define SOKOL_GP_IMPL
 #endif
